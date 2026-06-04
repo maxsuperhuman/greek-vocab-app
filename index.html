@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Greek Vocab"/>
+  <meta name="theme-color" content="#534AB7"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAACy0lEQVR42u3csQ3DQAwEQdXn1MWqvHcDDvUkXzcGNiekm0iAr7XWJaXmIQgACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJgPq+n3tpRgAYvA4EYfSKxmD4ioZg+IqGYPiKhmD8ikZg+IqGYPyKRmD8ikZg/IpGYPyKRmD8ikZg/IpGYPyKRmD8ikYAgAAwfqUiMH5FIwBAABi/UhEAIACMX6kIABAAxq9UBAAIAAAEgPErEAEAAgAAAQCAADB+ZSEAQAAAIAAAEAAACAAABAAAAgAAAQCAAABAAAAgAAAQAAAIAAAEgBcgACQAJAAkACQAJAAkABJeQNvP8wcAAM8fAAAAAKBhzBMApKMBAAAAAAAAAAAAAAAAAAAAAAAAAKgB4GYAAHAzAAC4GQAA3AwAAG4GAAA3AwCAmwEAwM0AAOBmAABwMwAAuBkAAAAAAAAAAAAAAAAAAAAAYwIAgNy/OPFXKgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4qupLMADGBAAAxgQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACvBSAAABAAAAgAAAQAAAIAAAEAgAAAQAAAIAAAEABegACQAJAAkACQAJAAkACQ3gsAAp06fgAEAAACAAABAIGyxg+AAABAAECgwPEDIACeBACBTho/AALgaQAQ6JTxAyAAdgCAQCeMfysACDR9/AAIgJ0AINDk8ZcAgEBTx18GAAJNHH8pAAg0bfzlACDQpPG3AIBAU8bfBgACTRh/KwAI1D3+dgAgqHt7IwBAYPzxAEAwfABAMHwAQDB8AGAwegCAMHgAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkAKS//QDLOO59ALLYLAAAAABJRU5ErkJggg=="/>
+  <title>Greek Vocab</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; }
+    #root { min-height: 100vh; }
+    /* iOS safe areas */
+    #root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      });
+    }
+  </script>
+  <script type="text/babel" src="/app.js" data-presets="react"></script>
+</body>
+</html>

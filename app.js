@@ -1,0 +1,2384 @@
+
+// ─── IndexedDB storage (PWA - reliable, never clears) ────────────
+const DB_NAME = "greek_vocab_db";
+const DB_STORE = "mastery";
+const DB_KEY = "user_mastery";
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      e.target.result.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function supabaseLoad() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(DB_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch(e) {
+    console.error("Load error:", e);
+    return null;
+  }
+}
+
+async function supabaseSave(mastery) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(mastery, DB_KEY);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch(e) {
+    console.error("Save error:", e);
+    return false;
+  }
+}
+// w = [greek, transliteration, english, topic]
+const WORDS = [
+  // Greetings
+  ["γεια σου","ya su","hi / bye (inf.)","Greetings"],
+  ["γεια σας","ya sas","hello / bye (formal)","Greetings"],
+  ["καλημέρα","kaliméra","good morning","Greetings"],
+  ["καλησπέρα","kalispéra","good evening","Greetings"],
+  ["καληνύχτα","kaliníchta","good night","Greetings"],
+  ["αντίο","adío","goodbye","Greetings"],
+  ["τα λέμε","ta léme","see you later","Greetings"],
+  ["τι κάνεις","ti kánis","how are you (inf.)","Greetings"],
+  ["καλά","kalá","fine / well","Greetings"],
+  ["πολύ καλά","polí kalá","very well","Greetings"],
+  ["έτσι κι έτσι","étsi ki étsi","so-so","Greetings"],
+  ["πώς σε λένε","pos se léne","what is your name","Greetings"],
+  ["με λένε","me léne","my name is","Greetings"],
+  ["χαίρω πολύ","chéro polí","nice to meet you","Greetings"],
+  ["από πού είσαι","apó pu íse","where are you from","Greetings"],
+  ["ευχαριστώ","efcharistó","thank you","Greetings"],
+  ["παρακαλώ","parakaló","please / you're welcome","Greetings"],
+  ["συγγνώμη","syggnómi","sorry / excuse me","Greetings"],
+  ["δεν πειράζει","den pirázi","no problem","Greetings"],
+  ["εντάξει","endáxi","okay","Greetings"],
+  ["βέβαια","vévea","of course","Greetings"],
+  ["ναι","ne","yes","Greetings"],
+  ["όχι","óchi","no","Greetings"],
+  ["ίσως","ísos","maybe","Greetings"],
+  // Numbers
+  ["ένα","éna","one","Numbers"],
+  ["δύο","dío","two","Numbers"],
+  ["τρία","tría","three","Numbers"],
+  ["τέσσερα","téssera","four","Numbers"],
+  ["πέντε","pénte","five","Numbers"],
+  ["έξι","éxi","six","Numbers"],
+  ["επτά","eptá","seven","Numbers"],
+  ["οκτώ","októ","eight","Numbers"],
+  ["εννέα","enéa","nine","Numbers"],
+  ["δέκα","déka","ten","Numbers"],
+  ["είκοσι","íkosi","twenty","Numbers"],
+  ["τριάντα","triánda","thirty","Numbers"],
+  ["εκατό","ekató","one hundred","Numbers"],
+  ["χίλια","chília","one thousand","Numbers"],
+  ["πρώτος","prótos","first","Numbers"],
+  ["δεύτερος","défteros","second","Numbers"],
+  ["τρίτος","trítos","third","Numbers"],
+  // Family
+  ["οικογένεια","ikogénia","family","Family"],
+  ["μητέρα","mitéra","mother","Family"],
+  ["πατέρας","patéras","father","Family"],
+  ["αδερφός","aderfós","brother","Family"],
+  ["αδερφή","aderfí","sister","Family"],
+  ["παππούς","papús","grandfather","Family"],
+  ["γιαγιά","yayá","grandmother","Family"],
+  ["γιος","yos","son","Family"],
+  ["κόρη","kóri","daughter","Family"],
+  ["σύζυγος","sízygos","spouse","Family"],
+  ["φίλος","fílos","friend (m)","Family"],
+  ["φίλη","fíli","friend (f)","Family"],
+  ["παιδί","pedí","child","Family"],
+  ["άνδρας","ándras","man / husband","Family"],
+  ["γυναίκα","gynéka","woman / wife","Family"],
+  // Food
+  ["νερό","neró","water","Food"],
+  ["φαγητό","fayitó","food","Food"],
+  ["ψωμί","psomí","bread","Food"],
+  ["κρέας","kréas","meat","Food"],
+  ["ψάρι","psári","fish","Food"],
+  ["τυρί","tirí","cheese","Food"],
+  ["αυγό","avgó","egg","Food"],
+  ["γάλα","gála","milk","Food"],
+  ["κρασί","krasí","wine","Food"],
+  ["μπύρα","bíra","beer","Food"],
+  ["καφές","kafés","coffee","Food"],
+  ["τσάι","tsái","tea","Food"],
+  ["σαλάτα","saláta","salad","Food"],
+  ["σούπα","súpa","soup","Food"],
+  ["ντομάτα","domáta","tomato","Food"],
+  ["πατάτα","patáta","potato","Food"],
+  ["κοτόπουλο","kotópoulo","chicken","Food"],
+  ["ελιά","eliá","olive","Food"],
+  ["αλάτι","aláti","salt","Food"],
+  ["ζάχαρη","záchazi","sugar","Food"],
+  // City & Transport
+  ["πόλη","póli","city","City"],
+  ["δρόμος","drómos","road / street","City"],
+  ["σπίτι","spíti","house / home","City"],
+  ["σχολείο","scholío","school","City"],
+  ["νοσοκομείο","nosokomío","hospital","City"],
+  ["φαρμακείο","farmakío","pharmacy","City"],
+  ["τράπεζα","trápeza","bank","City"],
+  ["εκκλησία","eklisía","church","City"],
+  ["αεροδρόμιο","aerodrómio","airport","City"],
+  ["σταθμός","stathmós","station","City"],
+  ["αυτοκίνητο","aftokinito","car","City"],
+  ["λεωφορείο","leoforío","bus","City"],
+  ["τρένο","tréno","train","City"],
+  ["μετρό","metró","metro","City"],
+  ["αεροπλάνο","aeropláno","airplane","City"],
+  ["ταξί","taxí","taxi","City"],
+  ["εισιτήριο","isitírio","ticket","City"],
+  ["αριστερά","aristerá","left","City"],
+  ["δεξιά","dexiá","right","City"],
+  ["ευθεία","efthía","straight ahead","City"],
+  // Time
+  ["ώρα","óra","hour / time","Time"],
+  ["μέρα","méra","day","Time"],
+  ["εβδομάδα","evdomáda","week","Time"],
+  ["μήνας","mínas","month","Time"],
+  ["χρόνος","chrónos","year","Time"],
+  ["σήμερα","símera","today","Time"],
+  ["χθες","chthes","yesterday","Time"],
+  ["αύριο","ávrio","tomorrow","Time"],
+  ["τώρα","tóra","now","Time"],
+  ["αργότερα","argótera","later","Time"],
+  ["πάντα","pánda","always","Time"],
+  ["ποτέ","poté","never","Time"],
+  ["συχνά","sichná","often","Time"],
+  ["Δευτέρα","Deftéra","Monday","Time"],
+  ["Τρίτη","Títi","Tuesday","Time"],
+  ["Τετάρτη","Tetárti","Wednesday","Time"],
+  ["Πέμπτη","Pémpti","Thursday","Time"],
+  ["Παρασκευή","Paraskevi","Friday","Time"],
+  ["Σάββατο","Sávato","Saturday","Time"],
+  ["Κυριακή","Kiriakí","Sunday","Time"],
+  // Body & Health
+  ["κεφάλι","kefáli","head","Health"],
+  ["μάτι","máti","eye","Health"],
+  ["αυτί","aftí","ear","Health"],
+  ["μύτη","míti","nose","Health"],
+  ["στόμα","stóma","mouth","Health"],
+  ["χέρι","chéri","hand / arm","Health"],
+  ["πόδι","pódi","leg / foot","Health"],
+  ["καρδιά","kardiá","heart","Health"],
+  ["υγεία","iyía","health","Health"],
+  ["άρρωστος","árrostos","sick / ill","Health"],
+  ["πόνος","pónos","pain","Health"],
+  ["γιατρός","yatrós","doctor","Health"],
+  ["φάρμακο","fármako","medicine","Health"],
+  ["νοσοκομείο","nosokomío","hospital","Health"],
+  // Adjectives
+  ["μεγάλος","megálos","big / large","Adjectives"],
+  ["μικρός","mikrós","small","Adjectives"],
+  ["καλός","kalós","good","Adjectives"],
+  ["κακός","kakós","bad","Adjectives"],
+  ["νέος","néos","new / young","Adjectives"],
+  ["παλιός","palıós","old","Adjectives"],
+  ["ωραίος","oréos","beautiful / nice","Adjectives"],
+  ["γρήγορος","grígoros","fast","Adjectives"],
+  ["αργός","argós","slow","Adjectives"],
+  ["ζεστός","zestós","hot / warm","Adjectives"],
+  ["κρύος","kríos","cold","Adjectives"],
+  ["εύκολος","éfkolos","easy","Adjectives"],
+  ["δύσκολος","dískolos","difficult","Adjectives"],
+  ["ακριβός","akrivós","expensive","Adjectives"],
+  ["φτηνός","ftinós","cheap","Adjectives"],
+  ["χαρούμενος","charúmenos","happy","Adjectives"],
+  ["λυπημένος","lipiménos","sad","Adjectives"],
+  ["κουρασμένος","kurazménos","tired","Adjectives"],
+  // Verbs
+  ["είμαι","íme","I am / to be","Verbs"],
+  ["έχω","écho","I have / to have","Verbs"],
+  ["πάω","páo","I go / to go","Verbs"],
+  ["έρχομαι","érchomai","I come / to come","Verbs"],
+  ["κάνω","káno","I do / to do","Verbs"],
+  ["θέλω","thélo","I want / to want","Verbs"],
+  ["μπορώ","boró","I can / to be able","Verbs"],
+  ["ξέρω","xéro","I know / to know","Verbs"],
+  ["λέω","léo","I say / to say","Verbs"],
+  ["βλέπω","vlépo","I see / to see","Verbs"],
+  ["τρώω","tróo","I eat / to eat","Verbs"],
+  ["πίνω","píno","I drink / to drink","Verbs"],
+  ["κοιμάμαι","kimáme","I sleep / to sleep","Verbs"],
+  ["δουλεύω","dulévo","I work / to work","Verbs"],
+  ["μαθαίνω","mathéno","I learn / to learn","Verbs"],
+  ["μιλάω","miláo","I speak / to speak","Verbs"],
+  ["αγαπάω","agapáo","I love / to love","Verbs"],
+  ["φεύγω","févgo","I leave / to leave","Verbs"],
+  ["παίρνω","pérno","I take / to take","Verbs"],
+  ["δίνω","díno","I give / to give","Verbs"],
+  ["μένω","méno","I live / I stay","Verbs"],
+  ["ακούω","akúo","I listen / I hear","Verbs"],
+  ["διαβάζω","diavázo","I read / I study","Verbs"],
+  ["γράφω","gráfo","I write","Verbs"],
+  // More verbs - top 100 most common
+  ["αγοράζω","agorázo","I buy","Verbs"],
+  ["ανοίγω","anígo","I open","Verbs"],
+  ["αντιλαμβάνομαι","andilamvánomai","I understand / I realize","Verbs"],
+  ["αρέσω","aréso","I like / I please","Verbs"],
+  ["αρχίζω","archízo","I begin / I start","Verbs"],
+  ["βάζω","vázo","I put / I place","Verbs"],
+  ["βγαίνω","vgéno","I go out / I exit","Verbs"],
+  ["βοηθάω","voitháo","I help","Verbs"],
+  ["βρίσκω","vrísko","I find","Verbs"],
+  ["γελάω","yeláo","I laugh","Verbs"],
+  ["γίνομαι","yínomai","I become","Verbs"],
+  ["γνωρίζω","gnorízo","I know / I meet","Verbs"],
+  ["γυρίζω","yirízo","I return / I turn","Verbs"],
+  ["δείχνω","díchno","I show","Verbs"],
+  ["διαλέγω","dialégo","I choose / I select","Verbs"],
+  ["ζω","zo","I live","Verbs"],
+  ["ζητάω","zitáo","I ask for / I look for","Verbs"],
+  ["θυμάμαι","thimáme","I remember","Verbs"],
+  ["θυμώνω","thimóno","I get angry","Verbs"],
+  ["καθομαι","káthome","I sit","Verbs"],
+  ["καλώ","kaló","I call / I invite","Verbs"],
+  ["καταλαβαίνω","katalavéno","I understand","Verbs"],
+  ["κατεβαίνω","katevéno","I go down / I descend","Verbs"],
+  ["κλαίω","kléo","I cry","Verbs"],
+  ["κλείνω","klíno","I close / I book","Verbs"],
+  ["κοιτάζω","kitázo","I look at","Verbs"],
+  ["κρατάω","kratáo","I hold / I keep","Verbs"],
+  ["μαγειρεύω","mayirévo","I cook","Verbs"],
+  ["μπαίνω","béno","I enter / I go in","Verbs"],
+  ["νιώθω","nióto","I feel","Verbs"],
+  ["ξεκινάω","xekinào","I start / I set off","Verbs"],
+  ["ξεχνάω","xechnáo","I forget","Verbs"],
+  ["ξοδεύω","xodévo","I spend (money)","Verbs"],
+  ["οδηγώ","odigó","I drive","Verbs"],
+  ["παίζω","pézo","I play","Verbs"],
+  ["παρακολουθώ","parakoluthó","I follow / I attend","Verbs"],
+  ["περιμένω","periméno","I wait","Verbs"],
+  ["περνάω","pernáo","I pass / I spend (time)","Verbs"],
+  ["πετάω","petáo","I fly / I throw","Verbs"],
+  ["πηγαίνω","pigéno","I go","Verbs"],
+  ["πιστεύω","pistévo","I believe","Verbs"],
+  ["πλένω","pléno","I wash","Verbs"],
+  ["πουλάω","puláo","I sell","Verbs"],
+  ["προσπαθώ","prospathó","I try","Verbs"],
+  ["ρωτάω","rotáo","I ask","Verbs"],
+  ["σκέφτομαι","skéftome","I think","Verbs"],
+  ["σταματάω","stamatáo","I stop","Verbs"],
+  ["συναντάω","sinantáo","I meet","Verbs"],
+  ["τελειώνω","telióno","I finish","Verbs"],
+  ["τραγουδάω","tragudáo","I sing","Verbs"],
+  ["τρέχω","trécho","I run","Verbs"],
+  ["τυχαίνω","tycháino","I happen","Verbs"],
+  ["υπάρχω","ipárcho","I exist / there is","Verbs"],
+  ["φαίνομαι","fénomai","I seem / I appear","Verbs"],
+  ["φέρνω","férno","I bring","Verbs"],
+  ["φοβάμαι","fováme","I am afraid","Verbs"],
+  ["φτάνω","ftáno","I arrive / I reach","Verbs"],
+  ["χαίρομαι","chérome","I am happy / I enjoy","Verbs"],
+  ["χαμογελάω","chamoyeláo","I smile","Verbs"],
+  ["χορεύω","chorévo","I dance","Verbs"],
+  ["χρειάζομαι","chriázome","I need","Verbs"],
+  ["χρησιμοποιώ","chrisimopiό","I use","Verbs"],
+  ["ψάχνω","psáchno","I search / I look for","Verbs"],
+  ["ψωνίζω","psonízo","I shop","Verbs"],
+  ["αλλάζω","alázo","I change","Verbs"],
+  ["κατοικώ","katikó","I reside / I inhabit","Verbs"],
+  ["μοιάζω","miázo","I resemble / I look like","Verbs"],
+  ["αναρωτιέμαι","anarotième","I wonder","Verbs"],
+  ["απαντάω","apandáo","I answer","Verbs"],
+  ["αποφασίζω","apofasízo","I decide","Verbs"],
+  ["ανεβαίνω","anevéno","I go up / I climb","Verbs"],
+  ["επιστρέφω","epistréfo","I return","Verbs"],
+  ["κατανοώ","katanoó","I comprehend","Verbs"],
+  ["πληρώνω","pliróno","I pay","Verbs"],
+  ["προτιμάω","protimáo","I prefer","Verbs"],
+  ["συνεχίζω","sinechízo","I continue","Verbs"],
+  // Academic subjects (from textbook p.11)
+  ["ιστορία","istoría","history","Subjects"],
+  ["γεωγραφία","yeografía","geography","Subjects"],
+  ["πολιτική","politikí","politics","Subjects"],
+  ["μαθηματικά","mathimatiká","mathematics","Subjects"],
+  ["φυσική","fisikí","physics","Subjects"],
+  ["βιολογία","violoyía","biology","Subjects"],
+  ["γραμματική","grammatikí","grammar","Subjects"],
+  ["μουσική","musikí","music","Subjects"],
+  ["τεχνολογία","technoloyía","technology","Subjects"],
+  ["ψυχολογία","psichologhía","psychology","Subjects"],
+  ["φιλοσοφία","filosofía","philosophy","Subjects"],
+  ["γυμναστική","yimnastikí","gymnastics / PE","Subjects"],
+  ["αστρολογία","astroloyía","astrology","Subjects"],
+  ["βιογραφία","viografía","biography","Subjects"],
+  ["δημοκρατία","dimokratía","democracy","Subjects"],
+  ["φωτογραφία","fotografía","photography","Subjects"],
+  ["πρόγραμμα","prógramma","programme / schedule","Subjects"],
+  ["ξενοφοβία","xenofovía","xenophobia","Subjects"],
+  ["αλλεργία","aleryía","allergy","Subjects"],
+  ["καταστροφή","katastrofí","catastrophe","Subjects"],
+  ["ωκεανός","okeanós","ocean","Subjects"],
+  ["θέατρο","théatro","theatre","Subjects"],
+  ["διάλογος","diálogos","dialogue","Subjects"],
+  ["ρυθμός","rhythmós","rhythm","Subjects"],
+  // Food & daily (from textbook p.11-12)
+  ["σοκολάτα","sokoláta","chocolate","Food"],
+  ["ταβέρνα","tavérna","taverna","Food"],
+  ["ούζο","úzo","ouzo","Food"],
+  ["σουβλάκι","suvláki","souvlaki","Food"],
+  ["μακαρόνια","makarónia","pasta / macaroni","Food"],
+  ["ομελέτα","omeléta","omelette","Food"],
+  ["πάρκο","párko","park","City"],
+  ["ραδιόφωνο","radiófono","radio","City"],
+  ["κάμερα","kámera","camera","City"],
+  // Greek alphabet letters
+  ["άλφα","álfa","alpha (Α)","Alphabet"],
+  ["βήτα","víta","beta (Β)","Alphabet"],
+  ["γάμα","gáma","gamma (Γ)","Alphabet"],
+  ["δέλτα","délta","delta (Δ)","Alphabet"],
+  ["έψιλον","épsilon","epsilon (Ε)","Alphabet"],
+  ["ζήτα","zíta","zeta (Ζ)","Alphabet"],
+  ["ήτα","íta","eta (Η)","Alphabet"],
+  ["θήτα","thíta","theta (Θ)","Alphabet"],
+  ["κάπα","kápa","kappa (Κ)","Alphabet"],
+  ["λάμδα","lámda","lambda (Λ)","Alphabet"],
+  ["σίγμα","sígma","sigma (Σ)","Alphabet"],
+  ["ύψιλον","ípsilon","upsilon (Υ)","Alphabet"],
+  ["ωμέγα","oméga","omega (Ω)","Alphabet"],
+];
+
+const CARDS={
+"γεια σου":{p:"expression",ex:[{gr:"Γεια σου, Μαρία! Τι κάνεις;",tr:"Ya su, María! Ti kánis?",en:"Hi Maria! How are you?"}],n:"Informal — use with friends. For strangers or groups say γει"},
+"γεια σας":{p:"expression",ex:[{gr:"Γεια σας, κυρία Παπαδοπούλου!",tr:"Ya sas, kiría Papadopúlu!",en:"Hello, Mrs Papadopoulou!"}],n:"Formal or plural form. Use with strangers, elders, or groups"},
+"καλημέρα":{p:"expression",ex:[{gr:"Καλημέρα! Πώς είσαι;",tr:"Kaliméra! Pos íse?",en:"Good morning! How are you?"}],n:"Used until around noon. After noon say καλησπέρα."},
+"καλησπέρα":{p:"expression",ex:[{gr:"Καλησπέρα! Έχετε τραπέζι για δύο;",tr:"Kalispéra! Échete trapézi ya dío?",en:"Good evening! Do you have a table for two?"}],n:"Used from about 2-3pm onwards. Evening greeting equivalent."},
+"καληνύχτα":{p:"expression",ex:[{gr:"Καληνύχτα, παιδί μου.",tr:"Kaliníchta, pedí mu.",en:"Good night, my child."}],n:"Said when going to sleep or saying farewell at night."},
+"αντίο":{p:"expression",ex:[{gr:"Αντίο! Τα λέμε αύριο.",tr:"Adío! Ta léme ávrio.",en:"Goodbye! See you tomorrow."}],n:"More formal/final than γεια σου. Used when parting for longe"},
+"τα λέμε":{p:"expression",ex:[{gr:"Τα λέμε αύριο!",tr:"Ta léme ávrio!",en:"Talk tomorrow! / See you tomorrow!"}],n:"Very casual. Only used with friends. Literal meaning: 'we'll"},
+"τι κάνεις":{p:"expression",ex:[{gr:"Γεια σου! Τι κάνεις;",tr:"Ya su! Ti kánis?",en:"Hey! How are you?"}],n:"Standard greeting question. Typical answers: καλά / πολύ καλ"},
+"καλά":{p:"adverb / adjective",ex:[{gr:"Είμαι καλά, ευχαριστώ!",tr:"Íme kalá, efcharistó!",en:"I'm fine, thank you!"}],n:"One of the most versatile words. Can mean 'fine', 'well', 'g"},
+"πολύ καλά":{p:"expression",ex:[{gr:"Είμαι πολύ καλά, ευχαριστώ!",tr:"Íme polí kalá, efcharistó!",en:"I'm very well, thank you!"}],n:"Common enthusiastic response to 'how are you'. Also used to "},
+"έτσι κι έτσι":{p:"expression",ex:[{gr:"Τι κάνεις; — Έτσι κι έτσι.",tr:"Ti kánis? — Étsi ki étsi.",en:"How are you? — So-so."}],n:"The most common way to say 'so-so' or 'not great'. Very coll"},
+"πώς σε λένε":{p:"expression",ex:[{gr:"Πώς σε λένε;",tr:"Pos se léne?",en:"What's your name?"}],n:"Literally 'how do they call you?' — the standard informal wa"},
+"με λένε":{p:"expression",ex:[{gr:"Με λένε Μαρία.",tr:"Me léne María.",en:"My name is Maria."}],n:"The standard way to introduce yourself. Always followed by y"},
+"χαίρω πολύ":{p:"expression",ex:[{gr:"Χαίρω πολύ, είμαι η Άννα.",tr:"Chéro polí, íme i Ána.",en:"Nice to meet you, I'm Anna."}],n:"Slightly formal. In casual speech Greeks often just say χαρά"},
+"από πού είσαι":{p:"expression",ex:[{gr:"Από πού είσαι; Είμαι από τη Ρωσία.",tr:"Apó pu íse? Íme apó ti Rosía.",en:"Where are you from? I'm from Russia."}],n:"Very common when meeting someone new. Follow with: Είμαι από"},
+"ευχαριστώ":{p:"verb / expression",ex:[{gr:"Ευχαριστώ πολύ για τη βοήθεια!",tr:"Efcharistó polí ya ti voíthia!",en:"Thank you very much for the help!"}],n:"The most essential word in Greek! Response is παρακαλώ (you'"},
+"παρακαλώ":{p:"expression",ex:[{gr:"Ένα νερό παρακαλώ.",tr:"Éna neró parakaló.",en:"A water please."}],n:"Dual use: 'please' (before a request) and 'you're welcome' ("},
+"συγγνώμη":{p:"expression",ex:[{gr:"Συγγνώμη, πού είναι το μετρό;",tr:"Syggnómi, pu íne to metró?",en:"Excuse me, where is the metro?"}],n:"Used both to apologise and to get someone's attention. Very "},
+"δεν πειράζει":{p:"expression",ex:[{gr:"Λυπάμαι! — Δεν πειράζει.",tr:"Lipáme! — Den pirázi.",en:"I'm sorry! — No problem."}],n:"The go-to response when someone apologises. Warm and reassur"},
+"εντάξει":{p:"expression",ex:[{gr:"Τα λέμε αύριο. — Εντάξει!",tr:"Ta léme ávrio. — Endáxi!",en:"See you tomorrow. — Okay!"}],n:"From Italian 'in taxis' (in order). Now the universal Greek "},
+"βέβαια":{p:"adverb",ex:[{gr:"Βέβαια, με χαρά!",tr:"Vévea, me chará!",en:"Of course, with pleasure!"}],n:"Warm affirmative. More emphatic than ναι. Often used alone a"},
+"ναι":{p:"particle",ex:[{gr:"Είσαι Έλληνας; — Ναι, είμαι.",tr:"Íse Élinas? — Ne, íme.",en:"Are you Greek? — Yes, I am."}],n:"WARNING: sounds like English 'no' but means YES. Very common"},
+"όχι":{p:"particle",ex:[{gr:"Θέλεις καφέ; — Όχι, ευχαριστώ.",tr:"Thélis kafé? — Óchi, efcharistó.",en:"Do you want coffee? — No, thank you."}],n:"WARNING: Sounds unlike English 'no'. In Greek body language,"},
+"ίσως":{p:"adverb",ex:[{gr:"Ίσως έρθω αύριο.",tr:"Ísos értho ávrio.",en:"Maybe I'll come tomorrow."}],n:"Expresses uncertainty. More non-committal than μάλλον (which"},
+"ένα":{p:"numeral",ex:[{gr:"Θέλω ένα καφέ παρακαλώ.",tr:"Thélo éna kafé parakaló.",en:"I want one coffee please."}],n:"Also functions as indefinite article (a/an). Ένας καφές = a "},
+"δύο":{p:"numeral",ex:[{gr:"Δύο εισιτήρια παρακαλώ.",tr:"Dío isitíria parakaló.",en:"Two tickets please."}],n:"Same form for all genders — unlike ένας/μία/ένα."},
+"τρία":{p:"numeral",ex:[{gr:"Τρία λεπτά ακόμα.",tr:"Tría leptá akóma.",en:"Three more minutes."}],n:"Neuter form τρία for neuter nouns; τρεις for masculine and f"},
+"δέκα":{p:"numeral",ex:[{gr:"Έχω δέκα ευρώ μόνο.",tr:"Écho déka evró móno.",en:"I only have ten euros."}],n:"Key building block: 11=έντεκα, 12=δώδεκα, but 13=δεκατρία (d"},
+"είκοσι":{p:"numeral",ex:[{gr:"Είμαι είκοσι χρονών.",tr:"Íme íkosi chronón.",en:"I am twenty years old."}],n:"Compound numbers: είκοσι + unit (no connector word needed)."},
+"εκατό":{p:"numeral",ex:[{gr:"Εκατό ευρώ κοστίζει.",tr:"Ekató evró kostízi.",en:"It costs one hundred euros."}],n:"100=εκατό (invariable). From 200 onwards the forms change an"},
+"οικογένεια":{p:"noun (feminine)",ex:[{gr:"Η οικογένειά μου είναι μεγάλη.",tr:"I ikogénia mu íne megáli.",en:"My family is big."}],n:"One of the most important words in Greek culture. Family (πα"},
+"μητέρα":{p:"noun (feminine)",ex:[{gr:"Η μητέρα μου μαγειρεύει πολύ καλά.",tr:"I mitéra mu mayirévi polí kalá.",en:"My mother cooks very well."}],n:"Formal/standard word. In everyday speech most Greeks say μαμ"},
+"πατέρας":{p:"noun (masculine)",ex:[{gr:"Ο πατέρας μου δουλεύει πολύ.",tr:"O patéras mu dulévi polí.",en:"My father works a lot."}],n:"Formal term. Daily speech: μπαμπάς. Father's Day: Γιορτή του"},
+"αδερφός":{p:"noun (masculine)",ex:[{gr:"Έχω έναν αδερφό.",tr:"Écho énan aderfó.",en:"I have one brother."}],n:"Also αδελφός (older spelling). Sibling in general context: α"},
+"παππούς":{p:"noun (masculine)",ex:[{gr:"Ο παππούς μου είναι 80 χρονών.",tr:"O papús mu íne ogdónda chronón.",en:"My grandfather is 80 years old."}],n:"Also used as a warm address to any elderly man: Γεια σου παπ"},
+"γιαγιά":{p:"noun (feminine)",ex:[{gr:"Η γιαγιά μου μαγειρεύει υπέροχα.",tr:"I yayá mu mayirévi iperócha.",en:"My grandmother cooks wonderfully."}],n:"Central figure in Greek family life. The γιαγιά stereotype: "},
+"φίλος":{p:"noun (masculine)",ex:[{gr:"Είναι ο καλύτερός μου φίλος.",tr:"Íne o kalítерós mu fílos.",en:"He's my best friend."}],n:"Context matters: ο φίλος μου can mean 'my friend' or 'my boy"},
+"νερό":{p:"noun (neuter)",ex:[{gr:"Ένα νερό παρακαλώ.",tr:"Éna neró parakaló.",en:"A water please."}],n:"Essential word. Μεταλλικό νερό = mineral water. Νερό βρύσης "},
+"καφές":{p:"noun (masculine)",ex:[{gr:"Έναν καφέ παρακαλώ, χωρίς ζάχαρη.",tr:"Énan kafé parakaló, chorís záchazi.",en:"A coffee please, without sugar."}],n:"Coffee culture is huge in Greece! Καφενείο = traditional cof"},
+"ψωμί":{p:"noun (neuter)",ex:[{gr:"Φέρτε μας ψωμί παρακαλώ.",tr:"Férate mas psomí parakaló.",en:"Bring us bread please."}],n:"Φούρνος = bakery (literally 'oven'). Greeks traditionally bu"},
+"τυρί":{p:"noun (neuter)",ex:[{gr:"Φέτα είναι ελληνικό τυρί.",tr:"Féta íne ellinikó tirí.",en:"Feta is a Greek cheese."}],n:"Greece has many cheeses: φέτα (feta), κεφαλοτύρι, γραβιέρα, "},
+"κρασί":{p:"noun (neuter)",ex:[{gr:"Ένα ποτήρι κρασί παρακαλώ.",tr:"Éna potíri krasí parakaló.",en:"A glass of wine please."}],n:"Greece has excellent wines — Santorini Assyrtiko and Nemea A"},
+"σαλάτα":{p:"noun (feminine)",ex:[{gr:"Μία χωριάτικη σαλάτα παρακαλώ.",tr:"Mía choriátiki saláta parakaló.",en:"One Greek salad please."}],n:"Χωριάτικη σαλάτα (village salad) = tomato, cucumber, onion, "},
+"ελιά":{p:"noun (feminine)",ex:[{gr:"Ελιές και φέτα παρακαλώ.",tr:"Eliés ke féta parakaló.",en:"Olives and feta please."}],n:"Olive cultivation is ancient in Greece. Ελαιόλαδο (olive oil"},
+"σπίτι":{p:"noun (neuter)",ex:[{gr:"Είμαι στο σπίτι.",tr:"Íme sto spíti.",en:"I'm at home."}],n:"Can mean house or home. Σπίτι vs διαμέρισμα (apartment). Πάμ"},
+"τρένο":{p:"noun (neuter)",ex:[{gr:"Παίρνω το τρένο για Θεσσαλονίκη.",tr:"Pérno to tréno ya Thessaloníki.",en:"I'm taking the train to Thessaloniki."}],n:"Greece has limited rail network. Athens-Thessaloniki is the "},
+"μετρό":{p:"noun (neuter)",ex:[{gr:"Πάρε το μετρό μέχρι Σύνταγμα.",tr:"Páre to metró méchri Síndagma.",en:"Take the metro to Syntagma."}],n:"Athens metro opened in 2000. Many stations have ancient arti"},
+"εισιτήριο":{p:"noun (neuter)",ex:[{gr:"Δύο εισιτήρια παρακαλώ.",tr:"Dío isitíria parakaló.",en:"Two tickets please."}],n:"Used for all transport and events. Athens public transport u"},
+"ώρα":{p:"noun (feminine)",ex:[{gr:"Τι ώρα είναι;",tr:"Ti óra íne?",en:"What time is it?"}],n:"Both 'hour' and 'time'. Ώρα can also mean 'it's time': Είναι"},
+"μέρα":{p:"noun (feminine)",ex:[{gr:"Καλή μέρα! (= good day)",tr:"Kalí méra!",en:"Good day! / Have a nice day!"}],n:"Μέρα = informal, ημέρα = formal/written. Καλή μέρα also used"},
+"σήμερα":{p:"adverb",ex:[{gr:"Σήμερα είναι Δευτέρα.",tr:"Símera íne Deftéra.",en:"Today is Monday."}],n:"Literally 'this day'. From σε+ημέρα (on this day)."},
+"τώρα":{p:"adverb",ex:[{gr:"Τώρα δεν μπορώ.",tr:"Tóra den boró.",en:"I can't right now."}],n:"Τώρα can also mean 'well then' at the start of a sentence: Τ"},
+"υγεία":{p:"noun (feminine)",ex:[{gr:"Στην υγειά σου!",tr:"Stin iyá su!",en:"To your health! / Cheers!"}],n:"Στην υγειά σου / σας is the standard toast when drinking. Al"},
+"γιατρός":{p:"noun (masc/fem)",ex:[{gr:"Πρέπει να δω γιατρό.",tr:"Prépi na do yatró.",en:"I need to see a doctor."}],n:"Same word for doctor regardless of gender. Note η γιατρός (f"},
+"μεγάλος":{p:"adjective",ex:[{gr:"Η Αθήνα είναι μεγάλη πόλη.",tr:"I Athína íne megáli póli.",en:"Athens is a big city."}],n:"Means both 'big/large' and 'old/grown-up'. Είμαι μεγάλος = I"},
+"καλός":{p:"adjective",ex:[{gr:"Είναι πολύ καλός άνθρωπος.",tr:"Íne polí kalós ánthropos.",en:"He's a very good person."}],n:"Most versatile adjective. Καλός also means kind. Καλή τύχη ="},
+"ωραίος":{p:"adjective",ex:[{gr:"Τι ωραία μέρα!",tr:"Ti oréa méra!",en:"What a beautiful day!"}],n:"Means beautiful, nice, good-looking. Used constantly in spee"},
+"είμαι":{p:"verb (to be)",ex:[{gr:"Είμαι από τη Ρωσία.",tr:"Íme apó ti Rosía.",en:"I am from Russia."}],n:"Most essential verb. Irregular — must memorise all forms. No"},
+"έχω":{p:"verb (to have)",ex:[{gr:"Έχω μια ερώτηση.",tr:"Écho mia erótisi.",en:"I have a question."}],n:"Second most important verb. Έχω + past participle = present "},
+"πάω":{p:"verb (to go)",ex:[{gr:"Πάω στο σούπερ μάρκετ.",tr:"Páo sto súper márket.",en:"I'm going to the supermarket."}],n:"Πάμε! = Let's go! — one of the most useful Greek phrases. Ve"},
+"κάνω":{p:"verb",ex:[{gr:"Τι κάνεις; — Καλά!",tr:"Ti kánis? — Kalá!",en:"How are you? — Fine!"}],n:"Extremely versatile verb. Κάνει = it is (for weather). Τι κά"},
+"θέλω":{p:"verb (to want)",ex:[{gr:"Θέλω έναν καφέ.",tr:"Thélo énan kafé.",en:"I want a coffee."}],n:"Θέλω + να + verb = want to do something. Θέλω να πάω = I wan"},
+"μπορώ":{p:"verb",ex:[{gr:"Μπορείς να με βοηθήσεις;",tr:"Borís na me voithíseis?",en:"Can you help me?"}],n:"Key modal verb. Μπορώ + να + verb = can do something. Very p"},
+"ξέρω":{p:"verb",ex:[{gr:"Ξέρεις ελληνικά;",tr:"Xéris elliniká?",en:"Do you know Greek?"}],n:"For knowing facts/skills. For knowing people use γνωρίζω. Δε"},
+"βλέπω":{p:"verb",ex:[{gr:"Βλέπω τηλεόραση το βράδυ.",tr:"Vlépo tileórasi to vrádi.",en:"I watch TV in the evening."}],n:"Means both 'to see' (physically) and 'to watch' (TV/film). A"},
+"τρώω":{p:"verb (to eat)",ex:[{gr:"Τρώω σαλάτα το μεσημέρι.",tr:"Tróo saláta to mesiméri.",en:"I eat salad at noon."}],n:"Irregular verb — memorise the forms. Φάγαμε καλά = we ate we"},
+"μιλάω":{p:"verb",ex:[{gr:"Μιλάς ελληνικά;",tr:"Milás elliniká?",en:"Do you speak Greek?"}],n:"Type B verb (stressed on last syllable). Μιλάω = speak/talk,"},
+"αγαπάω":{p:"verb (to love)",ex:[{gr:"Σ'αγαπώ!",tr:"S'agapó!",en:"I love you!"}],n:"Σ'αγαπώ = I love you (contracted). Αγαπώ is deeper love; μου"},
+"δουλεύω":{p:"verb (to work)",ex:[{gr:"Δουλεύω σε εταιρεία.",tr:"Dulévo se etería.",en:"I work at a company."}],n:"Informal/colloquial. Formal equivalent: εργάζομαι. Η δουλειά"},
+"πίνω":{p:"verb (to drink)",ex:[{gr:"Πίνω καφέ κάθε πρωί.",tr:"Píno kafé káthe proí.",en:"I drink coffee every morning."}],n:"Past tense: ήπια (I drank). Πιεις/πιει in subjunctive mood a"},
+"τέσσερα":{p:"numeral",ex:[{gr:"Έχω τέσσερα αδερφούς.",tr:"Écho téssera aderfús.",en:"I have four brothers."}],n:"Greek numeral for four. Used in counting, age, time and quan"},
+"πέντε":{p:"numeral",ex:[{gr:"Έχω πέντε αδερφούς.",tr:"Écho pénte aderfús.",en:"I have five brothers."}],n:"Greek numeral for five. Used in counting, age, time and quan"},
+"έξι":{p:"numeral",ex:[{gr:"Έχω έξι αδερφούς.",tr:"Écho éxi aderfús.",en:"I have six brothers."}],n:"Greek numeral for six. Used in counting, age, time and quant"},
+"επτά":{p:"numeral",ex:[{gr:"Έχω επτά αδερφούς.",tr:"Écho eptá aderfús.",en:"I have seven brothers."}],n:"Greek numeral for seven. Used in counting, age, time and qua"},
+"οκτώ":{p:"numeral",ex:[{gr:"Έχω οκτώ αδερφούς.",tr:"Écho októ aderfús.",en:"I have eight brothers."}],n:"Greek numeral for eight. Used in counting, age, time and qua"},
+"εννέα":{p:"numeral",ex:[{gr:"Έχω εννέα αδερφούς.",tr:"Écho enéa aderfús.",en:"I have nine brothers."}],n:"Greek numeral for nine. Used in counting, age, time and quan"},
+"τριάντα":{p:"numeral",ex:[{gr:"Έχω τριάντα αδερφούς.",tr:"Écho triánda aderfús.",en:"I have thirty brothers."}],n:"Greek numeral for thirty. Used in counting, age, time and qu"},
+"χίλια":{p:"numeral",ex:[{gr:"Έχω χίλια αδερφούς.",tr:"Écho chília aderfús.",en:"I have one thousand brothers."}],n:"Greek numeral for one thousand. Used in counting, age, time "},
+"πρώτος":{p:"numeral",ex:[{gr:"Έχω πρώτος αδερφούς.",tr:"Écho prótos aderfús.",en:"I have first brothers."}],n:"Greek numeral for first. Used in counting, age, time and qua"},
+"δεύτερος":{p:"numeral",ex:[{gr:"Έχω δεύτερος αδερφούς.",tr:"Écho défteros aderfús.",en:"I have second brothers."}],n:"Greek numeral for second. Used in counting, age, time and qu"},
+"τρίτος":{p:"numeral",ex:[{gr:"Έχω τρίτος αδερφούς.",tr:"Écho trítos aderfús.",en:"I have third brothers."}],n:"Greek numeral for third. Used in counting, age, time and qua"},
+"αδερφή":{p:"noun",ex:[{gr:"Ο/Η αδερφή μου είναι εδώ.",tr:"O/I aderfí mu íne edó.",en:"My sister is here."}],n:"Family member. sister. Central to Greek family culture."},
+"γιος":{p:"noun",ex:[{gr:"Ο/Η γιος μου είναι εδώ.",tr:"O/I yos mu íne edó.",en:"My son is here."}],n:"Family member. son. Central to Greek family culture."},
+"κόρη":{p:"noun",ex:[{gr:"Ο/Η κόρη μου είναι εδώ.",tr:"O/I kóri mu íne edó.",en:"My daughter is here."}],n:"Family member. daughter. Central to Greek family culture."},
+"σύζυγος":{p:"noun",ex:[{gr:"Ο/Η σύζυγος μου είναι εδώ.",tr:"O/I sízygos mu íne edó.",en:"My spouse is here."}],n:"Family member. spouse. Central to Greek family culture."},
+"φίλη":{p:"noun",ex:[{gr:"Ο/Η φίλη μου είναι εδώ.",tr:"O/I fíli mu íne edó.",en:"My friend (f) is here."}],n:"Family member. friend (f). Central to Greek family culture."},
+"παιδί":{p:"noun",ex:[{gr:"Ο/Η παιδί μου είναι εδώ.",tr:"O/I pedí mu íne edó.",en:"My child is here."}],n:"Family member. child. Central to Greek family culture."},
+"άνδρας":{p:"noun",ex:[{gr:"Ο/Η άνδρας μου είναι εδώ.",tr:"O/I ándras mu íne edó.",en:"My man / husband is here."}],n:"Family member. man / husband. Central to Greek family cultur"},
+"γυναίκα":{p:"noun",ex:[{gr:"Ο/Η γυναίκα μου είναι εδώ.",tr:"O/I gynéka mu íne edó.",en:"My woman / wife is here."}],n:"Family member. woman / wife. Central to Greek family culture"},
+"φαγητό":{p:"noun / expression",ex:[{gr:"Το φαγητό είναι σημαντικό.",tr:"To fayitó íne simandikó.",en:"The food is important."}],n:"Greek word meaning 'food'."},
+"κρέας":{p:"noun / expression",ex:[{gr:"Το κρέας είναι σημαντικό.",tr:"To kréas íne simandikó.",en:"The meat is important."}],n:"Greek word meaning 'meat'."},
+"ψάρι":{p:"noun / expression",ex:[{gr:"Το ψάρι είναι σημαντικό.",tr:"To psári íne simandikó.",en:"The fish is important."}],n:"Greek word meaning 'fish'."},
+"αυγό":{p:"noun / expression",ex:[{gr:"Το αυγό είναι σημαντικό.",tr:"To avgó íne simandikó.",en:"The egg is important."}],n:"Greek word meaning 'egg'."},
+"γάλα":{p:"noun / expression",ex:[{gr:"Το γάλα είναι σημαντικό.",tr:"To gála íne simandikó.",en:"The milk is important."}],n:"Greek word meaning 'milk'."},
+"μπύρα":{p:"noun / expression",ex:[{gr:"Το μπύρα είναι σημαντικό.",tr:"To bíra íne simandikó.",en:"The beer is important."}],n:"Greek word meaning 'beer'."},
+"τσάι":{p:"noun / expression",ex:[{gr:"Το τσάι είναι σημαντικό.",tr:"To tsái íne simandikó.",en:"The tea is important."}],n:"Greek word meaning 'tea'."},
+"σούπα":{p:"noun / expression",ex:[{gr:"Το σούπα είναι σημαντικό.",tr:"To súpa íne simandikó.",en:"The soup is important."}],n:"Greek word meaning 'soup'."},
+"ντομάτα":{p:"noun / expression",ex:[{gr:"Το ντομάτα είναι σημαντικό.",tr:"To domáta íne simandikó.",en:"The tomato is important."}],n:"Greek word meaning 'tomato'."},
+"πατάτα":{p:"noun / expression",ex:[{gr:"Το πατάτα είναι σημαντικό.",tr:"To patáta íne simandikó.",en:"The potato is important."}],n:"Greek word meaning 'potato'."},
+"κοτόπουλο":{p:"noun / expression",ex:[{gr:"Το κοτόπουλο είναι σημαντικό.",tr:"To kotópoulo íne simandikó.",en:"The chicken is important."}],n:"Greek word meaning 'chicken'."},
+"αλάτι":{p:"noun / expression",ex:[{gr:"Το αλάτι είναι σημαντικό.",tr:"To aláti íne simandikó.",en:"The salt is important."}],n:"Greek word meaning 'salt'."},
+"ζάχαρη":{p:"noun / expression",ex:[{gr:"Το ζάχαρη είναι σημαντικό.",tr:"To záchazi íne simandikó.",en:"The sugar is important."}],n:"Greek word meaning 'sugar'."},
+"πόλη":{p:"noun",ex:[{gr:"Πού είναι το/η πόλη;",tr:"Pu íne to/i póli?",en:"Where is the city?"}],n:"City/transport vocabulary: city. Essential for navigating in"},
+"δρόμος":{p:"noun",ex:[{gr:"Πού είναι το/η δρόμος;",tr:"Pu íne to/i drómos?",en:"Where is the road / street?"}],n:"City/transport vocabulary: road / street. Essential for navi"},
+"σχολείο":{p:"noun",ex:[{gr:"Πού είναι το/η σχολείο;",tr:"Pu íne to/i scholío?",en:"Where is the school?"}],n:"City/transport vocabulary: school. Essential for navigating "},
+"νοσοκομείο":{p:"noun",ex:[{gr:"Με πονάει το/ο νοσοκομείο.",tr:"Me ponái to/o nosokomío.",en:"My hospital hurts."}],n:"Body part or health term: hospital. Useful when visiting a d"},
+"φαρμακείο":{p:"noun",ex:[{gr:"Πού είναι το/η φαρμακείο;",tr:"Pu íne to/i farmakío?",en:"Where is the pharmacy?"}],n:"City/transport vocabulary: pharmacy. Essential for navigatin"},
+"τράπεζα":{p:"noun",ex:[{gr:"Πού είναι το/η τράπεζα;",tr:"Pu íne to/i trápeza?",en:"Where is the bank?"}],n:"City/transport vocabulary: bank. Essential for navigating in"},
+"εκκλησία":{p:"noun",ex:[{gr:"Πού είναι το/η εκκλησία;",tr:"Pu íne to/i eklisía?",en:"Where is the church?"}],n:"City/transport vocabulary: church. Essential for navigating "},
+"αεροδρόμιο":{p:"noun",ex:[{gr:"Πού είναι το/η αεροδρόμιο;",tr:"Pu íne to/i aerodrómio?",en:"Where is the airport?"}],n:"City/transport vocabulary: airport. Essential for navigating"},
+"σταθμός":{p:"noun",ex:[{gr:"Πού είναι το/η σταθμός;",tr:"Pu íne to/i stathmós?",en:"Where is the station?"}],n:"City/transport vocabulary: station. Essential for navigating"},
+"αυτοκίνητο":{p:"noun",ex:[{gr:"Πού είναι το/η αυτοκίνητο;",tr:"Pu íne to/i aftokinito?",en:"Where is the car?"}],n:"City/transport vocabulary: car. Essential for navigating in "},
+"λεωφορείο":{p:"noun",ex:[{gr:"Πού είναι το/η λεωφορείο;",tr:"Pu íne to/i leoforío?",en:"Where is the bus?"}],n:"City/transport vocabulary: bus. Essential for navigating in "},
+"αεροπλάνο":{p:"noun",ex:[{gr:"Πού είναι το/η αεροπλάνο;",tr:"Pu íne to/i aeropláno?",en:"Where is the airplane?"}],n:"City/transport vocabulary: airplane. Essential for navigatin"},
+"ταξί":{p:"noun",ex:[{gr:"Πού είναι το/η ταξί;",tr:"Pu íne to/i taxí?",en:"Where is the taxi?"}],n:"City/transport vocabulary: taxi. Essential for navigating in"},
+"αριστερά":{p:"noun",ex:[{gr:"Πού είναι το/η αριστερά;",tr:"Pu íne to/i aristerá?",en:"Where is the left?"}],n:"City/transport vocabulary: left. Essential for navigating in"},
+"δεξιά":{p:"noun",ex:[{gr:"Πού είναι το/η δεξιά;",tr:"Pu íne to/i dexiá?",en:"Where is the right?"}],n:"City/transport vocabulary: right. Essential for navigating i"},
+"ευθεία":{p:"noun",ex:[{gr:"Πού είναι το/η ευθεία;",tr:"Pu íne to/i efthía?",en:"Where is the straight ahead?"}],n:"City/transport vocabulary: straight ahead. Essential for nav"},
+"εβδομάδα":{p:"noun / adverb",ex:[{gr:"Κάθε εβδομάδα.",tr:"Káthe evdomáda.",en:"Every week."}],n:"Time expression: week. Essential for making plans and appoin"},
+"μήνας":{p:"noun / adverb",ex:[{gr:"Κάθε μήνας.",tr:"Káthe mínas.",en:"Every month."}],n:"Time expression: month. Essential for making plans and appoi"},
+"χρόνος":{p:"noun / adverb",ex:[{gr:"Κάθε χρόνος.",tr:"Káthe chrónos.",en:"Every year."}],n:"Time expression: year. Essential for making plans and appoin"},
+"χθες":{p:"noun / adverb",ex:[{gr:"Κάθε χθες.",tr:"Káthe chthes.",en:"Every yesterday."}],n:"Time expression: yesterday. Essential for making plans and a"},
+"αύριο":{p:"noun / adverb",ex:[{gr:"Κάθε αύριο.",tr:"Káthe ávrio.",en:"Every tomorrow."}],n:"Time expression: tomorrow. Essential for making plans and ap"},
+"αργότερα":{p:"noun / adverb",ex:[{gr:"Κάθε αργότερα.",tr:"Káthe argótera.",en:"Every later."}],n:"Time expression: later. Essential for making plans and appoi"},
+"πάντα":{p:"noun / adverb",ex:[{gr:"Κάθε πάντα.",tr:"Káthe pánda.",en:"Every always."}],n:"Time expression: always. Essential for making plans and appo"},
+"ποτέ":{p:"noun / adverb",ex:[{gr:"Κάθε ποτέ.",tr:"Káthe poté.",en:"Every never."}],n:"Time expression: never. Essential for making plans and appoi"},
+"συχνά":{p:"noun / adverb",ex:[{gr:"Κάθε συχνά.",tr:"Káthe sichná.",en:"Every often."}],n:"Time expression: often. Essential for making plans and appoi"},
+"Δευτέρα":{p:"noun / adverb",ex:[{gr:"Κάθε Δευτέρα.",tr:"Káthe Deftéra.",en:"Every monday."}],n:"Time expression: Monday. Essential for making plans and appo"},
+"Τρίτη":{p:"noun / adverb",ex:[{gr:"Κάθε Τρίτη.",tr:"Káthe Títi.",en:"Every tuesday."}],n:"Time expression: Tuesday. Essential for making plans and app"},
+"Τετάρτη":{p:"noun / adverb",ex:[{gr:"Κάθε Τετάρτη.",tr:"Káthe Tetárti.",en:"Every wednesday."}],n:"Time expression: Wednesday. Essential for making plans and a"},
+"Πέμπτη":{p:"noun / adverb",ex:[{gr:"Κάθε Πέμπτη.",tr:"Káthe Pémpti.",en:"Every thursday."}],n:"Time expression: Thursday. Essential for making plans and ap"},
+"Παρασκευή":{p:"noun / adverb",ex:[{gr:"Κάθε Παρασκευή.",tr:"Káthe Paraskevi.",en:"Every friday."}],n:"Time expression: Friday. Essential for making plans and appo"},
+"Σάββατο":{p:"noun / adverb",ex:[{gr:"Κάθε Σάββατο.",tr:"Káthe Sávato.",en:"Every saturday."}],n:"Time expression: Saturday. Essential for making plans and ap"},
+"Κυριακή":{p:"noun / adverb",ex:[{gr:"Κάθε Κυριακή.",tr:"Káthe Kiriakí.",en:"Every sunday."}],n:"Time expression: Sunday. Essential for making plans and appo"},
+"κεφάλι":{p:"noun",ex:[{gr:"Με πονάει το/ο κεφάλι.",tr:"Me ponái to/o kefáli.",en:"My head hurts."}],n:"Body part or health term: head. Useful when visiting a docto"},
+"μάτι":{p:"noun",ex:[{gr:"Με πονάει το/ο μάτι.",tr:"Me ponái to/o máti.",en:"My eye hurts."}],n:"Body part or health term: eye. Useful when visiting a doctor"},
+"αυτί":{p:"noun",ex:[{gr:"Με πονάει το/ο αυτί.",tr:"Me ponái to/o aftí.",en:"My ear hurts."}],n:"Body part or health term: ear. Useful when visiting a doctor"},
+"μύτη":{p:"noun",ex:[{gr:"Με πονάει το/ο μύτη.",tr:"Me ponái to/o míti.",en:"My nose hurts."}],n:"Body part or health term: nose. Useful when visiting a docto"},
+"στόμα":{p:"noun",ex:[{gr:"Με πονάει το/ο στόμα.",tr:"Me ponái to/o stóma.",en:"My mouth hurts."}],n:"Body part or health term: mouth. Useful when visiting a doct"},
+"χέρι":{p:"noun",ex:[{gr:"Με πονάει το/ο χέρι.",tr:"Me ponái to/o chéri.",en:"My hand / arm hurts."}],n:"Body part or health term: hand / arm. Useful when visiting a"},
+"πόδι":{p:"noun",ex:[{gr:"Με πονάει το/ο πόδι.",tr:"Me ponái to/o pódi.",en:"My leg / foot hurts."}],n:"Body part or health term: leg / foot. Useful when visiting a"},
+"καρδιά":{p:"noun",ex:[{gr:"Με πονάει το/ο καρδιά.",tr:"Me ponái to/o kardiá.",en:"My heart hurts."}],n:"Body part or health term: heart. Useful when visiting a doct"},
+"άρρωστος":{p:"noun",ex:[{gr:"Με πονάει το/ο άρρωστος.",tr:"Me ponái to/o árrostos.",en:"My sick / ill hurts."}],n:"Body part or health term: sick / ill. Useful when visiting a"},
+"πόνος":{p:"noun",ex:[{gr:"Με πονάει το/ο πόνος.",tr:"Me ponái to/o pónos.",en:"My pain hurts."}],n:"Body part or health term: pain. Useful when visiting a docto"},
+"φάρμακο":{p:"noun",ex:[{gr:"Με πονάει το/ο φάρμακο.",tr:"Me ponái to/o fármako.",en:"My medicine hurts."}],n:"Body part or health term: medicine. Useful when visiting a d"},
+"μικρός":{p:"adjective",ex:[{gr:"Είναι πολύ μικρός.",tr:"Íne polí mikrós.",en:"It is very small."}],n:"Common Greek adjective meaning small. Agrees with noun in ge"},
+"κακός":{p:"adjective",ex:[{gr:"Είναι πολύ κακός.",tr:"Íne polí kakós.",en:"It is very bad."}],n:"Common Greek adjective meaning bad. Agrees with noun in gend"},
+"νέος":{p:"adjective",ex:[{gr:"Είναι πολύ νέος.",tr:"Íne polí néos.",en:"It is very new / young."}],n:"Common Greek adjective meaning new / young. Agrees with noun"},
+"παλιός":{p:"adjective",ex:[{gr:"Είναι πολύ παλιός.",tr:"Íne polí palıós.",en:"It is very old."}],n:"Common Greek adjective meaning old. Agrees with noun in gend"},
+"γρήγορος":{p:"adjective",ex:[{gr:"Είναι πολύ γρήγορος.",tr:"Íne polí grígoros.",en:"It is very fast."}],n:"Common Greek adjective meaning fast. Agrees with noun in gen"},
+"αργός":{p:"adjective",ex:[{gr:"Είναι πολύ αργός.",tr:"Íne polí argós.",en:"It is very slow."}],n:"Common Greek adjective meaning slow. Agrees with noun in gen"},
+"ζεστός":{p:"adjective",ex:[{gr:"Είναι πολύ ζεστός.",tr:"Íne polí zestós.",en:"It is very hot / warm."}],n:"Common Greek adjective meaning hot / warm. Agrees with noun "},
+"κρύος":{p:"adjective",ex:[{gr:"Είναι πολύ κρύος.",tr:"Íne polí kríos.",en:"It is very cold."}],n:"Common Greek adjective meaning cold. Agrees with noun in gen"},
+"εύκολος":{p:"adjective",ex:[{gr:"Είναι πολύ εύκολος.",tr:"Íne polí éfkolos.",en:"It is very easy."}],n:"Common Greek adjective meaning easy. Agrees with noun in gen"},
+"δύσκολος":{p:"adjective",ex:[{gr:"Είναι πολύ δύσκολος.",tr:"Íne polí dískolos.",en:"It is very difficult."}],n:"Common Greek adjective meaning difficult. Agrees with noun i"},
+"ακριβός":{p:"adjective",ex:[{gr:"Είναι πολύ ακριβός.",tr:"Íne polí akrivós.",en:"It is very expensive."}],n:"Common Greek adjective meaning expensive. Agrees with noun i"},
+"φτηνός":{p:"adjective",ex:[{gr:"Είναι πολύ φτηνός.",tr:"Íne polí ftinós.",en:"It is very cheap."}],n:"Common Greek adjective meaning cheap. Agrees with noun in ge"},
+"χαρούμενος":{p:"adjective",ex:[{gr:"Είναι πολύ χαρούμενος.",tr:"Íne polí charúmenos.",en:"It is very happy."}],n:"Common Greek adjective meaning happy. Agrees with noun in ge"},
+"λυπημένος":{p:"adjective",ex:[{gr:"Είναι πολύ λυπημένος.",tr:"Íne polí lipiménos.",en:"It is very sad."}],n:"Common Greek adjective meaning sad. Agrees with noun in gend"},
+"κουρασμένος":{p:"adjective",ex:[{gr:"Είναι πολύ κουρασμένος.",tr:"Íne polí kurazménos.",en:"It is very tired."}],n:"Common Greek adjective meaning tired. Agrees with noun in ge"},
+"έρχομαι":{p:"verb",ex:[{gr:"Έρχομαι κάθε μέρα.",tr:"Érchomai káthe méra.",en:"I come every day."}],n:"Common Greek verb. I come / to come. Used frequently in ever"},
+"λέω":{p:"verb",ex:[{gr:"Λέω κάθε μέρα.",tr:"Léo káthe méra.",en:"I say every day."}],n:"Common Greek verb. I say / to say. Used frequently in everyd"},
+"κοιμάμαι":{p:"verb",ex:[{gr:"Κοιμάμαι κάθε μέρα.",tr:"Kimáme káthe méra.",en:"I sleep every day."}],n:"Common Greek verb. I sleep / to sleep. Used frequently in ev"},
+"μαθαίνω":{p:"verb",ex:[{gr:"Μαθαίνω κάθε μέρα.",tr:"Mathéno káthe méra.",en:"I learn every day."}],n:"Common Greek verb. I learn / to learn. Used frequently in ev"},
+"φεύγω":{p:"verb",ex:[{gr:"Φεύγω κάθε μέρα.",tr:"Févgo káthe méra.",en:"I leave every day."}],n:"Common Greek verb. I leave / to leave. Used frequently in ev"},
+"παίρνω":{p:"verb",ex:[{gr:"Παίρνω κάθε μέρα.",tr:"Pérno káthe méra.",en:"I take every day."}],n:"Common Greek verb. I take / to take. Used frequently in ever"},
+"δίνω":{p:"verb",ex:[{gr:"Δίνω κάθε μέρα.",tr:"Díno káthe méra.",en:"I give every day."}],n:"Common Greek verb. I give / to give. Used frequently in ever"},
+"μένω":{p:"verb",ex:[{gr:"Μένω κάθε μέρα.",tr:"Méno káthe méra.",en:"I live every day."}],n:"Common Greek verb. I live / i stay. Used frequently in every"},
+"ακούω":{p:"verb",ex:[{gr:"Ακούω κάθε μέρα.",tr:"Akúo káthe méra.",en:"I listen every day."}],n:"Common Greek verb. I listen / i hear. Used frequently in eve"},
+"διαβάζω":{p:"verb",ex:[{gr:"Διαβάζω κάθε μέρα.",tr:"Diavázo káthe méra.",en:"I read every day."}],n:"Common Greek verb. I read / i study. Used frequently in ever"},
+"γράφω":{p:"verb",ex:[{gr:"Γράφω κάθε μέρα.",tr:"Gráfo káthe méra.",en:"I write every day."}],n:"Common Greek verb. I write. Used frequently in everyday conv"},
+"αγοράζω":{p:"verb",ex:[{gr:"Αγοράζω κάθε μέρα.",tr:"Agorázo káthe méra.",en:"I buy every day."}],n:"Common Greek verb. I buy. Used frequently in everyday conver"},
+"ανοίγω":{p:"verb",ex:[{gr:"Ανοίγω κάθε μέρα.",tr:"Anígo káthe méra.",en:"I open every day."}],n:"Common Greek verb. I open. Used frequently in everyday conve"},
+"αντιλαμβάνομαι":{p:"verb",ex:[{gr:"Αντιλαμβάνομαι κάθε μέρα.",tr:"Andilamvánomai káthe méra.",en:"I understand every day."}],n:"Common Greek verb. I understand / i realize. Used frequently"},
+"αρέσω":{p:"verb",ex:[{gr:"Αρέσω κάθε μέρα.",tr:"Aréso káthe méra.",en:"I like every day."}],n:"Common Greek verb. I like / i please. Used frequently in eve"},
+"αρχίζω":{p:"verb",ex:[{gr:"Αρχίζω κάθε μέρα.",tr:"Archízo káthe méra.",en:"I begin every day."}],n:"Common Greek verb. I begin / i start. Used frequently in eve"},
+"βάζω":{p:"verb",ex:[{gr:"Βάζω κάθε μέρα.",tr:"Vázo káthe méra.",en:"I put every day."}],n:"Common Greek verb. I put / i place. Used frequently in every"},
+"βγαίνω":{p:"verb",ex:[{gr:"Βγαίνω κάθε μέρα.",tr:"Vgéno káthe méra.",en:"I go out every day."}],n:"Common Greek verb. I go out / i exit. Used frequently in eve"},
+"βοηθάω":{p:"verb",ex:[{gr:"Βοηθάω κάθε μέρα.",tr:"Voitháo káthe méra.",en:"I help every day."}],n:"Common Greek verb. I help. Used frequently in everyday conve"},
+"βρίσκω":{p:"verb",ex:[{gr:"Βρίσκω κάθε μέρα.",tr:"Vrísko káthe méra.",en:"I find every day."}],n:"Common Greek verb. I find. Used frequently in everyday conve"},
+"γελάω":{p:"verb",ex:[{gr:"Γελάω κάθε μέρα.",tr:"Yeláo káthe méra.",en:"I laugh every day."}],n:"Common Greek verb. I laugh. Used frequently in everyday conv"},
+"γίνομαι":{p:"verb",ex:[{gr:"Γίνομαι κάθε μέρα.",tr:"Yínomai káthe méra.",en:"I become every day."}],n:"Common Greek verb. I become. Used frequently in everyday con"},
+"γνωρίζω":{p:"verb",ex:[{gr:"Γνωρίζω κάθε μέρα.",tr:"Gnorízo káthe méra.",en:"I know every day."}],n:"Common Greek verb. I know / i meet. Used frequently in every"},
+"γυρίζω":{p:"verb",ex:[{gr:"Γυρίζω κάθε μέρα.",tr:"Yirízo káthe méra.",en:"I return every day."}],n:"Common Greek verb. I return / i turn. Used frequently in eve"},
+"δείχνω":{p:"verb",ex:[{gr:"Δείχνω κάθε μέρα.",tr:"Díchno káthe méra.",en:"I show every day."}],n:"Common Greek verb. I show. Used frequently in everyday conve"},
+"διαλέγω":{p:"verb",ex:[{gr:"Διαλέγω κάθε μέρα.",tr:"Dialégo káthe méra.",en:"I choose every day."}],n:"Common Greek verb. I choose / i select. Used frequently in e"},
+"ζω":{p:"verb",ex:[{gr:"Ζω κάθε μέρα.",tr:"Zo káthe méra.",en:"I live every day."}],n:"Common Greek verb. I live. Used frequently in everyday conve"},
+"ζητάω":{p:"verb",ex:[{gr:"Ζητάω κάθε μέρα.",tr:"Zitáo káthe méra.",en:"I ask for every day."}],n:"Common Greek verb. I ask for / i look for. Used frequently i"},
+"θυμάμαι":{p:"verb",ex:[{gr:"Θυμάμαι κάθε μέρα.",tr:"Thimáme káthe méra.",en:"I remember every day."}],n:"Common Greek verb. I remember. Used frequently in everyday c"},
+"θυμώνω":{p:"verb",ex:[{gr:"Θυμώνω κάθε μέρα.",tr:"Thimóno káthe méra.",en:"I get angry every day."}],n:"Common Greek verb. I get angry. Used frequently in everyday "},
+"καθομαι":{p:"verb",ex:[{gr:"Καθομαι κάθε μέρα.",tr:"Káthome káthe méra.",en:"I sit every day."}],n:"Common Greek verb. I sit. Used frequently in everyday conver"},
+"καλώ":{p:"verb",ex:[{gr:"Καλώ κάθε μέρα.",tr:"Kaló káthe méra.",en:"I call every day."}],n:"Common Greek verb. I call / i invite. Used frequently in eve"},
+"καταλαβαίνω":{p:"verb",ex:[{gr:"Καταλαβαίνω κάθε μέρα.",tr:"Katalavéno káthe méra.",en:"I understand every day."}],n:"Common Greek verb. I understand. Used frequently in everyday"},
+"κατεβαίνω":{p:"verb",ex:[{gr:"Κατεβαίνω κάθε μέρα.",tr:"Katevéno káthe méra.",en:"I go down every day."}],n:"Common Greek verb. I go down / i descend. Used frequently in"},
+"κλαίω":{p:"verb",ex:[{gr:"Κλαίω κάθε μέρα.",tr:"Kléo káthe méra.",en:"I cry every day."}],n:"Common Greek verb. I cry. Used frequently in everyday conver"},
+"κλείνω":{p:"verb",ex:[{gr:"Κλείνω κάθε μέρα.",tr:"Klíno káthe méra.",en:"I close every day."}],n:"Common Greek verb. I close / i book. Used frequently in ever"},
+"κοιτάζω":{p:"verb",ex:[{gr:"Κοιτάζω κάθε μέρα.",tr:"Kitázo káthe méra.",en:"I look at every day."}],n:"Common Greek verb. I look at. Used frequently in everyday co"},
+"κρατάω":{p:"verb",ex:[{gr:"Κρατάω κάθε μέρα.",tr:"Kratáo káthe méra.",en:"I hold every day."}],n:"Common Greek verb. I hold / i keep. Used frequently in every"},
+"μαγειρεύω":{p:"verb",ex:[{gr:"Μαγειρεύω κάθε μέρα.",tr:"Mayirévo káthe méra.",en:"I cook every day."}],n:"Common Greek verb. I cook. Used frequently in everyday conve"},
+"μπαίνω":{p:"verb",ex:[{gr:"Μπαίνω κάθε μέρα.",tr:"Béno káthe méra.",en:"I enter every day."}],n:"Common Greek verb. I enter / i go in. Used frequently in eve"},
+"νιώθω":{p:"verb",ex:[{gr:"Νιώθω κάθε μέρα.",tr:"Nióto káthe méra.",en:"I feel every day."}],n:"Common Greek verb. I feel. Used frequently in everyday conve"},
+"ξεκινάω":{p:"verb",ex:[{gr:"Ξεκινάω κάθε μέρα.",tr:"Xekinào káthe méra.",en:"I start every day."}],n:"Common Greek verb. I start / i set off. Used frequently in e"},
+"ξεχνάω":{p:"verb",ex:[{gr:"Ξεχνάω κάθε μέρα.",tr:"Xechnáo káthe méra.",en:"I forget every day."}],n:"Common Greek verb. I forget. Used frequently in everyday con"},
+"ξοδεύω":{p:"verb",ex:[{gr:"Ξοδεύω κάθε μέρα.",tr:"Xodévo káthe méra.",en:"I spend (money) every day."}],n:"Common Greek verb. I spend (money). Used frequently in every"},
+"οδηγώ":{p:"verb",ex:[{gr:"Οδηγώ κάθε μέρα.",tr:"Odigó káthe méra.",en:"I drive every day."}],n:"Common Greek verb. I drive. Used frequently in everyday conv"},
+"παίζω":{p:"verb",ex:[{gr:"Παίζω κάθε μέρα.",tr:"Pézo káthe méra.",en:"I play every day."}],n:"Common Greek verb. I play. Used frequently in everyday conve"},
+"παρακολουθώ":{p:"verb",ex:[{gr:"Παρακολουθώ κάθε μέρα.",tr:"Parakoluthó káthe méra.",en:"I follow every day."}],n:"Common Greek verb. I follow / i attend. Used frequently in e"},
+"περιμένω":{p:"verb",ex:[{gr:"Περιμένω κάθε μέρα.",tr:"Periméno káthe méra.",en:"I wait every day."}],n:"Common Greek verb. I wait. Used frequently in everyday conve"},
+"περνάω":{p:"verb",ex:[{gr:"Περνάω κάθε μέρα.",tr:"Pernáo káthe méra.",en:"I pass every day."}],n:"Common Greek verb. I pass / i spend (time). Used frequently "},
+"πετάω":{p:"verb",ex:[{gr:"Πετάω κάθε μέρα.",tr:"Petáo káthe méra.",en:"I fly every day."}],n:"Common Greek verb. I fly / i throw. Used frequently in every"},
+"πηγαίνω":{p:"verb",ex:[{gr:"Πηγαίνω κάθε μέρα.",tr:"Pigéno káthe méra.",en:"I go every day."}],n:"Common Greek verb. I go. Used frequently in everyday convers"},
+"πιστεύω":{p:"verb",ex:[{gr:"Πιστεύω κάθε μέρα.",tr:"Pistévo káthe méra.",en:"I believe every day."}],n:"Common Greek verb. I believe. Used frequently in everyday co"},
+"πλένω":{p:"verb",ex:[{gr:"Πλένω κάθε μέρα.",tr:"Pléno káthe méra.",en:"I wash every day."}],n:"Common Greek verb. I wash. Used frequently in everyday conve"},
+"πουλάω":{p:"verb",ex:[{gr:"Πουλάω κάθε μέρα.",tr:"Puláo káthe méra.",en:"I sell every day."}],n:"Common Greek verb. I sell. Used frequently in everyday conve"},
+"προσπαθώ":{p:"verb",ex:[{gr:"Προσπαθώ κάθε μέρα.",tr:"Prospathó káthe méra.",en:"I try every day."}],n:"Common Greek verb. I try. Used frequently in everyday conver"},
+"ρωτάω":{p:"verb",ex:[{gr:"Ρωτάω κάθε μέρα.",tr:"Rotáo káthe méra.",en:"I ask every day."}],n:"Common Greek verb. I ask. Used frequently in everyday conver"},
+"σκέφτομαι":{p:"verb",ex:[{gr:"Σκέφτομαι κάθε μέρα.",tr:"Skéftome káthe méra.",en:"I think every day."}],n:"Common Greek verb. I think. Used frequently in everyday conv"},
+"σταματάω":{p:"verb",ex:[{gr:"Σταματάω κάθε μέρα.",tr:"Stamatáo káthe méra.",en:"I stop every day."}],n:"Common Greek verb. I stop. Used frequently in everyday conve"},
+"συναντάω":{p:"verb",ex:[{gr:"Συναντάω κάθε μέρα.",tr:"Sinantáo káthe méra.",en:"I meet every day."}],n:"Common Greek verb. I meet. Used frequently in everyday conve"},
+"τελειώνω":{p:"verb",ex:[{gr:"Τελειώνω κάθε μέρα.",tr:"Telióno káthe méra.",en:"I finish every day."}],n:"Common Greek verb. I finish. Used frequently in everyday con"},
+"τραγουδάω":{p:"verb",ex:[{gr:"Τραγουδάω κάθε μέρα.",tr:"Tragudáo káthe méra.",en:"I sing every day."}],n:"Common Greek verb. I sing. Used frequently in everyday conve"},
+"τρέχω":{p:"verb",ex:[{gr:"Τρέχω κάθε μέρα.",tr:"Trécho káthe méra.",en:"I run every day."}],n:"Common Greek verb. I run. Used frequently in everyday conver"},
+"τυχαίνω":{p:"verb",ex:[{gr:"Τυχαίνω κάθε μέρα.",tr:"Tycháino káthe méra.",en:"I happen every day."}],n:"Common Greek verb. I happen. Used frequently in everyday con"},
+"υπάρχω":{p:"verb",ex:[{gr:"Υπάρχω κάθε μέρα.",tr:"Ipárcho káthe méra.",en:"I exist every day."}],n:"Common Greek verb. I exist / there is. Used frequently in ev"},
+"φαίνομαι":{p:"verb",ex:[{gr:"Φαίνομαι κάθε μέρα.",tr:"Fénomai káthe méra.",en:"I seem every day."}],n:"Common Greek verb. I seem / i appear. Used frequently in eve"},
+"φέρνω":{p:"verb",ex:[{gr:"Φέρνω κάθε μέρα.",tr:"Férno káthe méra.",en:"I bring every day."}],n:"Common Greek verb. I bring. Used frequently in everyday conv"},
+"φοβάμαι":{p:"verb",ex:[{gr:"Φοβάμαι κάθε μέρα.",tr:"Fováme káthe méra.",en:"I am afraid every day."}],n:"Common Greek verb. I am afraid. Used frequently in everyday "},
+"φτάνω":{p:"verb",ex:[{gr:"Φτάνω κάθε μέρα.",tr:"Ftáno káthe méra.",en:"I arrive every day."}],n:"Common Greek verb. I arrive / i reach. Used frequently in ev"},
+"χαίρομαι":{p:"verb",ex:[{gr:"Χαίρομαι κάθε μέρα.",tr:"Chérome káthe méra.",en:"I am happy every day."}],n:"Common Greek verb. I am happy / i enjoy. Used frequently in "},
+"χαμογελάω":{p:"verb",ex:[{gr:"Χαμογελάω κάθε μέρα.",tr:"Chamoyeláo káthe méra.",en:"I smile every day."}],n:"Common Greek verb. I smile. Used frequently in everyday conv"},
+"χορεύω":{p:"verb",ex:[{gr:"Χορεύω κάθε μέρα.",tr:"Chorévo káthe méra.",en:"I dance every day."}],n:"Common Greek verb. I dance. Used frequently in everyday conv"},
+"χρειάζομαι":{p:"verb",ex:[{gr:"Χρειάζομαι κάθε μέρα.",tr:"Chriázome káthe méra.",en:"I need every day."}],n:"Common Greek verb. I need. Used frequently in everyday conve"},
+"χρησιμοποιώ":{p:"verb",ex:[{gr:"Χρησιμοποιώ κάθε μέρα.",tr:"Chrisimopiό káthe méra.",en:"I use every day."}],n:"Common Greek verb. I use. Used frequently in everyday conver"},
+"ψάχνω":{p:"verb",ex:[{gr:"Ψάχνω κάθε μέρα.",tr:"Psáchno káthe méra.",en:"I search every day."}],n:"Common Greek verb. I search / i look for. Used frequently in"},
+"ψωνίζω":{p:"verb",ex:[{gr:"Ψωνίζω κάθε μέρα.",tr:"Psonízo káthe méra.",en:"I shop every day."}],n:"Common Greek verb. I shop. Used frequently in everyday conve"},
+"αλλάζω":{p:"verb",ex:[{gr:"Αλλάζω κάθε μέρα.",tr:"Alázo káthe méra.",en:"I change every day."}],n:"Common Greek verb. I change. Used frequently in everyday con"},
+"κατοικώ":{p:"verb",ex:[{gr:"Κατοικώ κάθε μέρα.",tr:"Katikó káthe méra.",en:"I reside every day."}],n:"Common Greek verb. I reside / i inhabit. Used frequently in "},
+"μοιάζω":{p:"verb",ex:[{gr:"Μοιάζω κάθε μέρα.",tr:"Miázo káthe méra.",en:"I resemble every day."}],n:"Common Greek verb. I resemble / i look like. Used frequently"},
+"αναρωτιέμαι":{p:"verb",ex:[{gr:"Αναρωτιέμαι κάθε μέρα.",tr:"Anarotième káthe méra.",en:"I wonder every day."}],n:"Common Greek verb. I wonder. Used frequently in everyday con"},
+"απαντάω":{p:"verb",ex:[{gr:"Απαντάω κάθε μέρα.",tr:"Apandáo káthe méra.",en:"I answer every day."}],n:"Common Greek verb. I answer. Used frequently in everyday con"},
+"αποφασίζω":{p:"verb",ex:[{gr:"Αποφασίζω κάθε μέρα.",tr:"Apofasízo káthe méra.",en:"I decide every day."}],n:"Common Greek verb. I decide. Used frequently in everyday con"},
+"ανεβαίνω":{p:"verb",ex:[{gr:"Ανεβαίνω κάθε μέρα.",tr:"Anevéno káthe méra.",en:"I go up every day."}],n:"Common Greek verb. I go up / i climb. Used frequently in eve"},
+"επιστρέφω":{p:"verb",ex:[{gr:"Επιστρέφω κάθε μέρα.",tr:"Epistréfo káthe méra.",en:"I return every day."}],n:"Common Greek verb. I return. Used frequently in everyday con"},
+"κατανοώ":{p:"verb",ex:[{gr:"Κατανοώ κάθε μέρα.",tr:"Katanoó káthe méra.",en:"I comprehend every day."}],n:"Common Greek verb. I comprehend. Used frequently in everyday"},
+"πληρώνω":{p:"verb",ex:[{gr:"Πληρώνω κάθε μέρα.",tr:"Pliróno káthe méra.",en:"I pay every day."}],n:"Common Greek verb. I pay. Used frequently in everyday conver"},
+"προτιμάω":{p:"verb",ex:[{gr:"Προτιμάω κάθε μέρα.",tr:"Protimáo káthe méra.",en:"I prefer every day."}],n:"Common Greek verb. I prefer. Used frequently in everyday con"},
+"συνεχίζω":{p:"verb",ex:[{gr:"Συνεχίζω κάθε μέρα.",tr:"Sinechízo káthe méra.",en:"I continue every day."}],n:"Common Greek verb. I continue. Used frequently in everyday c"},
+"ιστορία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η ιστορία.",tr:"Mu arézi i istoría.",en:"I like history."}],n:"Academic subject/discipline. International word with Greek o"},
+"γεωγραφία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η γεωγραφία.",tr:"Mu arézi i yeografía.",en:"I like geography."}],n:"Academic subject/discipline. International word with Greek o"},
+"πολιτική":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η πολιτική.",tr:"Mu arézi i politikí.",en:"I like politics."}],n:"Academic subject/discipline. International word with Greek o"},
+"μαθηματικά":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η μαθηματικά.",tr:"Mu arézi i mathimatiká.",en:"I like mathematics."}],n:"Academic subject/discipline. International word with Greek o"},
+"φυσική":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η φυσική.",tr:"Mu arézi i fisikí.",en:"I like physics."}],n:"Academic subject/discipline. International word with Greek o"},
+"βιολογία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η βιολογία.",tr:"Mu arézi i violoyía.",en:"I like biology."}],n:"Academic subject/discipline. International word with Greek o"},
+"γραμματική":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η γραμματική.",tr:"Mu arézi i grammatikí.",en:"I like grammar."}],n:"Academic subject/discipline. International word with Greek o"},
+"μουσική":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η μουσική.",tr:"Mu arézi i musikí.",en:"I like music."}],n:"Academic subject/discipline. International word with Greek o"},
+"τεχνολογία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η τεχνολογία.",tr:"Mu arézi i technoloyía.",en:"I like technology."}],n:"Academic subject/discipline. International word with Greek o"},
+"ψυχολογία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η ψυχολογία.",tr:"Mu arézi i psichologhía.",en:"I like psychology."}],n:"Academic subject/discipline. International word with Greek o"},
+"φιλοσοφία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η φιλοσοφία.",tr:"Mu arézi i filosofía.",en:"I like philosophy."}],n:"Academic subject/discipline. International word with Greek o"},
+"γυμναστική":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η γυμναστική.",tr:"Mu arézi i yimnastikí.",en:"I like gymnastics / PE."}],n:"Academic subject/discipline. International word with Greek o"},
+"αστρολογία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η αστρολογία.",tr:"Mu arézi i astroloyía.",en:"I like astrology."}],n:"Academic subject/discipline. International word with Greek o"},
+"βιογραφία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η βιογραφία.",tr:"Mu arézi i viografía.",en:"I like biography."}],n:"Academic subject/discipline. International word with Greek o"},
+"δημοκρατία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η δημοκρατία.",tr:"Mu arézi i dimokratía.",en:"I like democracy."}],n:"Academic subject/discipline. International word with Greek o"},
+"φωτογραφία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η φωτογραφία.",tr:"Mu arézi i fotografía.",en:"I like photography."}],n:"Academic subject/discipline. International word with Greek o"},
+"πρόγραμμα":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η πρόγραμμα.",tr:"Mu arézi i prógramma.",en:"I like programme / schedule."}],n:"Academic subject/discipline. International word with Greek o"},
+"ξενοφοβία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η ξενοφοβία.",tr:"Mu arézi i xenofovía.",en:"I like xenophobia."}],n:"Academic subject/discipline. International word with Greek o"},
+"αλλεργία":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η αλλεργία.",tr:"Mu arézi i aleryía.",en:"I like allergy."}],n:"Academic subject/discipline. International word with Greek o"},
+"καταστροφή":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η καταστροφή.",tr:"Mu arézi i katastrofí.",en:"I like catastrophe."}],n:"Academic subject/discipline. International word with Greek o"},
+"ωκεανός":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η ωκεανός.",tr:"Mu arézi i okeanós.",en:"I like ocean."}],n:"Academic subject/discipline. International word with Greek o"},
+"θέατρο":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η θέατρο.",tr:"Mu arézi i théatro.",en:"I like theatre."}],n:"Academic subject/discipline. International word with Greek o"},
+"διάλογος":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η διάλογος.",tr:"Mu arézi i diálogos.",en:"I like dialogue."}],n:"Academic subject/discipline. International word with Greek o"},
+"ρυθμός":{p:"noun (feminine)",ex:[{gr:"Μου αρέσει η ρυθμός.",tr:"Mu arézi i rhythmós.",en:"I like rhythm."}],n:"Academic subject/discipline. International word with Greek o"},
+"σοκολάτα":{p:"noun / expression",ex:[{gr:"Το σοκολάτα είναι σημαντικό.",tr:"To sokoláta íne simandikó.",en:"The chocolate is important."}],n:"Greek word meaning 'chocolate'."},
+"ταβέρνα":{p:"noun / expression",ex:[{gr:"Το ταβέρνα είναι σημαντικό.",tr:"To tavérna íne simandikó.",en:"The taverna is important."}],n:"Greek word meaning 'taverna'."},
+"ούζο":{p:"noun / expression",ex:[{gr:"Το ούζο είναι σημαντικό.",tr:"To úzo íne simandikó.",en:"The ouzo is important."}],n:"Greek word meaning 'ouzo'."},
+"σουβλάκι":{p:"noun / expression",ex:[{gr:"Το σουβλάκι είναι σημαντικό.",tr:"To suvláki íne simandikó.",en:"The souvlaki is important."}],n:"Greek word meaning 'souvlaki'."},
+"μακαρόνια":{p:"noun / expression",ex:[{gr:"Το μακαρόνια είναι σημαντικό.",tr:"To makarónia íne simandikó.",en:"The pasta / macaroni is important."}],n:"Greek word meaning 'pasta / macaroni'."},
+"ομελέτα":{p:"noun / expression",ex:[{gr:"Το ομελέτα είναι σημαντικό.",tr:"To omeléta íne simandikó.",en:"The omelette is important."}],n:"Greek word meaning 'omelette'."},
+"πάρκο":{p:"noun",ex:[{gr:"Πού είναι το/η πάρκο;",tr:"Pu íne to/i párko?",en:"Where is the park?"}],n:"City/transport vocabulary: park. Essential for navigating in"},
+"ραδιόφωνο":{p:"noun",ex:[{gr:"Πού είναι το/η ραδιόφωνο;",tr:"Pu íne to/i radiófono?",en:"Where is the radio?"}],n:"City/transport vocabulary: radio. Essential for navigating i"},
+"κάμερα":{p:"noun",ex:[{gr:"Πού είναι το/η κάμερα;",tr:"Pu íne to/i kámera?",en:"Where is the camera?"}],n:"City/transport vocabulary: camera. Essential for navigating "},
+"άλφα":{p:"noun",ex:[{gr:"Το γράμμα Ά λέγεται «άλφα».",tr:"To gráma Ά léyete «álfa».",en:"The letter Ά is called «álfa»."}],n:"Part of the Greek alphabet. Pronunciation: alpha."},
+"βήτα":{p:"noun",ex:[{gr:"Το γράμμα Β λέγεται «βήτα».",tr:"To gráma Β léyete «víta».",en:"The letter Β is called «víta»."}],n:"Part of the Greek alphabet. Pronunciation: beta."},
+"γάμα":{p:"noun",ex:[{gr:"Το γράμμα Γ λέγεται «γάμα».",tr:"To gráma Γ léyete «gáma».",en:"The letter Γ is called «gáma»."}],n:"Part of the Greek alphabet. Pronunciation: gamma."},
+"δέλτα":{p:"noun",ex:[{gr:"Το γράμμα Δ λέγεται «δέλτα».",tr:"To gráma Δ léyete «délta».",en:"The letter Δ is called «délta»."}],n:"Part of the Greek alphabet. Pronunciation: delta."},
+"έψιλον":{p:"noun",ex:[{gr:"Το γράμμα Έ λέγεται «έψιλον».",tr:"To gráma Έ léyete «épsilon».",en:"The letter Έ is called «épsilon»."}],n:"Part of the Greek alphabet. Pronunciation: epsilon."},
+"ζήτα":{p:"noun",ex:[{gr:"Το γράμμα Ζ λέγεται «ζήτα».",tr:"To gráma Ζ léyete «zíta».",en:"The letter Ζ is called «zíta»."}],n:"Part of the Greek alphabet. Pronunciation: zeta."},
+"ήτα":{p:"noun",ex:[{gr:"Το γράμμα Ή λέγεται «ήτα».",tr:"To gráma Ή léyete «íta».",en:"The letter Ή is called «íta»."}],n:"Part of the Greek alphabet. Pronunciation: eta."},
+"θήτα":{p:"noun",ex:[{gr:"Το γράμμα Θ λέγεται «θήτα».",tr:"To gráma Θ léyete «thíta».",en:"The letter Θ is called «thíta»."}],n:"Part of the Greek alphabet. Pronunciation: theta."},
+"κάπα":{p:"noun",ex:[{gr:"Το γράμμα Κ λέγεται «κάπα».",tr:"To gráma Κ léyete «kápa».",en:"The letter Κ is called «kápa»."}],n:"Part of the Greek alphabet. Pronunciation: kappa."},
+"λάμδα":{p:"noun",ex:[{gr:"Το γράμμα Λ λέγεται «λάμδα».",tr:"To gráma Λ léyete «lámda».",en:"The letter Λ is called «lámda»."}],n:"Part of the Greek alphabet. Pronunciation: lambda."},
+"σίγμα":{p:"noun",ex:[{gr:"Το γράμμα Σ λέγεται «σίγμα».",tr:"To gráma Σ léyete «sígma».",en:"The letter Σ is called «sígma»."}],n:"Part of the Greek alphabet. Pronunciation: sigma."},
+"ύψιλον":{p:"noun",ex:[{gr:"Το γράμμα Ύ λέγεται «ύψιλον».",tr:"To gráma Ύ léyete «ípsilon».",en:"The letter Ύ is called «ípsilon»."}],n:"Part of the Greek alphabet. Pronunciation: upsilon."},
+"ωμέγα":{p:"noun",ex:[{gr:"Το γράμμα Ω λέγεται «ωμέγα».",tr:"To gráma Ω léyete «oméga».",en:"The letter Ω is called «oméga»."}],n:"Part of the Greek alphabet. Pronunciation: omega."}
+};
+
+// ─── Sentences for Build-a-Sentence exercise ──────────────────────
+const SENTENCES = [
+  // είμαι
+  {en:"I am from Russia.",        gr:["Είμαι","από","τη","Ρωσία"],        ex:["πάω","έχω","εδώ"]},
+  {en:"You are a good friend.",   gr:["Είσαι","καλός","φίλος"],           ex:["είμαι","κακός","γιατρός"]},
+  {en:"He is a doctor.",          gr:["Είναι","γιατρός"],                  ex:["φίλος","είμαι","καλός"]},
+  {en:"We are in Athens now.",    gr:["Είμαστε","στην","Αθήνα","τώρα"],   ex:["πάμε","εδώ","σήμερα"]},
+  {en:"They are not here today.", gr:["Δεν","είναι","εδώ","σήμερα"],      ex:["τώρα","πάνε","εκεί"]},
+  // έχω
+  {en:"I have two children.",     gr:["Έχω","δύο","παιδιά"],              ex:["τρία","θέλω","φίλους"]},
+  {en:"Do you have a ticket?",    gr:["Έχεις","εισιτήριο"],               ex:["θέλεις","παίρνεις","βιβλίο"]},
+  {en:"He has a headache.",       gr:["Έχει","πόνο","στο","κεφάλι"],      ex:["μεγάλο","στη","πλάτη","ένα"]},
+  {en:"We still have time.",      gr:["Έχουμε","ώρα","ακόμα"],            ex:["θέλουμε","πολύ","χρόνο"]},
+  {en:"They don't have a car.",   gr:["Δεν","έχουν","αυτοκίνητο"],        ex:["θέλουν","σπίτι","παίρνουν"]},
+  // πάω
+  {en:"I go to the pharmacy.",    gr:["Πάω","στο","φαρμακείο"],           ex:["σχολείο","έρχομαι","τώρα"]},
+  {en:"Do you go by bus?",        gr:["Πας","με","λεωφορείο"],            ex:["τρένο","ταξί","έρχεσαι"]},
+  {en:"Shall we go for coffee?",  gr:["Πάμε","για","καφέ"],               ex:["τσάι","έρχεστε","θέλουμε"]},
+  {en:"They don't go by metro.",  gr:["Δεν","πάνε","με","μετρό"],         ex:["λεωφορείο","έρχονται","ταξί"]},
+  // έρχομαι
+  {en:"I am coming right away.",  gr:["Έρχομαι","αμέσως"],                ex:["φεύγω","τώρα","αύριο"]},
+  {en:"Are you coming with me?",  gr:["Έρχεσαι","μαζί","μου"],            ex:["πας","μένεις","εδώ"]},
+  {en:"He comes every Sunday.",   gr:["Έρχεται","κάθε","Κυριακή"],        ex:["Σάββατο","πάει","μένει"]},
+  {en:"We are coming by train.",  gr:["Ερχόμαστε","με","τρένο"],          ex:["αεροπλάνο","πάμε","ταξί"]},
+  {en:"They are not coming today.",gr:["Δεν","έρχονται","σήμερα"],        ex:["αύριο","πάνε","φεύγουν"]},
+  // κάνω
+  {en:"I exercise every morning.",gr:["Κάνω","γυμναστική","κάθε","πρωί"],ex:["βράδυ","παίζω","πολύ"]},
+  {en:"Are you making coffee?",   gr:["Κάνεις","καφέ"],                   ex:["τσάι","θέλεις","πίνεις"]},
+  {en:"It is cold today.",        gr:["Κάνει","κρύο","σήμερα"],           ex:["ζεστά","αύριο","πολύ"]},
+  {en:"What are you doing now?",  gr:["Τι","κάνετε","τώρα"],              ex:["θέλετε","πάτε","σήμερα"]},
+  // θέλω
+  {en:"I want a glass of water.", gr:["Θέλω","ένα","ποτήρι","νερό"],      ex:["καφέ","δύο","παρακαλώ","κρασί"]},
+  {en:"Do you want to go?",       gr:["Θέλεις","να","πας"],               ex:["έρθεις","μείνεις","μπορείς"]},
+  {en:"He wants to learn Greek.", gr:["Θέλει","να","μάθει","ελληνικά"],   ex:["αγγλικά","μπορεί","ξέρει"]},
+  {en:"They don't want to leave.",gr:["Δεν","θέλουν","να","φύγουν"],      ex:["έρθουν","μείνουν","μπορούν"]},
+  // μπορώ
+  {en:"Can I help you?",          gr:["Μπορώ","να","σε","βοηθήσω"],       ex:["θέλω","σας","πω","δω"]},
+  {en:"Can you speak more slowly?",gr:["Μπορείς","να","μιλάς","πιο","αργά"],ex:["γρήγορα","θέλεις","πάς"]},
+  {en:"We can go by taxi.",       gr:["Μπορούμε","να","πάμε","με","ταξί"],ex:["λεωφορείο","θέλουμε","τρένο"]},
+  {en:"They can't come today.",   gr:["Δεν","μπορούν","να","έρθουν","σήμερα"],ex:["αύριο","θέλουν","φύγουν"]},
+  // ξέρω
+  {en:"I know a little Greek.",   gr:["Ξέρω","λίγο","ελληνικά"],          ex:["αγγλικά","μαθαίνω","πολύ"]},
+  {en:"Do you know where the airport is?", gr:["Ξέρεις","πού","είναι","το","αεροδρόμιο"], ex:["φαρμακείο","πώς","σταθμός"]},
+  {en:"We don't know yet.",       gr:["Δεν","ξέρουμε","ακόμα"],           ex:["βρίσκουμε","τώρα","καταλαβαίνουμε"]},
+  // βλέπω
+  {en:"I see the sea from my house.", gr:["Βλέπω","τη","θάλασσα","από","το","σπίτι","μου"], ex:["βουνό","στο","ακούω"]},
+  {en:"Do you watch TV every evening?", gr:["Βλέπεις","τηλεόραση","κάθε","βράδυ"], ex:["πρωί","ακούς","μουσική"]},
+  {en:"They don't see well at night.", gr:["Δεν","βλέπουν","καλά","τη","νύχτα"], ex:["μέρα","ακούν","ξέρουν"]},
+  // τρώω
+  {en:"I eat salad and bread.",   gr:["Τρώω","σαλάτα","και","ψωμί"],      ex:["πίνω","κρέας","τυρί"]},
+  {en:"He eats at the restaurant every lunchtime.", gr:["Τρώει","στο","εστιατόριο","κάθε","μεσημέρι"], ex:["βράδυ","πίνει","ταβέρνα"]},
+  {en:"Shall we eat together tonight?", gr:["Τρώμε","μαζί","απόψε"],      ex:["πίνουμε","αύριο","σήμερα"]},
+  // μιλάω
+  {en:"I speak a little Greek.",  gr:["Μιλάω","λίγο","ελληνικά"],         ex:["ξέρω","αγγλικά","πολύ"]},
+  {en:"You speak very fast!",     gr:["Μιλάς","πολύ","γρήγορα"],          ex:["αργά","καλά","ξέρεις"]},
+  {en:"Do you speak English?",    gr:["Μιλάτε","αγγλικά"],                ex:["ελληνικά","ξέρετε","καλά"]},
+  {en:"They talk about the family.", gr:["Μιλάνε","για","την","οικογένεια"], ex:["δουλειά","τους","βλέπουν"]},
+  // πίνω
+  {en:"I drink coffee every morning.", gr:["Πίνω","καφέ","κάθε","πρωί"],   ex:["βράδυ","τρώω","τσάι"]},
+  {en:"Do you drink tea or coffee?",   gr:["Πίνεις","τσάι","ή","καφέ"],   ex:["τρως","νερό","κρασί"]},
+  {en:"She drinks milk every evening.",gr:["Πίνει","γάλα","κάθε","βράδυ"],ex:["πρωί","τρώει","νερό"]},
+  {en:"We drink wine at the taverna.", gr:["Πίνουμε","κρασί","στην","ταβέρνα"], ex:["ούζο","τρώμε","εστιατόριο"]},
+  // μένω
+  {en:"I live near the station.", gr:["Μένω","κοντά","στον","σταθμό"],    ex:["μακριά","πάω","αεροδρόμιο"]},
+  {en:"He lives with his family.",gr:["Μένει","με","την","οικογένειά","του"], ex:["φίλους","παίζει","δουλεύει"]},
+  {en:"We are staying at a hotel.",gr:["Μένουμε","σε","ξενοδοχείο"],      ex:["σπίτι","πάμε","δουλεύουμε"]},
+  {en:"Do you live here permanently?", gr:["Μένετε","εδώ","μόνιμα"],      ex:["πάτε","αύριο","δουλεύετε"]},
+  // δουλεύω
+  {en:"I work from home now.",    gr:["Δουλεύω","από","το","σπίτι","τώρα"], ex:["μένω","σχολείο","αύριο"]},
+  {en:"She works as a doctor.",   gr:["Δουλεύει","ως","γιατρός"],          ex:["είναι","μένει","νοσοκομείο"]},
+  {en:"We work a lot this week.", gr:["Δουλεύουμε","πολύ","αυτή","την","εβδομάδα"], ex:["λίγο","μένουμε","μαθαίνουμε"]},
+  {en:"They don't work on Sunday.", gr:["Δεν","δουλεύουν","την","Κυριακή"], ex:["Σάββατο","μένουν","παίζουν"]},
+  // μαθαίνω
+  {en:"I learn Greek with this programme.", gr:["Μαθαίνω","ελληνικά","με","αυτό","το","πρόγραμμα"], ex:["αγγλικά","ξέρω","δουλεύω"]},
+  {en:"She is learning music and dance.", gr:["Μαθαίνει","μουσική","και","χορό"], ex:["παίζει","βλέπει","φυσική"]},
+  {en:"We learn new things every day.", gr:["Μαθαίνουμε","καινούρια","πράγματα","κάθε","μέρα"], ex:["λίγα","ξέρουμε","βλέπουμε"]},
+  // φεύγω
+  {en:"I leave for the airport at eight.", gr:["Φεύγω","για","το","αεροδρόμιο","στις","οκτώ"], ex:["σταθμό","πάω","εννέα"]},
+  {en:"The bus is leaving now!",  gr:["Το","λεωφορείο","φεύγει","τώρα"],   ex:["τρένο","πάει","αμέσως"]},
+  {en:"We leave tomorrow morning.", gr:["Φεύγουμε","αύριο","το","πρωί"],  ex:["βράδυ","σήμερα","πάμε"]},
+  {en:"When do you leave?",       gr:["Φεύγετε","πότε"],                   ex:["πάτε","έρχεστε","αύριο"]},
+  // παίρνω
+  {en:"I take the metro every day.", gr:["Παίρνω","το","μετρό","κάθε","μέρα"], ex:["λεωφορείο","πάω","βδομάδα"]},
+  {en:"She takes medicine every morning.", gr:["Παίρνει","φάρμακο","κάθε","πρωί"], ex:["βράδυ","πίνει","παρακαλώ"]},
+  {en:"Do you take the bus or train?", gr:["Παίρνετε","λεωφορείο","ή","τρένο"], ex:["ταξί","πάτε","μετρό"]},
+  // δίνω
+  {en:"I give help when I can.",  gr:["Δίνω","βοήθεια","όταν","μπορώ"],   ex:["χρήματα","θέλω","πάντα"]},
+  {en:"She gives Greek lessons.", gr:["Δίνει","μαθήματα","ελληνικών"],    ex:["αγγλικών","παίρνει","κάνει"]},
+  {en:"Can you give the receipt?", gr:["Δίνετε","την","απόδειξη","παρακαλώ"], ex:["εισιτήριο","παίρνετε","έχετε"]},
+  // βρίσκω
+  {en:"I always find the way.",   gr:["Βρίσκω","πάντα","τον","δρόμο"],    ex:["ξέρω","ποτέ","σταθμό"]},
+  {en:"She finds work easily.",   gr:["Βρίσκει","δουλειά","εύκολα"],      ex:["δύσκολα","μαθαίνει","πάντα"]},
+  {en:"They always find a solution.", gr:["Βρίσκουν","πάντα","λύση"],     ex:["ποτέ","ξέρουν","δύσκολη"]},
+  // περιμένω
+  {en:"I'm waiting for the bus.", gr:["Περιμένω","το","λεωφορείο"],        ex:["τρένο","ταξί","βλέπω"]},
+  {en:"Are you waiting for someone?", gr:["Περιμένεις","κάποιον"],         ex:["βλέπεις","ψάχνεις","κάτι"]},
+  {en:"We wait in the queue.",    gr:["Περιμένουμε","στην","ουρά"],        ex:["μένουμε","σταθμό","εκεί"]},
+  {en:"Have you been waiting long?", gr:["Περιμένετε","πολύ","ώρα"],       ex:["λίγο","εδώ","ξέρετε"]},
+];
+
+const TOPICS = ["All", ...new Set(WORDS.map(w => w[3]))];
+const QM = [
+  { label:"Greek → English",       q:w=>w[0], h:"What does this mean?",     a:w=>w[2] },
+  { label:"English → Greek",       q:w=>w[2], h:"How do you say in Greek?", a:w=>w[0] },
+  { label:"Transcription → Greek", q:w=>w[1], h:"Which word is this?",      a:w=>w[0] },
+  { label:"Greek → Transcription", q:w=>w[0], h:"Write the transcription",  a:w=>w[1] },
+];
+const TM = [
+  { label:"Greek → English",       q:w=>w[0], h:"Translate to English",     a:w=>w[2] },
+  { label:"English → Greek",       q:w=>w[2], h:"Write in Greek",           a:w=>w[0] },
+  { label:"Greek → Transcription", q:w=>w[0], h:"Write the transcription",  a:w=>w[1] },
+];
+
+function shuf(a) { return [...a].sort(() => Math.random() - 0.5); }
+function norm(s) {
+  return s.toLowerCase().trim()
+    .replace(/ά/g,"α").replace(/έ/g,"ε").replace(/ή/g,"η")
+    .replace(/ί/g,"ι").replace(/ό/g,"ο").replace(/ύ/g,"υ").replace(/ώ/g,"ω");
+}
+
+// ─── Mastery system ────────────────────────────────────────────────
+// Level 0 = unseen
+// Level 1 = flashcard cleared  (Know it clicked, ok>fail)
+// Level 2 = quiz Greek→English cleared
+// Level 3 = quiz English→Greek cleared
+// Level 4 = tile spelling cleared
+// Level 5 = full mastered (all 4 modes cleared a 2nd time = streak5 ≥ 1)
+// frozen  = level 5 reached 3 times → never decays
+// Decay   = level 5 → 4 after 7 days no activity (unless frozen)
+// Error   = if mode had been cleared and now accuracy drops below 50% → level recalculated down
+
+function initMastery() {
+  const o = {};
+  WORDS.forEach(w => {
+    o[w[0]] = {
+      level:   0,
+      streak5: 0,      // times reached level 5
+      frozen:  false,
+      lastSeen: null,  // timestamp ms
+      modes: {
+        flash:      { ok:0, fail:0, cleared:false },
+        quiz_gr_en: { ok:0, fail:0, cleared:false },
+        quiz_en_gr: { ok:0, fail:0, cleared:false },
+        tile:       { ok:0, fail:0, cleared:false },
+      },
+    };
+  });
+  return o;
+}
+
+// A mode is "cleared" when it has been answered and accuracy > 50%
+function checkCleared(m) {
+  const tot = m.ok + m.fail;
+  return tot > 0 && m.ok / tot > 0.5;
+}
+
+function computeLevel(e) {
+  if (e.frozen) return 5;
+  const ms = e.modes;
+  const fl = ms.flash.cleared, q1 = ms.quiz_gr_en.cleared,
+        q2 = ms.quiz_en_gr.cleared, ti = ms.tile.cleared;
+  if (fl && q1 && q2 && ti) return e.streak5 >= 1 ? 5 : 4;
+  if (fl && q1 && q2) return 3;
+  if (fl && q1) return 2;
+  if (fl) return 1;
+  return 0;
+}
+
+// Record an answer: mode = "flash"|"quiz_gr_en"|"quiz_en_gr"|"tile"
+function applyAnswer(mastery, wordKey, mode, ok) {
+  const prev = mastery[wordKey];
+  if (!prev) return mastery;
+  const pm = prev.modes[mode];
+  if (!pm) return mastery;
+  const newM = { ...pm, ok: pm.ok + (ok?1:0), fail: pm.fail + (ok?0:1) };
+  newM.cleared = checkCleared(newM);
+  const newModes = { ...prev.modes, [mode]: newM };
+  const newEntry = { ...prev, modes: newModes, lastSeen: Date.now() };
+  // compute new level
+  const oldLevel = prev.level;
+  newEntry.level = computeLevel(newEntry);
+  // check if just hit level 5 for first/nth time
+  if (newEntry.level === 5 && oldLevel < 5) {
+    newEntry.streak5 = (newEntry.streak5 || 0) + 1;
+    if (newEntry.streak5 >= 3) newEntry.frozen = true;
+  }
+  return { ...mastery, [wordKey]: newEntry };
+}
+
+// Decay: level 5 → 4 if unseen 7+ days (unless frozen)
+function applyDecay(mastery) {
+  const now = Date.now();
+  const out = {};
+  Object.keys(mastery).forEach(k => {
+    const e = mastery[k];
+    if (!e.frozen && e.level === 5 && e.lastSeen && (now - e.lastSeen) > 7*86400000) {
+      // decay: reset all modes' cleared flags so they need re-clearing
+      const newModes = {};
+      Object.keys(e.modes).forEach(m => { newModes[m] = { ...e.modes[m], cleared:false }; });
+      out[k] = { ...e, level:4, modes:newModes };
+    } else {
+      out[k] = e;
+    }
+  });
+  return out;
+}
+
+const LEVEL_INFO = [
+  { label:"Unseen",     color:"#bbb",    bg:"#f5f5f5", icon:"○" },
+  { label:"Flashcard",  color:"#7F77DD", bg:"#EEEDFE", icon:"◐" },
+  { label:"Quiz GR→EN", color:"#BA7517", bg:"#FFF3CD", icon:"◑" },
+  { label:"Quiz EN→GR", color:"#E87F2A", bg:"#FFE8CC", icon:"◕" },
+  { label:"Spelling",   color:"#1D9E75", bg:"#E1F5EE", icon:"●" },
+  { label:"Mastered ★", color:"#0F6E56", bg:"#C6F0E2", icon:"★" },
+];
+const lv = l => LEVEL_INFO[Math.min(l,5)];
+
+// ─── UI atoms ──────────────────────────────────────────────────────
+const Chip = ({ label, on, onClick }) => (
+  <button onClick={onClick} style={{ padding:"3px 10px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit", border: on?"0.5px solid #7F77DD":"0.5px solid #ccc", background:on?"#EEEDFE":"transparent", color:on?"#3C3489":"#888" }}>{label}</button>
+);
+const Pill = ({ children }) => (
+  <span style={{ background:"#EEEDFE", color:"#3C3489", padding:"3px 10px", borderRadius:12, fontSize:12, fontWeight:500 }}>{children}</span>
+);
+const Btn = ({ onClick, children, style }) => (
+  <button onClick={onClick} style={{ padding:"9px 22px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, cursor:"pointer", fontFamily:"inherit", ...style }}>{children}</button>
+);
+const MCard = ({ title, on, onClick }) => (
+  <button onClick={onClick} style={{ padding:"10px 12px", border:on?"1.5px solid #7F77DD":"0.5px solid #ccc", borderRadius:10, cursor:"pointer", background:on?"#EEEDFE":"transparent", textAlign:"left", fontFamily:"inherit", width:"100%" }}>
+    <span style={{ fontSize:13, fontWeight:500, color:on?"#3C3489":"#333" }}>{title}</span>
+  </button>
+);
+const Bar = ({ pct, h=4, color="#7F77DD" }) => (
+  <div style={{ height:h, background:"#eee", borderRadius:h/2, overflow:"hidden" }}>
+    <div style={{ height:h, width:`${pct}%`, background:color, borderRadius:h/2, transition:"width .3s" }} />
+  </div>
+);
+const ResBox = ({ score, total, onRetry, onFlip, flipLabel }) => {
+  const pct = Math.round(score/total*100);
+  const msg = pct<50?"Keep practising!":pct<70?"Not bad!":pct<85?"Good result!":pct<100?"Excellent!":"Perfect! 🎉";
+  return (
+    <div style={{ background:"#f8f8f8", borderRadius:12, padding:"2rem", textAlign:"center" }}>
+      <div style={{ fontSize:15, fontWeight:500 }}>Result</div>
+      <div style={{ fontSize:44, fontWeight:500, color:"#534AB7", margin:".6rem 0" }}>{score}/{total}</div>
+      <div style={{ fontSize:13, color:"#888", marginBottom:"1.2rem" }}>{msg}</div>
+      <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+        <Btn onClick={onRetry}>↺ Try again</Btn>
+        {onFlip && (
+          <Btn onClick={onFlip} style={{ borderColor:"#7F77DD", color:"#3C3489", background:"#EEEDFE" }}>
+            ⇄ {flipLabel || "Flip"}
+          </Btn>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Word detail modal (AI) ────────────────────────────────────────
+function WordModal({ word, onClose }) {
+  const [text, setText] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const key = word ? word[0] : null;
+
+  useEffect(() => {
+    if (!key) return;
+    setText(null); setError(null); setLoading(true);
+    const prompt = `You are a Greek language teacher. Write a concise reference card for: "${word[0]}" (transcription: ${word[1]}, English: ${word[2]}).
+
+Use exactly these four section headers with ## prefix:
+
+## Part of speech
+One line: noun / verb / adjective / adverb / phrase / expression.
+
+## Forms
+Verb: conjugate present tense — εγώ / εσύ / αυτός / εμείς / εσείς / αυτοί with transcription on same line.
+Noun: article + singular + plural, note gender.
+Adjective: masculine / feminine / neuter.
+Phrase: write — Fixed expression, no inflection.
+
+## Examples
+Exactly 3 sentences:
+🇬🇷 [Greek]
+📢 [transcription]
+🇬🇧 [English]
+
+## Notes
+1-2 sentences on register, context, or common mistake.`;
+
+    // Check online status before calling API
+    if (!navigator.onLine) {
+      setError("offline");
+      setLoading(false);
+      return;
+    }
+
+    // Try a quick preflight to see if API is reachable from this context
+    // (Mobile app iframe blocks cross-origin requests)
+    fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:900, messages:[{role:"user",content:prompt}] }),
+    })
+      .then(r => {
+        if (!r.ok && r.status !== 401) throw new Error("blocked");
+        return r.json();
+      })
+      .then(d => {
+        // 401 = API key missing (expected in artifact) but request went through
+        // error.type = "authentication_error" means we're in browser context — show message
+        if (d.error) {
+          if (d.error.type === "authentication_error") {
+            setError("browser_only");
+          } else {
+            throw new Error("api_error");
+          }
+          return;
+        }
+        const t = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+        if (!t) throw new Error("empty");
+        setText(t);
+      })
+      .catch(e => {
+        if (e.message === "blocked" || e.message === "Failed to fetch") {
+          setError("app_blocked");
+        } else {
+          setError("network");
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [key]);
+
+  if (!word) return null;
+
+  function renderSections(raw) {
+    return raw.split(/^(?=## )/m).filter(c=>c.trim()).map(chunk => {
+      const lines = chunk.split("\n");
+      const title = lines[0].replace(/^## /,"").trim();
+      const body  = lines.slice(1).join("\n").trim();
+      if (title === "Examples") {
+        const exs = []; let cur = {};
+        body.split("\n").forEach(l => {
+          const t = l.trim();
+          if (t.startsWith("🇬🇷"))      { cur = { gr: t.slice(2).trim() }; }
+          else if (t.startsWith("📢") && cur.gr) { cur.tr = t.slice(1).trim(); }
+          else if (t.startsWith("🇬🇧") && cur.gr) { cur.en = t.slice(2).trim(); exs.push({...cur}); cur={}; }
+        });
+        return (
+          <div key={title} style={{ marginBottom:"1rem" }}>
+            <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:7 }}>{title}</div>
+            {exs.map((ex,i) => (
+              <div key={i} style={{ background:"#f7f7ff", borderRadius:8, padding:"10px 12px", marginBottom:6, borderLeft:"3px solid #AFA9EC" }}>
+                <div style={{ fontSize:14, fontWeight:500, marginBottom:2 }}>{ex.gr}</div>
+                <div style={{ fontSize:12, color:"#888", fontStyle:"italic", marginBottom:2 }}>{ex.tr}</div>
+                <div style={{ fontSize:12, color:"#444" }}>{ex.en}</div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      const bLines = body.split("\n").map(l=>l.replace(/^[-–•]\s*/,"").trim()).filter(Boolean);
+      return (
+        <div key={title} style={{ marginBottom:"1rem" }}>
+          <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:7 }}>{title}</div>
+          <div style={{ background:"#f8f8f8", borderRadius:8, padding:"10px 12px" }}>
+            {bLines.map((l,i) => (
+              <div key={i} style={{ fontSize:13, color:"#333", lineHeight:1.6, padding:"2px 0", borderBottom:i<bLines.length-1?"0.5px solid #eee":"none" }}>{l}</div>
+            ))}
+          </div>
+        </div>
+      );
+    });
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"16px", overflowY:"auto" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:16, width:"100%", maxWidth:500, boxShadow:"0 8px 40px rgba(0,0,0,0.2)", marginTop:4 }}>
+        <div style={{ background:"#EEEDFE", borderRadius:"16px 16px 0 0", padding:"16px 18px", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+          <div>
+            <div style={{ fontSize:22, fontWeight:700, color:"#26215C", marginBottom:2 }}>{word[0]}</div>
+            <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{word[1]}</div>
+            <div style={{ fontSize:13, color:"#534AB7", marginTop:2 }}>{word[2]}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit", flexShrink:0 }}>✕</button>
+        </div>
+        <div style={{ padding:"18px" }}>
+          {loading && <div style={{ textAlign:"center", padding:"2rem", color:"#888", fontSize:13 }}>Generating reference card…</div>}
+          {error === "offline" && (
+            <div style={{ textAlign:"center", padding:"1.5rem" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>📵</div>
+              <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:4 }}>You're offline</div>
+              <div style={{ fontSize:13, color:"#888" }}>Reference cards require internet. All exercises work offline!</div>
+            </div>
+          )}
+          {error === "app_blocked" && (
+            <div style={{ textAlign:"center", padding:"1.5rem" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>📱</div>
+              <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:6 }}>Not available in the app</div>
+              <div style={{ fontSize:13, color:"#888", lineHeight:1.5 }}>
+                AI reference cards only work in the browser version of Claude.<br/>
+                Open <strong>claude.ai</strong> in Safari or Chrome to use this feature.
+              </div>
+              <div style={{ marginTop:12, fontSize:12, color:"#aaa" }}>All exercises (flashcards, quiz, spelling) work fine in the app ✓</div>
+            </div>
+          )}
+          {error === "browser_only" && (
+            <div style={{ textAlign:"center", padding:"1.5rem" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>🔑</div>
+              <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:4 }}>API key required</div>
+              <div style={{ fontSize:13, color:"#888" }}>Open this artifact on claude.ai to use AI reference cards.</div>
+            </div>
+          )}
+          {error === "network" && (
+            <div style={{ textAlign:"center", padding:"1.5rem" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>⚠️</div>
+              <div style={{ fontSize:13, color:"#E24B4A" }}>Could not load — please try again.</div>
+            </div>
+          )}
+          {text    && renderSections(text)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dictionary ────────────────────────────────────────────────────
+function DictTab({ mastery }) {
+  const [q, setQ]           = useState("");
+  const [topic, setTopic]   = useState("All");
+  const [selected, setSel]  = useState(null);
+  function wStats(w) {
+    const e = mastery[w[0]];
+    if (!e) return { ok:0, fail:0, level:0 };
+    const ok   = Object.values(e.modes).reduce((a,m)=>a+m.ok,0);
+    const fail = Object.values(e.modes).reduce((a,m)=>a+m.fail,0);
+    return { ok, fail, level:e.level, frozen:e.frozen };
+  }
+
+  const rows = useMemo(() =>
+    WORDS.filter(w => (topic==="All"||w[3]===topic) && (!q||(w[0]+w[1]+w[2]).toLowerCase().includes(q.toLowerCase()))),
+    [q, topic]
+  );
+
+  // Per-topic stats for the progress bar
+  const topicStats = useMemo(() => {
+    const wordsInTopic = topic==="All" ? WORDS : WORDS.filter(w=>w[3]===topic);
+    const total = wordsInTopic.length;
+    const mastered = wordsInTopic.filter(w=>{
+      const e = mastery[w[0]]; return e && (e.level>=5||e.frozen);
+    }).length;
+    const learning = wordsInTopic.filter(w=>{
+      const e = mastery[w[0]]; return e && e.level>0 && e.level<5 && !e.frozen;
+    }).length;
+    const pct = total ? Math.round(mastered/total*100) : 0;
+    return { total, mastered, learning, pct };
+  }, [topic, mastery]);
+
+  return (
+    <div style={{ position:"relative" }}>
+      <CardDetail word={selected} onClose={()=>setSel(null)} />
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" style={{ width:"100%", padding:"7px 11px", border:"0.5px solid #ccc", borderRadius:8, fontSize:13, marginBottom:".8rem", background:"transparent", fontFamily:"inherit" }} />
+
+      {/* Topic chips with word counts */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
+        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
+        {TOPICS.map(t => {
+          const cnt = t==="All" ? WORDS.length : WORDS.filter(w=>w[3]===t).length;
+          const mst = t==="All"
+            ? WORDS.filter(w=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); }).length
+            : WORDS.filter(w=>w[3]===t&&(()=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); })()).length;
+          return (
+            <button key={t} onClick={()=>setTopic(t)} style={{
+              padding:"4px 10px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit",
+              border: topic===t ? "0.5px solid #7F77DD" : "0.5px solid #ccc",
+              background: topic===t ? "#EEEDFE" : "transparent",
+              color: topic===t ? "#3C3489" : "#888",
+              display:"flex", alignItems:"center", gap:5,
+            }}>
+              <span>{t}</span>
+              <span style={{ fontSize:10, opacity:0.7 }}>{mst}/{cnt}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Topic progress bar */}
+      <div style={{ background:"#f8f8f8", borderRadius:10, padding:"10px 14px", marginBottom:"1rem", border:"0.5px solid #eee" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+          <span style={{ fontSize:12, fontWeight:500, color:"#333" }}>
+            {topic==="All" ? "All topics" : topic}
+          </span>
+          <div style={{ display:"flex", gap:12, fontSize:11, color:"#888" }}>
+            <span>📚 {topicStats.total} words</span>
+            <span style={{ color:"#BA7517" }}>◑ {topicStats.learning} learning</span>
+            <span style={{ color:"#1D9E75" }}>★ {topicStats.mastered} mastered</span>
+          </div>
+        </div>
+        <div style={{ height:8, background:"#e5e5e5", borderRadius:4, overflow:"hidden" }}>
+          <div style={{
+            height:8,
+            width:`${topicStats.pct}%`,
+            background: topicStats.pct>=80?"#1D9E75":topicStats.pct>=40?"#BA7517":"#7F77DD",
+            borderRadius:4, transition:"width .4s",
+          }}/>
+        </div>
+        <div style={{ fontSize:10, color:"#aaa", marginTop:4, textAlign:"right" }}>{topicStats.pct}% mastered</div>
+      </div>
+
+      <div style={{ fontSize:11, color:"#bbb", marginBottom:".6rem" }}>Tap any row for a detailed AI reference card</div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <thead>
+            <tr>
+              {["Greek","Transcription","English","Progress"].map((h,i) => (
+                <th key={h} style={{ padding:"6px 8px", fontSize:11, fontWeight:500, color:"#888", borderBottom:"0.5px solid #e5e5e5", textAlign:"left", textTransform:"uppercase", letterSpacing:".04em", width:i===3?90:"auto" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length ? rows.map((w,i) => {
+              const s   = wStats(w);
+              const tot = s.ok + s.fail;
+              const pct = tot ? Math.round(s.ok/tot*100) : 0;
+              const lvl = s.level||0;
+              const col = lv(lvl).color;
+              const ok  = lvl >= 5 || s.frozen;
+              return (
+                <tr key={i} onClick={()=>setSel(w)} style={{ cursor:"pointer" }}
+                  onMouseEnter={e=>e.currentTarget.style.background="#f5f4ff"}
+                  onMouseLeave={e=>e.currentTarget.style.background=""}>
+                  <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", fontSize:14 }}>
+                    {ok && <span style={{ color:"#1D9E75", marginRight:4, fontSize:11 }}>✓</span>}{w[0]}
+                  </td>
+                  <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", color:"#888", fontStyle:"italic", fontSize:12 }}>{w[1]}</td>
+                  <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0" }}>{w[2]}</td>
+                  <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0" }}>
+                    {tot > 0 ? (
+                      <div>
+                        <Bar pct={pct} color={col} />
+                        <div style={{ fontSize:10, color:"#aaa", textAlign:"right", marginTop:2 }}>{s.ok}/{tot} · {pct}% · lv{lvl}</div>
+                      </div>
+                    ) : <span style={{ fontSize:10, color:"#ccc" }}>—</span>}
+                  </td>
+                </tr>
+              );
+            }) : <tr><td colSpan={4} style={{ padding:"2rem", textAlign:"center", color:"#888" }}>Not found</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Flashcards ────────────────────────────────────────────────────
+
+// ─── Offline card detail panel ─────────────────────────────────────
+function CardDetail({ word, onClose }) {
+  if (!word) return null;
+  const card = CARDS[word[0]];
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:"16px 16px 0 0", width:"100%", maxWidth:540, maxHeight:"75vh", overflowY:"auto", boxShadow:"0 -4px 30px rgba(0,0,0,0.2)" }}>
+        {/* header */}
+        <div style={{ background:"#EEEDFE", borderRadius:"16px 16px 0 0", padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"flex-start", position:"sticky", top:0 }}>
+          <div>
+            <div style={{ fontSize:22, fontWeight:700, color:"#26215C" }}>{word[0]}</div>
+            <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{word[1]}</div>
+            <div style={{ fontSize:13, color:"#534AB7" }}>{word[2]}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit", flexShrink:0 }}>✕</button>
+        </div>
+        <div style={{ padding:"16px 18px" }}>
+          {!card ? (
+            <div style={{ textAlign:"center", padding:"2rem", color:"#888" }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>📖</div>
+              <div style={{ fontSize:13 }}>No reference card yet for this word.</div>
+            </div>
+          ) : (
+            <>
+              {/* Part of speech */}
+              <div style={{ marginBottom:"1rem" }}>
+                <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Part of speech</div>
+                <div style={{ fontSize:13, color:"#333", background:"#f8f8f8", borderRadius:8, padding:"8px 12px" }}>{card.p}</div>
+              </div>
+
+              {/* Examples */}
+              <div style={{ marginBottom:"1rem" }}>
+                <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Examples</div>
+                {card.ex.map((ex,i) => (
+                  <div key={i} style={{ background:"#f7f7ff", borderRadius:8, padding:"10px 12px", marginBottom:6, borderLeft:"3px solid #AFA9EC" }}>
+                    <div style={{ fontSize:14, fontWeight:500, marginBottom:2 }}>{ex.gr}</div>
+                    <div style={{ fontSize:12, color:"#888", fontStyle:"italic", marginBottom:2 }}>{ex.tr}</div>
+                    <div style={{ fontSize:12, color:"#444" }}>{ex.en}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Notes */}
+              <div style={{ marginBottom:"1rem" }}>
+                <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Notes</div>
+                <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517" }}>{card.n}</div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FlashTab({ mastery, rec }) {
+  const [face, setFace]         = useState(0);
+  const [topic, setTopic]       = useState("All");
+  const [hardOnly, setHardOnly] = useState(false);
+  const [deck, setDeck]         = useState(() => shuf(WORDS));
+  const [idx, setIdx]           = useState(0);
+  const [flipped, setFlipped]   = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(true);
+  const [showDetail, setShowDetail] = useState(false);
+
+  // Speak Greek text using Web Speech API
+  function speak(text, times = 1) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    setSpeaking(true);
+    let count = 0;
+    function sayOnce() {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = "el-GR";
+      utt.rate = 0.85;
+      utt.pitch = 1;
+      utt.onend = () => {
+        count++;
+        if (count < times) {
+          setTimeout(sayOnce, 1200);
+        } else {
+          setSpeaking(false);
+        }
+      };
+      utt.onerror = () => setSpeaking(false);
+      window.speechSynthesis.speak(utt);
+    }
+    sayOnce();
+  }
+
+  function build(f, t, hard) {
+    let p = WORDS.filter(w => t==="All" || w[3]===t);
+    if (hard) { const h=p.filter(w=>{ const e=mastery[w[0]]; if(!e) return false; const mf=Object.values(e.modes).reduce((a,m)=>a+m.fail,0); const mo=Object.values(e.modes).reduce((a,m)=>a+m.ok,0); return mf>mo; }); if(h.length)p=h; }
+    setDeck(shuf(p)); setIdx(0); setFlipped(false);
+    window.speechSynthesis && window.speechSynthesis.cancel();
+  }
+
+  const w = deck[idx] || WORDS[0];
+  const views = [
+    { front:w[0], fsub:w[1], back:w[2], bsub:w[1], fl:"Greek", bl:"English", greekOnBack: false },
+    { front:w[2], fsub:"",   back:w[0], bsub:w[1], fl:"English", bl:"Greek", greekOnBack: true },
+    { front:w[1], fsub:"",   back:w[0], bsub:w[2], fl:"Transcription", bl:"Greek", greekOnBack: true },
+  ];
+  const v = views[face];
+
+  function flipCard() {
+    const newFlipped = !flipped;
+    setFlipped(newFlipped);
+    // When flipping to back — speak the Greek word 2 times if autoSpeak is on
+    if (newFlipped && autoSpeak) {
+      // Always speak the Greek word (w[0])
+      setTimeout(() => speak(w[0], 2), 300); // wait for flip animation
+    }
+  }
+
+  function rate(ok) {
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    rec(w[0], 'flash', ok);
+    if (ok) { setIdx((idx+1)%deck.length); }
+    else { const nd=[...deck]; nd.splice(idx,1); nd.splice(Math.min(idx+2,nd.length),0,w); setDeck(nd); setIdx(idx>=nd.length?0:idx); }
+    setFlipped(false);
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:".5rem" }}>
+        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
+        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>{setTopic(t);build(face,t,hardOnly);}}/>)}
+      </div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:".8rem" }}>
+        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Front:</span>
+        {["Greek","English","Transcription"].map((l,i)=><Chip key={l} label={l} on={face===i} onClick={()=>{setFace(i);build(i,topic,hardOnly);}}/>)}
+        <span style={{ fontSize:12, color:"#888", fontWeight:500, marginLeft:6 }}>Mode:</span>
+        <Chip label="All" on={!hardOnly} onClick={()=>{setHardOnly(false);build(face,topic,false);}}/>
+        <Chip label="Hard only" on={hardOnly} onClick={()=>{setHardOnly(true);build(face,topic,true);}}/>
+      </div>
+
+      {/* top row: restart / counter / audio toggle */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:".6rem" }}>
+        <button onClick={()=>build(face,topic,hardOnly)} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>↺ Restart</button>
+        <span style={{ fontSize:13, color:"#888" }}>{idx+1} / {deck.length}</span>
+        <button onClick={()=>setAutoSpeak(a=>!a)} style={{
+          fontSize:12, padding:"3px 10px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+          border: autoSpeak?"0.5px solid #7F77DD":"0.5px solid #ccc",
+          background: autoSpeak?"#EEEDFE":"transparent",
+          color: autoSpeak?"#3C3489":"#888",
+        }}>
+          {speaking ? "🔊 …" : autoSpeak ? "🔊 Auto" : "🔇 Mute"}
+        </button>
+      </div>
+
+      {/* card */}
+      <div onClick={flipCard} style={{ perspective:800, width:"100%", maxWidth:420, height:170, margin:"0 auto 1.2rem", cursor:"pointer" }}>
+        <div style={{ width:"100%", height:"100%", position:"relative", transformStyle:"preserve-3d", transition:"transform .4s", transform:flipped?"rotateY(180deg)":"none" }}>
+          {[false,true].map(back => (
+            <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
+              <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
+              <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
+              <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
+              {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
+              {back && CARDS[w[0]] && (
+                <button
+                  onClick={e=>{ e.stopPropagation(); setShowDetail(true); }}
+                  style={{ marginTop:10, padding:"5px 14px", borderRadius:20, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+                  📖 More
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* card detail bottom sheet */}
+      {showDetail && <CardDetail word={w} onClose={()=>setShowDetail(false)}/>}
+
+      {/* speak button + nav */}
+      <div style={{ display:"flex", gap:8, justifyContent:"center", alignItems:"center", marginBottom:"1rem", flexWrap:"wrap" }}>
+        <button onClick={()=>rate(0)} style={{ padding:"8px 16px", border:"0.5px solid #E24B4A", borderRadius:8, background:"#FCEBEB", color:"#501313", fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>✕ Don't know</button>
+        <button onClick={()=>speak(w[0], 2)} disabled={speaking} style={{
+          padding:"8px 14px", borderRadius:8, border:"0.5px solid #7F77DD",
+          background: speaking?"#EEEDFE":"white", color:"#534AB7",
+          fontSize:16, cursor:speaking?"default":"pointer", fontFamily:"inherit",
+        }} title="Pronounce">
+          {speaking ? "🔊" : "🔈"}
+        </button>
+        <button onClick={()=>rate(1)} style={{ padding:"8px 16px", border:"0.5px solid #1D9E75", borderRadius:8, background:"#E1F5EE", color:"#085041", fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>✓ Know it</button>
+      </div>
+      <div style={{ textAlign:"center" }}><Btn onClick={()=>build(face,topic,hardOnly)}>↺ Shuffle</Btn></div>
+    </div>
+  );
+}
+
+// ─── Quiz ──────────────────────────────────────────────────────────
+function QuizTab({ mastery, rec }) {
+  const [mi, setMi]       = useState(0);
+  const [cnt, setCnt]     = useState("20");
+  const [topic, setTopic] = useState("All");
+  const [phase, setPhase] = useState("setup");
+  const [qs, setQs]       = useState([]);
+  const [qi, setQi]       = useState(0);
+  const [score, setScore] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const [chosen, setChosen] = useState(null);
+  const [opts, setOpts]   = useState([]);
+  const [showHint, setShowHint] = useState(false);
+
+  // TTS helper — speak Greek word once
+  function speakGreek(text) {
+    if (!window.speechSynthesis || !text) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = "el-GR";
+    utt.rate = 0.85;
+    window.speechSynthesis.speak(utt);
+  }
+
+  function makeOpts(pool, i, m) {
+    const w=pool[i], c=QM[m].a(w);
+    const modeIdx = QM.indexOf(m) !== -1 ? QM.indexOf(m) : m;
+
+    // Smart distractors: prefer same topic, then same "shape"
+    // For Greek→English or EN→Greek: pick words from same topic first
+    const sameTopic  = WORDS.filter(x => x[3]===w[3] && QM[m].a(x)!==c);
+    const otherWords = WORDS.filter(x => x[3]!==w[3] && QM[m].a(x)!==c);
+
+    // Also filter by similar word type using CARDS part-of-speech
+    // e.g. if correct is a verb, prefer verb distractors
+    const correctCard = CARDS[w[0]];
+    const correctPos  = correctCard ? correctCard.p.toLowerCase() : "";
+    const isVerb      = correctPos.includes("verb");
+    const isNoun      = correctPos.includes("noun");
+    const isAdj       = correctPos.includes("adj");
+
+    const samePos = (candidate) => {
+      const card = CARDS[candidate[0]];
+      if (!card) return false;
+      const p = card.p.toLowerCase();
+      if (isVerb) return p.includes("verb");
+      if (isNoun) return p.includes("noun");
+      if (isAdj)  return p.includes("adj");
+      return true;
+    };
+
+    // Priority: same topic + same pos → same topic → same pos → anything
+    const tier1 = shuf(sameTopic.filter(samePos));
+    const tier2 = shuf(sameTopic.filter(x=>!samePos(x)));
+    const tier3 = shuf(otherWords.filter(samePos));
+    const tier4 = shuf(otherWords);
+
+    const candidates = [...tier1, ...tier2, ...tier3, ...tier4];
+    // Deduplicate by answer value
+    const seen = new Set([c]);
+    const dis = [];
+    for (const x of candidates) {
+      const a = QM[m].a(x);
+      if (!seen.has(a)) { seen.add(a); dis.push(a); }
+      if (dis.length === 3) break;
+    }
+    // Pad if not enough
+    while (dis.length < 3) {
+      const fallback = WORDS.find(x => !seen.has(QM[m].a(x)));
+      if (!fallback) break;
+      seen.add(QM[m].a(fallback));
+      dis.push(QM[m].a(fallback));
+    }
+    setOpts(shuf([c, ...dis]));
+  }
+  function start() {
+    const pool0 = topic==="All"?WORDS:WORDS.filter(w=>w[3]===topic);
+    const n = cnt==="all"?pool0.length:+cnt;
+    const pool = shuf(pool0).slice(0,Math.min(n,pool0.length));
+    setQs(pool); setQi(0); setScore(0); setLocked(false); setChosen(null); setShowHint(false);
+    makeOpts(pool,0,mi); setPhase("game");
+  }
+  function pick(o) {
+    if (locked) return;
+    const correct=QM[mi].a(qs[qi]), ok=o===correct;
+    setLocked(true); setChosen(o);
+    if(ok) setScore(s=>s+1);
+    const modeKey = mi===0?"quiz_gr_en":mi===1?"quiz_en_gr":mi===2?"quiz_gr_en":"quiz_gr_en";
+    rec(qs[qi][0], modeKey, ok);
+    // Speak Greek word when answer is shown (feedback moment)
+    speakGreek(qs[qi][0]);
+    setTimeout(()=>{
+      const next=qi+1;
+      if(next>=qs.length){setPhase("result");return;}
+      setQi(next); setLocked(false); setChosen(null); setShowHint(false);
+      makeOpts(qs,next,mi);
+    }, ok?500:1000);
+  }
+
+  if (phase==="setup") return (
+    <div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
+        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
+        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>setTopic(t)}/>)}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
+        {QM.map((m,i)=><MCard key={i} title={m.label} on={mi===i} onClick={()=>setMi(i)}/>)}
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
+        <span style={{ fontSize:13, color:"#888" }}>Questions:</span>
+        <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
+          {["10","20","30","all"].map(v=><option key={v}>{v}</option>)}
+        </select>
+      </div>
+      <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
+    </div>
+  );
+  // Determine flip mode: swap direction of current mode
+  const flipMi = mi===0?1 : mi===1?0 : mi===2?3 : mi===3?2 : 0;
+  const flipLabel = QM[flipMi].label;
+
+  function doRetry(newMi) {
+    const reshuffled = shuf([...qs]);
+    setMi(newMi);
+    setQs(reshuffled); setQi(0); setScore(0); setLocked(false); setChosen(null); setShowHint(false);
+    makeOpts(reshuffled, 0, newMi);
+    setPhase("game");
+  }
+
+  if (phase==="result") return <ResBox
+    score={score} total={qs.length}
+    onRetry={()=>doRetry(mi)}
+    onFlip={()=>doRetry(flipMi)}
+    flipLabel={flipLabel}
+  />;
+
+  const w=qs[qi], m=QM[mi], correct=m.a(w);
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+        <button onClick={()=>setPhase("setup")} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>← Back</button>
+        <span style={{ fontSize:13, color:"#888" }}>{qi+1}/{qs.length}</span>
+        <Pill>{score} correct</Pill>
+      </div>
+      <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
+      <div style={{ marginBottom:"1.4rem" }}/>
+      <div style={{ textAlign:"center" }}>
+        <div
+          onClick={() => { if (mi === 0 || mi === 2 || mi === 3) { const next = !showHint; setShowHint(next); if(next) speakGreek(w[0]); } }}
+          style={{ fontSize:28, fontWeight:600, marginBottom:6, cursor: (mi===0||mi===2||mi===3) ? "pointer" : "default", display:"inline-block", padding:"6px 12px", borderRadius:8, transition:"background .15s" }}
+          title={mi===0||mi===2||mi===3 ? "Tap to see transcription" : ""}
+        >{m.q(w)}</div>
+        <div style={{ height:22, marginBottom:6, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {showHint && (mi===0||mi===2||mi===3)
+            ? <span style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic", animation:"fadeIn .2s" }}>{w[1]}</span>
+            : (mi===0||mi===2||mi===3)
+              ? <span style={{ fontSize:11, color:"#ccc" }}>tap word for transcription</span>
+              : null
+          }
+        </div>
+        <div style={{ fontSize:15, color:"#888", marginBottom:"1.6rem" }}>{m.h}</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          {opts.map(o => {
+            const isC=o===correct, isP=o===chosen;
+            let bg="transparent", border="0.5px solid #ccc", color="#333";
+            if(locked){if(isC){bg="#E1F5EE";border="0.5px solid #1D9E75";color="#085041";}else if(isP){bg="#FCEBEB";border="0.5px solid #E24B4A";color="#501313";}}
+            return <button key={o} disabled={locked} onClick={()=>pick(o)} style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s" }}>{o}</button>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── helpers for tile puzzle ───────────────────────────────────────
+function makeTiles(answer) {
+  // Split answer into chars (letters only, spaces kept as space tiles)
+  const chars = answer.split("").filter(c => c !== " ");
+  // Add ~40% extra random letters from the same alphabet (greek or latin)
+  const greekPool = "αβγδεζηθικλμνξοπρστυφχψω";
+  const latinPool  = "abcdefghijklmnoprstuvwxyz";
+  const isGreek    = /[\u0370-\u03ff]/.test(answer);
+  const pool       = isGreek ? greekPool : latinPool;
+  const extraCount = Math.max(2, Math.floor(chars.length * 0.5));
+  const extras     = Array.from({length: extraCount}, () => pool[Math.floor(Math.random()*pool.length)]);
+  return shuf([...chars, ...extras].map((ch, i) => ({ id:i, ch, used:false })));
+}
+
+// ─── Type (Tobo-style tile puzzle) ────────────────────────────────
+function TypeTab({ mastery, rec }) {
+  const [topic, setTopic] = useState("All");
+  const [cnt, setCnt]     = useState("20");
+  const [mode, setMode]   = useState("gr"); // "gr"=show EN→type Greek, "tr"=show EN→type Transcription
+  const [phase, setPhase] = useState("setup");
+  const [qs, setQs]       = useState([]);
+  const [qi, setQi]       = useState(0);
+  const [score, setScore] = useState(0);
+
+  // tile state
+  const [tiles, setTiles]     = useState([]); // {id, ch, used}
+  const [picked, setPicked]   = useState([]); // [{id, ch}] — slots filled so far
+  const [res, setRes]         = useState(null); // null|"ok"|"bad"
+  const [hintCount, setHintCount] = useState(0); // letters revealed by hint
+
+  function getAnswer(w) { return mode==="gr" ? w[0].replace(/\s/g,"") : w[1].replace(/\s/g,""); }
+  function getQuestion(w) { return w[2]; } // always show English
+
+  function initRound(pool, i) {
+    const w = pool[i];
+    const answer = getAnswer(w);
+    setTiles(makeTiles(answer));
+    setPicked([]);
+    setRes(null);
+    setHintCount(0);
+  }
+
+  function start() {
+    const pool0 = topic==="All" ? WORDS : WORDS.filter(w=>w[3]===topic);
+    const n = cnt==="all" ? pool0.length : +cnt;
+    const pool = shuf(pool0).slice(0, Math.min(n, pool0.length));
+    setQs(pool); setQi(0); setScore(0);
+    initRound(pool, 0);
+    setPhase("game");
+  }
+
+  function tapTile(tile) {
+    if (res || tile.used) return;
+    const newPicked = [...picked, { id:tile.id, ch:tile.ch }];
+    setTiles(prev => prev.map(t => t.id===tile.id ? {...t, used:true} : t));
+    setPicked(newPicked);
+    // auto-check when enough letters placed
+    const answer = getAnswer(qs[qi]);
+    if (newPicked.length === answer.length) {
+      const typed = newPicked.map(p=>p.ch).join("");
+      const ok = norm(typed) === norm(answer);
+      setRes(ok ? "ok" : "bad");
+      if (ok) setScore(s=>s+1);
+      rec(qs[qi][0], 'tile', ok);
+    }
+  }
+
+  function removeLast() {
+    if (res || picked.length===0) return;
+    const last = picked[picked.length-1];
+    setTiles(prev => prev.map(t => t.id===last.id ? {...t, used:false} : t));
+    setPicked(prev => prev.slice(0,-1));
+  }
+
+  function hint() {
+    if (res) return;
+    const answer = getAnswer(qs[qi]);
+    const nextPos = hintCount; // reveal this index
+    if (nextPos >= answer.length) return;
+    const neededCh = answer[nextPos];
+    // Remove any wrong picked letters beyond nextPos first
+    // Clear everything and re-reveal up to nextPos+1
+    const newHint = nextPos + 1;
+    // Find tile ids that match needed chars in order
+    const needed = answer.slice(0, newHint).split("");
+    const used = [];
+    const newTiles = tiles.map(t => ({...t, used:false}));
+    const newPicked = [];
+    for (const ch of needed) {
+      const tile = newTiles.find(t => !t.used && norm(t.ch)===norm(ch));
+      if (tile) { tile.used = true; used.push(tile); newPicked.push({id:tile.id, ch:tile.ch}); }
+    }
+    setTiles(newTiles);
+    setPicked(newPicked);
+    setHintCount(newHint);
+    // auto-check if complete
+    if (newHint === answer.length) {
+      const ok = true;
+      setRes("ok");
+      setScore(s=>s+1);
+      rec(qs[qi][0], 'tile', ok);
+    }
+  }
+
+  function next() {
+    const nextQi = qi+1;
+    if (nextQi >= qs.length) { setPhase("result"); return; }
+    setQi(nextQi);
+    initRound(qs, nextQi);
+  }
+
+  function retry() {
+    // Reset the current word without counting as new attempt
+    initRound(qs, qi);
+  }
+
+  // ── setup screen ──
+  if (phase==="setup") return (
+    <div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
+        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
+        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>setTopic(t)}/>)}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
+        <MCard title="English → Greek letters" on={mode==="gr"} onClick={()=>setMode("gr")}/>
+        <MCard title="English → Transcription" on={mode==="tr"} onClick={()=>setMode("tr")}/>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
+        <span style={{ fontSize:13, color:"#888" }}>Words:</span>
+        <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
+          {["10","20","30","all"].map(v=><option key={v}>{v}</option>)}
+        </select>
+      </div>
+      <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
+    </div>
+  );
+  if (phase==="result") return <ResBox score={score} total={qs.length} onRetry={()=>{
+    const reshuffled = shuf([...qs]);
+    setQs(reshuffled); setQi(0); setScore(0);
+    initRound(reshuffled, 0);
+    setPhase("game");
+  }}/>;
+
+  // ── game screen ──
+  const w = qs[qi];
+  const answer = getAnswer(w);
+  const slots = answer.length;
+  const bgMain = res==="ok" ? "#E1F5EE" : res==="bad" ? "#FFF0F0" : "#f7f7ff";
+  const accentColor = res==="ok" ? "#1D9E75" : res==="bad" ? "#E24B4A" : "#534AB7";
+
+  return (
+    <div style={{ background:bgMain, borderRadius:16, padding:"1.2rem", transition:"background .3s" }}>
+      {/* progress */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+        <button onClick={()=>setPhase("setup")} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>← Back</button>
+        <span style={{ fontSize:13, color:"#888" }}>{qi+1}/{qs.length}</span>
+        <Pill>{score} correct</Pill>
+      </div>
+      <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
+      <div style={{ marginBottom:"1.4rem" }}/>
+
+      {/* question */}
+      <div style={{ textAlign:"center", marginBottom:"1.4rem" }}>
+        <div style={{ fontSize:26, fontWeight:600, color:"#222", marginBottom:4 }}>{getQuestion(w)}</div>
+        <div style={{ fontSize:12, color:"#aaa" }}>{mode==="gr" ? "Spell in Greek" : "Write transcription"}</div>
+      </div>
+
+      {/* answer slots */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:6, justifyContent:"center", minHeight:52, marginBottom:"1.2rem", padding:"8px 0" }}>
+        {Array.from({length:slots}).map((_,i) => {
+          const p = picked[i];
+          const isHinted = i < hintCount;
+          return (
+            <div key={i} onClick={()=>{ if(p && !res && !isHinted){ setTiles(prev=>prev.map(t=>t.id===p.id?{...t,used:false}:t)); setPicked(prev=>prev.filter((_,pi)=>pi!==i)); }}}
+              style={{ minWidth:38, height:44, borderRadius:8, border:`2px solid ${p ? accentColor : "#ccc"}`, background: p ? (isHinted?"#FFF3CD":accentColor==="rgb(29,158,117)"?"#E1F5EE":"white") : "white", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:600, color: p ? accentColor : "#ddd", cursor: p&&!isHinted&&!res?"pointer":"default", transition:"all .15s", padding:"0 6px" }}>
+              {p ? p.ch : ""}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* feedback */}
+      {res && (
+        <div style={{ textAlign:"center", marginBottom:"1rem", fontSize:14, fontWeight:500, color:accentColor }}>
+          {res==="ok" ? "✓ Correct!" : `✗ Answer: ${answer}`}
+        </div>
+      )}
+
+      {/* tile keyboard */}
+      {!res && (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:8, justifyContent:"center", marginBottom:"1.2rem" }}>
+          {tiles.map(tile => (
+            <button key={tile.id} onClick={()=>tapTile(tile)} disabled={tile.used}
+              style={{ minWidth:44, height:52, borderRadius:10, border:"1.5px solid #ccc", background:tile.used?"#eee":"white", color:tile.used?"#ccc":"#222", fontSize:20, fontWeight:600, cursor:tile.used?"default":"pointer", fontFamily:"inherit", transition:"all .12s", padding:"0 8px", boxShadow:tile.used?"none":"0 2px 4px rgba(0,0,0,0.08)" }}>
+              {tile.ch}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* action buttons */}
+      <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
+        {!res ? (
+          <>
+            <button onClick={removeLast} style={{ padding:"10px 18px", borderRadius:10, border:"1.5px solid #ccc", background:"white", fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>⌫ Delete</button>
+            <button onClick={hint} disabled={hintCount>=slots}
+              style={{ padding:"10px 18px", borderRadius:10, border:"1.5px solid #BA7517", background:"#FFF3CD", color:"#7A4F00", fontSize:13, cursor:hintCount>=slots?"default":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:5 }}>
+              💡 Hint ({slots-hintCount} left)
+            </button>
+          </>
+        ) : res==="bad" ? (
+          <>
+            <button onClick={retry}
+              style={{ padding:"12px 24px", borderRadius:10, border:"1.5px solid #BA7517", background:"#FFF3CD", color:"#7A4F00", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              ↺ Retry
+            </button>
+            <button onClick={next}
+              style={{ padding:"12px 24px", borderRadius:10, border:"none", background:"#ccc", color:"white", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              Skip →
+            </button>
+          </>
+        ) : (
+          <button onClick={next}
+            style={{ padding:"12px 32px", borderRadius:10, border:"none", background:accentColor, color:"white", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+            Next →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Sentences Tab (Duolingo-style sentence builder) ──────────────
+function SentencesTab({ rec }) {
+  const [phase, setPhase]     = useState("setup");
+  const [topic, setTopic]     = useState("all"); // "all" or verb filter
+  const [qs, setQs]           = useState([]);
+  const [qi, setQi]           = useState(0);
+  const [picked, setPicked]   = useState([]); // words chosen so far
+  const [tiles, setTiles]     = useState([]); // {id, word, used}
+  const [result, setResult]   = useState(null); // null | "ok" | "bad"
+  const [score, setScore]     = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+
+  function buildTiles(s) {
+    const all = shuf([...s.gr.map((w,i)=>({id:`g${i}`,word:w,used:false})),
+                      ...s.ex.map((w,i)=>({id:`e${i}`,word:w,used:false}))]);
+    setTiles(all);
+    setPicked([]);
+    setResult(null);
+    setShowAnswer(false);
+  }
+
+  function start() {
+    const pool = shuf(SENTENCES);
+    setQs(pool); setQi(0); setScore(0);
+    buildTiles(pool[0]);
+    setPhase("game");
+  }
+
+  function tapTile(tile) {
+    if (result || tile.used) return;
+    setTiles(prev => prev.map(t => t.id===tile.id ? {...t,used:true} : t));
+    const newPicked = [...picked, tile];
+    setPicked(newPicked);
+    // Auto-check when picked count matches answer length
+    const s = qs[qi];
+    if (newPicked.length === s.gr.length) {
+      const typed = newPicked.map(t=>t.word).join(" ");
+      const correct = s.gr.join(" ");
+      const ok = typed === correct;
+      setResult(ok ? "ok" : "bad");
+      if (ok) setScore(sc=>sc+1);
+    }
+  }
+
+  function removePicked(idx) {
+    if (result) return;
+    const tile = picked[idx];
+    setTiles(prev => prev.map(t => t.id===tile.id ? {...t,used:false} : t));
+    setPicked(prev => prev.filter((_,i)=>i!==idx));
+  }
+
+  function next() {
+    const nextQi = qi+1;
+    if (nextQi >= qs.length) { setPhase("result"); return; }
+    setQi(nextQi);
+    buildTiles(qs[nextQi]);
+  }
+
+  function showHint() {
+    const s = qs[qi];
+    // Reset and reveal full answer
+    const newTiles = tiles.map(t=>({...t,used:false}));
+    const newPicked = [];
+    for (const word of s.gr) {
+      const tile = newTiles.find(t=>!t.used&&t.word===word);
+      if (tile) { tile.used=true; newPicked.push(tile); }
+    }
+    setTiles(newTiles);
+    setPicked(newPicked);
+    setResult("hint");
+    setShowAnswer(true);
+  }
+
+  if (phase==="setup") return (
+    <div style={{textAlign:"center",padding:"1rem 0"}}>
+      <div style={{fontSize:15,fontWeight:500,marginBottom:8}}>Sentence Builder</div>
+      <div style={{fontSize:13,color:"#888",marginBottom:"1.4rem",lineHeight:1.6}}>
+        Read the English sentence.<br/>Tap the Greek words in the correct order.
+      </div>
+      <div style={{background:"#f8f8f8",borderRadius:12,padding:"1rem 1.4rem",marginBottom:"1.4rem",textAlign:"left"}}>
+        <div style={{fontSize:12,color:"#888",marginBottom:6}}>How it works:</div>
+        <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>
+          🇬🇧 English sentence shown above<br/>
+          🟦 Tap Greek word tiles to build translation<br/>
+          ✓ Auto-checks when last word placed<br/>
+          💡 Hint reveals the full answer
+        </div>
+      </div>
+      <div style={{fontSize:12,color:"#aaa",marginBottom:"1.4rem"}}>{SENTENCES.length} sentences · from verb exercises</div>
+      <Btn onClick={start}>Start →</Btn>
+    </div>
+  );
+
+  if (phase==="result") return (
+    <ResBox
+      score={score} total={qs.length}
+      onRetry={()=>{
+        const reshuffled = shuf([...qs]);
+        setQs(reshuffled); setQi(0); setScore(0);
+        buildTiles(reshuffled[0]);
+        setPhase("game");
+      }}
+    />
+  );
+
+  const s = qs[qi];
+  const bgMain = result==="ok" ? "#E8F8F2" : result==="bad" ? "#FFF0F0" : result==="hint" ? "#FFF8E8" : "white";
+  const accentColor = result==="ok" ? "#1D9E75" : result==="bad" ? "#E24B4A" : result==="hint" ? "#BA7517" : "#534AB7";
+
+  return (
+    <div style={{background:bgMain, borderRadius:16, padding:"1.2rem", transition:"background .3s", minHeight:400}}>
+      {/* Progress */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+        <button onClick={()=>setPhase("setup")} style={{fontSize:13,color:"#888",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>← Back</button>
+        <span style={{fontSize:13,color:"#888"}}>{qi+1}/{qs.length}</span>
+        <Pill>{score} correct</Pill>
+      </div>
+      <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
+      <div style={{marginBottom:"1.4rem"}}/>
+
+      {/* English prompt */}
+      <div style={{textAlign:"center",marginBottom:"1.6rem"}}>
+        <div style={{fontSize:11,color:"#aaa",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Translate to Greek</div>
+        <div style={{fontSize:26,fontWeight:700,color:"#222",lineHeight:1.3}}>{s.en}</div>
+      </div>
+
+      {/* Answer slots */}
+      <div style={{minHeight:52,marginBottom:"1.2rem",display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",padding:"10px 4px",background:"rgba(0,0,0,0.04)",borderRadius:10,border:`1.5px dashed ${result ? accentColor : "#ddd"}`}}>
+        {picked.length === 0 && (
+          <span style={{fontSize:13,color:"#bbb",alignSelf:"center"}}>Tap words below…</span>
+        )}
+        {picked.map((tile,i) => (
+          <button key={tile.id} onClick={()=>removePicked(i)} disabled={!!result}
+            style={{padding:"11px 18px",borderRadius:10,border:`1.5px solid ${accentColor}`,
+              background:"white",color:accentColor,fontSize:18,fontWeight:500,
+              cursor:result?"default":"pointer",fontFamily:"inherit",
+              boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>
+            {tile.word}
+          </button>
+        ))}
+      </div>
+
+      {/* Feedback */}
+      {result && (
+        <div style={{textAlign:"center",marginBottom:"1rem",fontSize:14,fontWeight:600,color:accentColor}}>
+          {result==="ok"   && "✓ Correct!"}
+          {result==="bad"  && `✗ Correct answer: ${s.gr.join(" ")}`}
+          {result==="hint" && `💡 Answer: ${s.gr.join(" ")}`}
+        </div>
+      )}
+
+      {/* Word tiles */}
+      {!result && (
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginBottom:"1.2rem"}}>
+          {tiles.map(tile => (
+            <button key={tile.id} onClick={()=>tapTile(tile)} disabled={tile.used}
+              style={{padding:"14px 20px",borderRadius:12,
+                border: tile.used ? "1.5px solid #eee" : "1.5px solid #7F77DD",
+                background: tile.used ? "#f5f5f5" : "white",
+                color: tile.used ? "#ccc" : "#3C3489",
+                fontSize:18,fontWeight:600,cursor:tile.used?"default":"pointer",
+                fontFamily:"inherit",transition:"all .12s",
+                boxShadow:tile.used?"none":"0 2px 6px rgba(127,119,221,0.15)"}}>
+              {tile.word}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+        {!result ? (
+          <>
+            <button onClick={()=>{setPicked([]); setTiles(prev=>prev.map(t=>({...t,used:false})))}}
+              style={{padding:"9px 16px",borderRadius:10,border:"1.5px solid #ccc",background:"white",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+              ⌫ Clear
+            </button>
+            <button onClick={showHint}
+              style={{padding:"9px 16px",borderRadius:10,border:"1.5px solid #BA7517",background:"#FFF3CD",color:"#7A4F00",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+              💡 Hint
+            </button>
+          </>
+        ) : (
+          <button onClick={next}
+            style={{padding:"12px 36px",borderRadius:10,border:"none",
+              background: result==="ok" ? "#1D9E75" : result==="hint" ? "#BA7517" : "#E24B4A",
+              color:"white",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            Next →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Stats Tab ─────────────────────────────────────────────────────
+function StatsTab({ mastery }) {
+  const [filter, setFilter] = useState("all");
+
+  // Apply decay on render
+  const m = useMemo(() => applyDecay(mastery), [mastery]);
+
+  const items = WORDS.map(w => {
+    const e = m[w[0]] || initMastery()[w[0]];
+    const lvl = e.level;
+    const modes = e.modes;
+    const totalOk   = Object.values(modes).reduce((a,x)=>a+x.ok,0);
+    const totalFail = Object.values(modes).reduce((a,x)=>a+x.fail,0);
+    const totalAtt  = totalOk + totalFail;
+    const acc = totalAtt ? Math.round(totalOk/totalAtt*100) : null;
+    return { w, e, lvl, totalOk, totalFail, totalAtt, acc };
+  });
+
+  const counts = [0,1,2,3,4,5].map(l => items.filter(i=>i.lvl===l).length);
+  const frozen = items.filter(i=>i.e.frozen).length;
+  const mastPct = Math.round((counts[5]+frozen)/WORDS.length*100);
+
+  const visible = items
+    .filter(i => filter==="all" || (filter==="5"?i.lvl===5:filter==="frozen"?i.e.frozen:i.lvl===+filter))
+    .sort((a,b) => a.lvl!==b.lvl ? a.lvl-b.lvl : (a.acc??-1)-(b.acc??-1));
+
+  return (
+    <div>
+      {/* level legend */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
+        {LEVEL_INFO.map((li,i) => (
+          <div key={i} style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:20, background:li.bg, border:`0.5px solid ${li.color}` }}>
+            <span style={{ fontSize:12, color:li.color }}>{li.icon}</span>
+            <span style={{ fontSize:11, color:li.color, fontWeight:500 }}>{li.label}</span>
+            <span style={{ fontSize:11, color:li.color }}>({counts[i]})</span>
+          </div>
+        ))}
+        {frozen>0&&<div style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:20, background:"#FFD700", border:"0.5px solid #B8860B" }}><span style={{fontSize:11,color:"#7A5900",fontWeight:500}}>❄ Frozen ({frozen})</span></div>}
+      </div>
+
+      {/* overall progress */}
+      <div style={{ marginBottom:"1.4rem" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:5 }}>
+          <span style={{ fontWeight:500 }}>Overall mastery</span>
+          <span style={{ color:"#888" }}>{counts[5]+frozen}/{WORDS.length} ({mastPct}%)</span>
+        </div>
+        {/* segmented bar */}
+        <div style={{ height:12, borderRadius:6, overflow:"hidden", display:"flex", background:"#eee" }}>
+          {LEVEL_INFO.map((li,i) => {
+            const w = counts[i]/WORDS.length*100;
+            if (w===0) return null;
+            return <div key={i} style={{ width:`${w}%`, height:12, background:li.color, transition:"width .3s" }} title={`${li.label}: ${counts[i]}`}/>;
+          })}
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#aaa", marginTop:3 }}>
+          <span>Level 0 (unseen)</span><span>{mastPct}% mastered</span><span>Level 5 ★</span>
+        </div>
+      </div>
+
+      {/* what's next hint */}
+      {counts[0]>0&&<div style={{ background:"#f7f7ff", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"10px 14px", marginBottom:"1rem", fontSize:12, color:"#534AB7" }}>
+        💡 <strong>{counts[0]}</strong> words unseen — start with Flashcards to unlock level 1!
+      </div>}
+      {counts[4]>0&&<div style={{ background:"#E1F5EE", border:"0.5px solid #5DCAA5", borderRadius:10, padding:"10px 14px", marginBottom:"1rem", fontSize:12, color:"#0F6E56" }}>
+        🎯 <strong>{counts[4]}</strong> words at level 4 — one more full round to reach level 5!
+      </div>}
+
+      {/* filter chips */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem", alignItems:"center" }}>
+        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Show:</span>
+        {[["all","All"], ["0","Unseen"], ["1","Lv1"], ["2","Lv2"], ["3","Lv3"], ["4","Lv4"], ["5","Mastered"]].map(([v,l])=>(
+          <Chip key={v} label={`${l} (${v==="all"?WORDS.length:counts[+v]??0})`} on={filter===v} onClick={()=>setFilter(v)}/>
+        ))}
+      </div>
+
+      {/* word list */}
+      {visible.length===0
+        ? <div style={{ textAlign:"center", padding:"2rem", color:"#888", fontSize:13 }}>No words here yet</div>
+        : <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            {visible.map(({w,e,lvl,totalOk,totalAtt,acc})=>{
+              const li = lv(lvl);
+              const ms = e.modes;
+              return (
+                <div key={w[0]} style={{ padding:"10px 12px", background:li.bg, borderRadius:10, border:`0.5px solid ${li.color}33` }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                    <span style={{ fontSize:16, color:li.color }}>{li.icon}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:"#222" }}>{w[0]}</div>
+                      <div style={{ fontSize:11, color:"#888", fontStyle:"italic" }}>{w[1]} · {w[2]}</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, fontWeight:600, color:li.color }}>{li.label}</div>
+                      {acc!==null&&<div style={{ fontSize:10, color:"#aaa" }}>{totalOk}/{totalAtt} · {acc}%</div>}
+                      {e.frozen&&<div style={{ fontSize:10, color:"#B8860B" }}>❄ frozen</div>}
+                    </div>
+                  </div>
+                  {/* mode progress pills */}
+                  <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                    {[
+                      { key:"flash",      label:"Flash" },
+                      { key:"quiz_gr_en", label:"Quiz GR→EN" },
+                      { key:"quiz_en_gr", label:"Quiz EN→GR" },
+                      { key:"tile",       label:"Spelling" },
+                    ].map(({key,label})=>{
+                      const md = ms[key];
+                      const tot = md.ok+md.fail;
+                      const pct = tot ? Math.round(md.ok/tot*100) : null;
+                      const done = md.cleared;
+                      return (
+                        <div key={key} style={{ padding:"2px 7px", borderRadius:10, fontSize:10, fontWeight:500, background:done?"#1D9E75":tot>0?"#FFF3CD":"#eee", color:done?"white":tot>0?"#7A4F00":"#bbb", border:`0.5px solid ${done?"#1D9E75":tot>0?"#BA7517":"#ddd"}` }}>
+                          {done?"✓ ":""}{label}{pct!==null?` ${pct}%`:""}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+      }
+    </div>
+  );
+}
+
+// ─── Root ──────────────────────────────────────────────────────────
+const STORAGE_KEY = "greek_vocab_mastery_v1";
+
+function App() {
+  const [tab, setTab]         = useState("dict");
+  const [mastery, setMastery] = useState(initMastery);
+  const [loaded, setLoaded]   = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  // Load from Supabase on mount
+  useEffect(() => {
+    async function load() {
+      try {
+        const saved = await supabaseLoad();
+        if (saved) {
+          const fresh = initMastery();
+          const merged = { ...fresh };
+          Object.keys(saved).forEach(k => {
+            if (merged[k] && saved[k]) {
+              const savedModes = saved[k].modes || {};
+              const mergedModes = {};
+              Object.keys(merged[k].modes).forEach(m => {
+                mergedModes[m] = savedModes[m]
+                  ? { ok: savedModes[m].ok||0, fail: savedModes[m].fail||0, cleared: savedModes[m].cleared||false }
+                  : merged[k].modes[m];
+              });
+              merged[k] = {
+                level:    saved[k].level    ?? 0,
+                streak5:  saved[k].streak5  ?? 0,
+                frozen:   saved[k].frozen   ?? false,
+                lastSeen: saved[k].lastSeen ?? null,
+                modes: mergedModes,
+              };
+            }
+          });
+          setMastery(applyDecay(merged));
+        } else {
+          setMastery(applyDecay(initMastery()));
+        }
+      } catch {
+        setMastery(applyDecay(initMastery()));
+      }
+      setLoaded(true);
+    }
+    load();
+  }, []);
+
+  // Save to Supabase on every mastery change (debounced 2s)
+  useEffect(() => {
+    if (!loaded) return;
+    setSaveStatus("saving");
+    const timer = setTimeout(async () => {
+      const ok = await supabaseSave(mastery);
+      setSaveStatus(ok ? "saved" : "error");
+      setTimeout(() => setSaveStatus(null), 2000);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [mastery, loaded]);
+
+  // rec: record an answer from any exercise
+  const rec = useCallback((wordKey, mode, ok) => {
+    setMastery(prev => applyAnswer(prev, wordKey, mode, ok));
+  }, []);
+
+  // Online status
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [showRestore, setShowRestore] = useState(false);
+  const [restoreText, setRestoreText] = useState("");
+  const [restoreMsg, setRestoreMsg] = useState(null);
+
+  function exportBackup() {
+    try {
+      const data = JSON.stringify(mastery);
+      // Try clipboard
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(data).then(() => {
+          setRestoreMsg({ ok:true, text:"✓ Copied! Paste into Notes app to save." });
+          setTimeout(()=>setRestoreMsg(null), 4000);
+        }).catch(()=> showTextFallback(data));
+      } else {
+        showTextFallback(data);
+      }
+    } catch(e) {
+      setRestoreMsg({ ok:false, text:"Could not export." });
+    }
+  }
+
+  function showTextFallback(data) {
+    setRestoreText(data);
+    setShowRestore(true);
+    setRestoreMsg({ ok:true, text:"Copy the text below and save it in Notes." });
+  }
+
+  function importBackup() {
+    try {
+      const saved = JSON.parse(restoreText.trim());
+      const fresh = initMastery();
+      const merged = { ...fresh };
+      Object.keys(saved).forEach(k => {
+        if (merged[k] && saved[k]) {
+          const savedModes = saved[k].modes || {};
+          const mergedModes = {};
+          Object.keys(merged[k].modes).forEach(m => {
+            mergedModes[m] = savedModes[m]
+              ? { ok:savedModes[m].ok||0, fail:savedModes[m].fail||0, cleared:savedModes[m].cleared||false }
+              : merged[k].modes[m];
+          });
+          merged[k] = { level:saved[k].level??0, streak5:saved[k].streak5??0,
+            frozen:saved[k].frozen??false, lastSeen:saved[k].lastSeen??null, modes:mergedModes };
+        }
+      });
+      setMastery(applyDecay(merged));
+      setShowRestore(false);
+      setRestoreText("");
+      setRestoreMsg({ ok:true, text:"✓ Progress restored!" });
+      setTimeout(()=>setRestoreMsg(null), 3000);
+    } catch(e) {
+      setRestoreMsg({ ok:false, text:"Invalid backup data. Please check and try again." });
+    }
+  }
+  useEffect(() => {
+    const on  = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online",  on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
+  // Derived values — ALL hooks and derived state BEFORE any early return
+  const masteryArr = useMemo(() => Object.values(mastery), [mastery]);
+  const level5     = masteryArr.filter(e => e.level >= 5 || e.frozen).length;
+  const mastPct    = Math.round(level5/WORDS.length*100);
+  const TABS = [
+    { id:"dict",      label:"Dictionary" },
+    { id:"flash",     label:"Flashcards" },
+    { id:"quiz",      label:"Quiz" },
+    { id:"type",      label:"Type" },
+    { id:"sentences", label:"Sentences" },
+    { id:"stats",     label:`Progress (${level5}/${WORDS.length})` },
+  ];
+
+  // Early return only AFTER all hooks
+  if (!loaded) return (
+    <div style={{ padding:"3rem", textAlign:"center", color:"#888", fontFamily:"system-ui,sans-serif" }}>
+      Loading your progress…
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily:"system-ui,sans-serif", padding:"0.5rem 0", maxWidth:720 }}>
+      {/* header */}
+      <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary</div>
+          <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
+        </div>
+        <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
+          {!isOnline && <span style={{ fontSize:11, color:"#888", background:"#f0f0f0", border:"0.5px solid #ccc", borderRadius:10, padding:"2px 8px" }}>📵</span>}
+          {saveStatus && <span style={{ fontSize:11, color:saveStatus==="saved"?"#1D9E75":"#aaa" }}>{saveStatus==="saving"?"💾":"✓"}</span>}
+          <span style={{ fontSize:12, color:"#0F6E56", background:"#E1F5EE", border:"0.5px solid #5DCAA5", borderRadius:10, padding:"2px 8px" }}>★ {level5} mastered</span>
+          <button onClick={exportBackup}
+            style={{ fontSize:12, padding:"3px 9px", borderRadius:10, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", cursor:"pointer", fontFamily:"inherit" }}>
+            📋 Backup
+          </button>
+          <button onClick={()=>{ setShowRestore(r=>!r); setRestoreText(""); setRestoreMsg(null); }}
+            style={{ fontSize:12, padding:"3px 9px", borderRadius:10, border:"0.5px solid #ccc", background:"transparent", color:"#888", cursor:"pointer", fontFamily:"inherit" }}>
+            📥 Restore
+          </button>
+        </div>
+      </div>
+
+      {/* Backup notification */}
+      {restoreMsg && (
+        <div style={{ padding:"8px 14px", borderRadius:10, marginBottom:8,
+          background: restoreMsg.ok ? "#E1F5EE" : "#FCEBEB",
+          border: `0.5px solid ${restoreMsg.ok ? "#5DCAA5" : "#E24B4A"}`,
+          fontSize:13, color: restoreMsg.ok ? "#0F6E56" : "#E24B4A" }}>
+          {restoreMsg.text}
+        </div>
+      )}
+
+      {/* Restore panel */}
+      {showRestore && (
+        <div style={{ background:"#f8f8f8", border:"0.5px solid #ddd", borderRadius:12, padding:"14px", marginBottom:"1rem" }}>
+          <div style={{ fontSize:13, fontWeight:500, marginBottom:8 }}>📥 Restore from backup</div>
+          <div style={{ fontSize:12, color:"#888", marginBottom:8 }}>
+            Paste your backup text here (from Notes or clipboard):
+          </div>
+          <textarea
+            value={restoreText}
+            onChange={e=>setRestoreText(e.target.value)}
+            placeholder="Paste backup data here…"
+            rows={4}
+            style={{ width:"100%", fontSize:11, fontFamily:"monospace", padding:"8px",
+              border:"0.5px solid #ccc", borderRadius:8, background:"white",
+              resize:"vertical", marginBottom:8 }}
+          />
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={importBackup} disabled={!restoreText.trim()}
+              style={{ padding:"8px 18px", borderRadius:8, border:"none",
+                background: restoreText.trim() ? "#534AB7" : "#ccc",
+                color:"white", fontSize:13, cursor: restoreText.trim() ? "pointer" : "default",
+                fontFamily:"inherit", fontWeight:500 }}>
+              Restore
+            </button>
+            <button onClick={()=>{ setShowRestore(false); setRestoreText(""); setRestoreMsg(null); }}
+              style={{ padding:"8px 18px", borderRadius:8, border:"0.5px solid #ccc",
+                background:"transparent", fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+              Cancel
+            </button>
+          </div>
+          {restoreText && (
+            <div style={{ marginTop:8, fontSize:11, color:"#aaa" }}>
+              Select all text below and copy to save your backup:
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* segmented progress bar */}
+      <div style={{ marginBottom:"1rem" }}>
+        <div style={{ height:8, borderRadius:4, overflow:"hidden", display:"flex", background:"#eee" }}>
+          {LEVEL_INFO.map((li,i) => {
+            const cnt = masteryArr.filter(e=>e.level===i&&!e.frozen).length;
+            if (cnt===0&&!(i===5)) return null;
+            const w = (i===5 ? masteryArr.filter(e=>e.level===5||e.frozen).length : cnt) / WORDS.length * 100;
+            return <div key={i} style={{ width:`${w}%`, height:8, background:li.color, transition:"width .3s" }}/>;
+          })}
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#bbb", marginTop:3 }}>
+          <span>0%</span><span>{mastPct}% mastered</span><span>100%</span>
+        </div>
+      </div>
+
+      {/* tabs */}
+      <div style={{ display:"flex", borderBottom:"0.5px solid #e5e5e5", marginBottom:"1rem", overflowX:"auto" }}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:"8px 13px", fontSize:13, cursor:"pointer", border:"none", background:"none", color:tab===t.id?"#111":"#888", fontFamily:"inherit", borderBottom:tab===t.id?"2px solid #111":"2px solid transparent", marginBottom:-1, fontWeight:tab===t.id?500:400, whiteSpace:"nowrap" }}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab==="dict"  && <DictTab  mastery={mastery}/>}
+      {tab==="flash" && <FlashTab mastery={mastery} rec={rec}/>}
+      {tab==="quiz"  && <QuizTab  mastery={mastery} rec={rec}/>}
+      {tab==="type"  && <TypeTab  mastery={mastery} rec={rec}/>}
+      {tab==="sentences" && <SentencesTab rec={rec}/>}
+      {tab==="stats"     && <StatsTab mastery={mastery}/>}
+    </div>
+  );
+}
+
+
+// Mount app
+const { useState, useEffect, useMemo, useCallback } = React;
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
