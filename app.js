@@ -355,6 +355,85 @@ const WORDS = [
   ["ωμέγα","oméga","omega (Ω)","Alphabet"],
 ];
 
+// ─── Claude API for interactive word cards ────────────────────────
+const CLAUDE_API_KEY = "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";
+const CARD_CACHE_PREFIX = "card_v1_";
+
+async function getCardFromCache(greek) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(CARD_CACHE_PREFIX + greek);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function saveCardToCache(greek, card) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(card, CARD_CACHE_PREFIX + greek);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch { return false; }
+}
+
+async function fetchWordCard(greek, transcription, english, topic) {
+  // Check cache first
+  const cached = await getCardFromCache(greek);
+  if (cached) return cached;
+
+  const prompt = `You are a Greek language teacher. Give a concise reference card for the Greek word "${greek}" (${transcription}) meaning "${english}" (topic: ${topic}).
+
+Return ONLY a JSON object with this exact structure:
+{
+  "pos": "part of speech (e.g. noun (neuter), verb, adjective)",
+  "forms": "key grammatical forms (e.g. conjugation or declension, max 2 lines)",
+  "examples": [
+    {"gr": "Greek sentence", "tr": "transliteration", "en": "English translation"},
+    {"gr": "Greek sentence", "tr": "transliteration", "en": "English translation"},
+    {"gr": "Greek sentence", "tr": "transliteration", "en": "English translation"}
+  ],
+  "notes": "1-2 sentences: cultural context, common mistakes, or usage tips"
+}
+
+Use simple A2-level Greek in examples. Include negation or question form in one example.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": CLAUDE_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 600,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    if (!res.ok) throw new Error("API error " + res.status);
+    const data = await res.json();
+    const text = data.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON");
+    const card = JSON.parse(jsonMatch[0]);
+    await saveCardToCache(greek, card);
+    return card;
+  } catch(e) {
+    console.error("Card fetch error:", e);
+    return null;
+  }
+}
+
+
 const CARDS={
 "γεια σου":{p:"expression",ex:[{gr:"Γεια σου, Μαρία! Τι κάνεις;",tr:"Ya su, María! Ti kánis?",en:"Hi Maria! How are you?"}],n:"Informal — use with friends. For strangers or groups say γει"},
 "γεια σας":{p:"expression",ex:[{gr:"Γεια σας, κυρία Παπαδοπούλου!",tr:"Ya sas, kiría Papadopúlu!",en:"Hello, Mrs Papadopoulou!"}],n:"Formal or plural form. Use with strangers, elders, or groups"},
@@ -749,7 +828,680 @@ const SENTENCES = [
   {en:"Are you waiting for someone?", gr:["Περιμένεις","κάποιον"],         ex:["βλέπεις","ψάχνεις","κάτι"]},
   {en:"We wait in the queue.",    gr:["Περιμένουμε","στην","ουρά"],        ex:["μένουμε","σταθμό","εκεί"]},
   {en:"Have you been waiting long?", gr:["Περιμένετε","πολύ","ώρα"],       ex:["λίγο","εδώ","ξέρετε"]},
-];
+,
+  ["σκύλος","skílos","dog","Animals"],
+  ["γάτα","gáta","cat","Animals"],
+  ["άλογο","álogo","horse","Animals"],
+  ["αγελάδα","ageláda","cow","Animals"],
+  ["πρόβατο","próvato","sheep","Animals"],
+  ["κατσίκα","katsíka","goat","Animals"],
+  ["χοίρος","chíros","pig","Animals"],
+  ["πουλί","pulí","bird","Animals"],
+  ["φίδι","fídi","snake","Animals"],
+  ["ελέφαντας","eléfandas","elephant","Animals"],
+  ["λιοντάρι","liondári","lion","Animals"],
+  ["αρκούδα","arkúda","bear","Animals"],
+  ["λύκος","líkos","wolf","Animals"],
+  ["αλεπού","alepú","fox","Animals"],
+  ["κουνέλι","kunéli","rabbit","Animals"],
+  ["ποντίκι","pondíki","mouse","Animals"],
+  ["μέλισσα","mélissa","bee","Animals"],
+  ["πεταλούδα","petalúda","butterfly","Animals"],
+  ["χελώνα","chelóna","turtle","Animals"],
+  ["δελφίνι","delfíni","dolphin","Animals"],
+  ["βουνό","vunó","mountain","Nature"],
+  ["ποτάμι","potámi","river","Nature"],
+  ["λίμνη","límni","lake","Nature"],
+  ["δάσος","dásos","forest","Nature"],
+  ["παραλία","paralía","beach","Nature"],
+  ["νησί","nisí","island","Nature"],
+  ["ουρανός","uranós","sky","Nature"],
+  ["ήλιος","ílios","sun","Nature"],
+  ["φεγγάρι","fengári","moon","Nature"],
+  ["αστέρι","astéri","star","Nature"],
+  ["σύννεφο","sínefo","cloud","Nature"],
+  ["βροχή","vrochí","rain","Nature"],
+  ["χιόνι","chióni","snow","Nature"],
+  ["άνεμος","ánemos","wind","Nature"],
+  ["καιρός","kerós","weather","Nature"],
+  ["άνοιξη","ánoixi","spring","Nature"],
+  ["καλοκαίρι","kalokéri","summer","Nature"],
+  ["φθινόπωρο","fthinóporo","autumn","Nature"],
+  ["χειμώνας","chimónas","winter","Nature"],
+  ["λουλούδι","lulúdi","flower","Nature"],
+  ["δέντρο","déndro","tree","Nature"],
+  ["χορτάρι","chortári","grass","Nature"],
+  ["πέτρα","pétra","stone / rock","Nature"],
+  ["άμμος","ámos","sand","Nature"],
+  ["γη","yi","earth / ground","Nature"],
+  ["δωμάτιο","domátio","room","Home"],
+  ["υπνοδωμάτιο","ipnodmátio","bedroom","Home"],
+  ["μπάνιο","bánio","bathroom","Home"],
+  ["σαλόνι","salóni","living room","Home"],
+  ["τραπεζαρία","trapezaría","dining room","Home"],
+  ["μπαλκόνι","balkóni","balcony","Home"],
+  ["κήπος","kípos","garden","Home"],
+  ["πόρτα","pórta","door","Home"],
+  ["παράθυρο","paráthiro","window","Home"],
+  ["τοίχος","tíchos","wall","Home"],
+  ["σκάλα","skála","stairs","Home"],
+  ["κρεβάτι","kreváti","bed","Home"],
+  ["καναπές","kanapés","sofa","Home"],
+  ["καρέκλα","karékla","chair","Home"],
+  ["ψυγείο","psigío","fridge","Home"],
+  ["φούρνος","fúrnos","oven","Home"],
+  ["πλυντήριο","plintírio","washing machine","Home"],
+  ["τηλεόραση","tileórasi","television","Home"],
+  ["λάμπα","lámpa","lamp","Home"],
+  ["κλειδί","klidí","key","Home"],
+  ["χαλί","chalí","carpet / rug","Home"],
+  ["κουρτίνα","kurtína","curtain","Home"],
+  ["καθρέφτης","kathrépftis","mirror","Home"],
+  ["ντουλάπα","dulápa","wardrobe","Home"],
+  ["μαξιλάρι","maxilári","pillow","Home"],
+  ["ρούχα","rúcha","clothes","Clothes"],
+  ["πουκάμισο","pukámiso","shirt","Clothes"],
+  ["παντελόνι","pandelóni","trousers","Clothes"],
+  ["φούστα","fústa","skirt","Clothes"],
+  ["φόρεμα","fórema","dress","Clothes"],
+  ["μπλούζα","blúza","blouse / top","Clothes"],
+  ["ζακέτα","zakéta","cardigan","Clothes"],
+  ["παλτό","paltó","coat","Clothes"],
+  ["παπούτσια","papútsia","shoes","Clothes"],
+  ["μπότες","bótes","boots","Clothes"],
+  ["σανδάλια","sandália","sandals","Clothes"],
+  ["κάλτσες","káltes","socks","Clothes"],
+  ["καπέλο","kapélo","hat","Clothes"],
+  ["τσάντα","tsánda","bag","Clothes"],
+  ["ζώνη","zóni","belt","Clothes"],
+  ["δαχτυλίδι","dachtirídi","ring","Clothes"],
+  ["σκουλαρίκια","skularíkia","earrings","Clothes"],
+  ["ρολόι","rolói","watch","Clothes"],
+  ["μαντήλι","mandíli","scarf / handkerchief","Clothes"],
+  ["γάντια","gándia","gloves","Clothes"],
+  ["δουλειά","duliá","work / job","Work"],
+  ["γραφείο","grafío","office","Work"],
+  ["συνάδελφος","sinádelfos","colleague","Work"],
+  ["αφεντικό","afendikó","boss","Work"],
+  ["μισθός","misthós","salary","Work"],
+  ["σύσκεψη","sískepsi","meeting","Work"],
+  ["εταιρεία","etería","company","Work"],
+  ["πελάτης","pelátis","client","Work"],
+  ["άδεια","ádeia","leave / holiday","Work"],
+  ["υπολογιστής","ipoloyistís","computer","Work"],
+  ["εκτυπωτής","ektipotís","printer","Work"],
+  ["email","email","email","Work"],
+  ["τηλεδιάσκεψη","tiledíaskepsi","video call","Work"],
+  ["διαχειριστής","diacheiristís","manager","Work"],
+  ["προθεσμία","prothesmía","deadline","Work"],
+  ["χαρά","chará","joy","Emotions"],
+  ["λύπη","lípi","sadness","Emotions"],
+  ["θυμός","thimós","anger","Emotions"],
+  ["φόβος","fóvos","fear","Emotions"],
+  ["έκπληξη","ékplixi","surprise","Emotions"],
+  ["αγάπη","agápi","love","Emotions"],
+  ["μίσος","mísos","hate","Emotions"],
+  ["ζήλια","zília","jealousy","Emotions"],
+  ["περηφάνια","perifánia","pride","Emotions"],
+  ["ανησυχία","anisichía","anxiety","Emotions"],
+  ["ηρεμία","iremía","calm","Emotions"],
+  ["ελπίδα","elpída","hope","Emotions"],
+  ["απογοήτευση","apogóitepsi","disappointment","Emotions"],
+  ["ενθουσιασμός","enthusiasmós","enthusiasm","Emotions"],
+  ["μοναξιά","monaxiá","loneliness","Emotions"],
+  ["μαλλιά","maliá","hair","Health"],
+  ["πρόσωπο","prósopo","face","Health"],
+  ["δόντι","dóndi","tooth","Health"],
+  ["λαιμός","lemós","throat / neck","Health"],
+  ["ώμος","ómos","shoulder","Health"],
+  ["δάχτυλο","dáchtilo","finger","Health"],
+  ["στήθος","stíthos","chest","Health"],
+  ["πλάτη","pláti","back","Health"],
+  ["κοιλιά","kiliá","stomach","Health"],
+  ["γόνατο","gónato","knee","Health"],
+  ["αίμα","éma","blood","Health"],
+  ["ασθένεια","asthénia","illness","Health"],
+  ["συνταγή","sindayí","prescription","Health"],
+  ["επείγον","epígon","emergency","Health"],
+  ["πρωινό","proinó","breakfast","Food"],
+  ["μεσημεριανό","mesimerianó","lunch","Food"],
+  ["βραδινό","vradinó","dinner","Food"],
+  ["επιδόρπιο","epidórpio","dessert","Food"],
+  ["φρούτο","frúto","fruit","Food"],
+  ["μήλο","mílo","apple","Food"],
+  ["πορτοκάλι","portokáli","orange","Food"],
+  ["μπανάνα","banána","banana","Food"],
+  ["σταφύλι","stafíli","grape","Food"],
+  ["λεμόνι","lemóni","lemon","Food"],
+  ["λαχανικά","lachanikά","vegetables","Food"],
+  ["καρότο","karóto","carrot","Food"],
+  ["κρεμμύδι","kremídi","onion","Food"],
+  ["σκόρδο","skórdo","garlic","Food"],
+  ["αγγούρι","angúri","cucumber","Food"],
+  ["ρύζι","rízi","rice","Food"],
+  ["τυρόπιτα","tirópita","cheese pie","Food"],
+  ["σπανακόπιτα","spanakópita","spinach pie","Food"],
+  ["μουσακάς","musakás","moussaka","Food"],
+  ["τζατζίκι","tzatzíki","tzatziki","Food"],
+  ["χταπόδι","chtapódi","octopus","Food"],
+  ["γαρίδα","garída","shrimp","Food"],
+  ["μέλι","méli","honey","Food"],
+  ["βούτυρο","vútiro","butter","Food"],
+  ["λάδι","ládi","oil","Food"],
+  ["ξενοδοχείο","xenodochío","hotel","City"],
+  ["εστιατόριο","estiatório","restaurant","City"],
+  ["πλατεία","platía","square","City"],
+  ["μουσείο","musío","museum","City"],
+  ["βιβλιοθήκη","vivliothíki","library","City"],
+  ["ταχυδρομείο","tachydromío","post office","City"],
+  ["αστυνομία","astinomía","police","City"],
+  ["κινηματογράφος","kinimatográfos","cinema","City"],
+  ["γήπεδο","gípedo","stadium","City"],
+  ["λιμάνι","limáni","port / harbour","City"],
+  ["γέφυρα","yéfira","bridge","City"],
+  ["τούνελ","túnel","tunnel","City"],
+  ["πεζοδρόμιο","pezodómio","pavement","City"],
+  ["φανάρι","fanári","traffic light","City"],
+  ["ανακαλύπτω","anakalípto","I discover","Verbs"],
+  ["ανακοινώνω","anakinóno","I announce","Verbs"],
+  ["ανακυκλώνω","anakiklóno","I recycle","Verbs"],
+  ["αναπαύομαι","anapávome","I rest","Verbs"],
+  ["αναπτύσσω","anaptísso","I develop","Verbs"],
+  ["αντέχω","andécho","I endure","Verbs"],
+  ["αντιγράφω","andiyráfo","I copy","Verbs"],
+  ["απαγορεύω","apayorévo","I forbid","Verbs"],
+  ["απογοητεύω","apogoitévo","I disappoint","Verbs"],
+  ["αποκτώ","apoctó","I acquire","Verbs"],
+  ["αποστέλλω","apostéllo","I send","Verbs"],
+  ["αποφεύγω","apofévgo","I avoid","Verbs"],
+  ["αρνούμαι","arnúme","I refuse","Verbs"],
+  ["ασκώ","askó","I practise","Verbs"],
+  ["ασχολούμαι","ascholúme","I deal with","Verbs"],
+  ["βελτιώνω","veltióno","I improve","Verbs"],
+  ["βιάζομαι","viázome","I hurry","Verbs"],
+  ["γεμίζω","yemízo","I fill","Verbs"],
+  ["γεννιέμαι","yeniéme","I am born","Verbs"],
+  ["γλυτώνω","ylitóno","I escape / save","Verbs"],
+  ["δανείζω","danízo","I lend / borrow","Verbs"],
+  ["διακόπτω","diacópto","I interrupt","Verbs"],
+  ["διατηρώ","diateeró","I maintain","Verbs"],
+  ["διευθύνω","diefthíno","I manage","Verbs"],
+  ["δοκιμάζω","dokimázo","I try / taste","Verbs"],
+  ["ελέγχω","eléncho","I check / control","Verbs"],
+  ["ενδιαφέρομαι","endiaférome","I am interested","Verbs"],
+  ["ενημερώνω","enimeróno","I inform","Verbs"],
+  ["ενοχλώ","enochló","I bother","Verbs"],
+  ["επιλέγω","epilégo","I select","Verbs"],
+  ["επισκέπτομαι","episképtome","I visit","Verbs"],
+  ["εργάζομαι","ergázome","I work (formal)","Verbs"],
+  ["εξηγώ","exigó","I explain","Verbs"],
+  ["εξετάζω","exetázo","I examine","Verbs"],
+  ["εκφράζω","ekfrázo","I express","Verbs"],
+  ["ετοιμάζω","etimázo","I prepare","Verbs"],
+  ["ζαλίζομαι","zalízome","I get dizzy","Verbs"],
+  ["ηρεμώ","ireemó","I calm down","Verbs"],
+  ["καθαρίζω","katharízo","I clean","Verbs"],
+  ["καταγράφω","katayráfo","I record","Verbs"],
+  ["κατεβάζω","katevάzo","I download","Verbs"],
+  ["κατορθώνω","katorthóno","I achieve","Verbs"],
+  ["κουράζω","kourázo","I tire","Verbs"],
+  ["κρύβω","krivo","I hide","Verbs"],
+  ["λείπω","lípo","I am missing / absent","Verbs"],
+  ["λύνω","líno","I solve / untie","Verbs"],
+  ["μεγαλώνω","megalóno","I grow up","Verbs"],
+  ["μετακομίζω","metakomízo","I move house","Verbs"],
+  ["μετράω","metráo","I count / measure","Verbs"],
+  ["μοιράζω","mirázo","I share","Verbs"],
+  ["μπερδεύω","berdévo","I confuse","Verbs"],
+  ["νικώ","nikó","I win","Verbs"],
+  ["ονομάζω","onomázo","I name","Verbs"],
+  ["οργανώνω","organóno","I organise","Verbs"],
+  ["παραγγέλνω","paranélo","I order","Verbs"],
+  ["παραιτούμαι","paraitúme","I resign","Verbs"],
+  ["παραλαμβάνω","paralambáno","I receive","Verbs"],
+  ["παρατηρώ","paratiró","I observe","Verbs"],
+  ["παρατώ","paratό","I give up","Verbs"],
+  ["πεθαίνω","pethéno","I die","Verbs"],
+  ["πετυχαίνω","petihéno","I succeed","Verbs"],
+  ["πηδώ","pidó","I jump","Verbs"],
+  ["πλησιάζω","plisiázo","I approach","Verbs"],
+  ["ποτίζω","potízo","I water (plants)","Verbs"],
+  ["προειδοποιώ","proeidopiό","I warn","Verbs"],
+  ["προσέχω","prosécho","I pay attention","Verbs"],
+  ["προσκαλώ","proskaló","I invite","Verbs"],
+  ["προσφέρω","prosfέro","I offer","Verbs"],
+  ["σβήνω","zvíno","I turn off / erase","Verbs"],
+  ["σηκώνω","sikόno","I lift / raise","Verbs"],
+  ["συγκεντρώνω","sigendróno","I concentrate","Verbs"],
+  ["συγχωρώ","sigchoró","I forgive","Verbs"],
+  ["συμμετέχω","simetécho","I participate","Verbs"],
+  ["συμπεριφέρομαι","siperiférome","I behave","Verbs"],
+  ["συμφωνώ","simfonó","I agree","Verbs"],
+  ["συνδέω","sindéo","I connect","Verbs"],
+  ["συστήνω","sistíno","I introduce / recommend","Verbs"],
+  ["ταιριάζω","teriázo","I match / suit","Verbs"],
+  ["τηλεφωνώ","tilefonό","I phone","Verbs"],
+  ["υποστηρίζω","ipostirízo","I support","Verbs"],
+  ["φαντάζομαι","fadázome","I imagine","Verbs"],
+  ["φροντίζω","frodízo","I take care of","Verbs"],
+  ["χαλάω","chaláo","I break / spoil","Verbs"],
+  ["χάνω","cháno","I lose / miss","Verbs"],
+  ["ψηφίζω","psifízo","I vote","Verbs"],
+  ["ωφελώ","ofelό","I benefit","Verbs"],
+  ["αδειάζω","adeázo","I empty","Verbs"],
+  ["ανεβάζω","anevάzo","I upload / raise","Verbs"],
+  ["αξίζω","axízo","I am worth / deserve","Verbs"],
+  ["αρκώ","arKó","I suffice / be enough","Verbs"],
+  ["αφήνω","afíno","I let / leave behind","Verbs"],
+  ["αφορώ","aforó","I concern / relate to","Verbs"],
+  ["βαριέμαι","variéme","I am bored","Verbs"],
+  ["βλάπτω","vlápto","I harm","Verbs"],
+  ["εμπιστεύομαι","emístévome","I trust","Verbs"],
+  ["ενδιαφέρω","endiaféro","I interest","Verbs"],
+  ["κατακτώ","katactó","I conquer / achieve","Verbs"],
+  ["λειτουργώ","liturγό","I function / work","Verbs"],
+  ["μαζεύω","mazévo","I collect / gather","Verbs"],
+  ["απλός","aplós","simple","Adjectives"],
+  ["βαρύς","varís","heavy","Adjectives"],
+  ["γλυκός","glikós","sweet","Adjectives"],
+  ["δυνατός","dinatós","strong","Adjectives"],
+  ["έξυπνος","éxipnos","clever","Adjectives"],
+  ["ήσυχος","ísichos","quiet","Adjectives"],
+  ["ίδιος","ídios","same","Adjectives"],
+  ["κενός","kenós","empty","Adjectives"],
+  ["κοντός","kondós","short (height)","Adjectives"],
+  ["μακρύς","makriss","long / tall","Adjectives"],
+  ["μαλακός","malakós","soft","Adjectives"],
+  ["μόνος","mónos","alone","Adjectives"],
+  ["ξένος","xénos","foreign","Adjectives"],
+  ["παχύς","pachís","fat","Adjectives"],
+  ["πλούσιος","plúsios","rich","Adjectives"],
+  ["πρόθυμος","próthimos","willing / eager","Adjectives"],
+  ["σκληρός","sklerós","hard / harsh","Adjectives"],
+  ["στενός","stenós","narrow","Adjectives"],
+  ["τυχερός","ticherós","lucky","Adjectives"],
+  ["φαρδύς","fardís","wide","Adjectives"],
+  ["φρέσκος","fréskos","fresh","Adjectives"],
+  ["ψηλός","psilós","tall / high","Adjectives"],
+  ["χοντρός","chondros","fat / thick","Adjectives"],
+  ["αδύνατος","adínatos","thin / weak","Adjectives"],
+  ["άνετος","ánetos","comfortable","Adjectives"],
+  ["ασφαλής","asfális","safe","Adjectives"],
+  ["αναγκαίος","anankéos","necessary","Adjectives"],
+  ["ειλικρινής","ilikrinís","sincere / honest","Adjectives"],
+  ["επικίνδυνος","epikíndinos","dangerous","Adjectives"],
+  ["ευτυχισμένος","eftichizménos","happy","Adjectives"],
+  ["κατάλληλος","katálliloss","suitable / appropriate","Adjectives"],
+  ["σημαντικός","simandikós","important","Adjectives"],
+  ["σαράντα","saránda","forty","Numbers"],
+  ["πενήντα","penínda","fifty","Numbers"],
+  ["εξήντα","exínda","sixty","Numbers"],
+  ["εβδομήντα","evdomínda","seventy","Numbers"],
+  ["ογδόντα","ogdónda","eighty","Numbers"],
+  ["ενενήντα","enenínda","ninety","Numbers"],
+  ["διακόσια","diakósia","two hundred","Numbers"],
+  ["πεντακόσια","pendakósia","five hundred","Numbers"],
+  ["καλή επιτυχία","kalí epitichía","good luck","Greetings"],
+  ["καλό ταξίδι","kaló taxídi","have a good trip","Greetings"],
+  ["καλές διακοπές","kalés diakopés","have a good holiday","Greetings"],
+  ["καλή χρονιά","kalí chroniá","happy new year","Greetings"],
+  ["με συγχωρείς","me sigchorís","excuse me (inf)","Greetings"],
+  ["στην υγειά σας","stin iyá sas","cheers","Greetings"],
+  ["τι νέα","ti néa","what's new","Greetings"],
+  ["φυσικά","fisikά","of course","Greetings"],
+  ["σίγουρα","sígura","certainly","Greetings"],
+  ["μάλιστα","málista","yes indeed","Greetings"],
+  ["δεν έχει σημασία","den échi simasía","it doesn't matter","Greetings"],
+  ["καλή επιτυχία","kalí epitichía","good luck","Greetings"],
+  ["λεπτό","leptó","minute","Time"],
+  ["δευτερόλεπτο","defterollepto","second (time)","Time"],
+  ["τέταρτο","tétarto","quarter hour","Time"],
+  ["σύντομα","síntoma","soon","Time"],
+  ["αμέσως","amésos","immediately","Time"],
+  ["ήδη","ídi","already","Time"],
+  ["ακόμα","akóma","still / yet","Time"],
+  ["μόλις","mólis","just now","Time"],
+  ["επιτέλους","epitelús","finally","Time"],
+  ["μερικές φορές","merikés forés","sometimes","Time"],
+  ["σπάνια","spánia","rarely","Time"],
+  ["προχτές","prochthés","day before yesterday","Time"],
+  ["μεθαύριο","methávrio","day after tomorrow","Time"],
+  ["πανεπιστήμιο","panepistímio","university","Education"],
+  ["μαθητής","mathitís","school student","Education"],
+  ["φοιτητής","fititís","university student","Education"],
+  ["δάσκαλος","dáskalos","teacher (primary)","Education"],
+  ["καθηγητής","kathigitís","professor / teacher","Education"],
+  ["μάθημα","máthima","lesson","Education"],
+  ["εξέταση","exétasi","exam","Education"],
+  ["βαθμός","vathmós","grade","Education"],
+  ["τάξη","táxi","class","Education"],
+  ["πτυχίο","ptichío","degree","Education"],
+  ["εγγραφή","engrafí","registration","Education"],
+  ["υποτροφία","ipotrofía","scholarship","Education"],
+  ["διάλεξη","diálexi","lecture","Education"],
+  ["βιβλίο","vivlío","book","Education"],
+  ["τετράδιο","tetrádio","notebook","Education"],
+  ["μολύβι","molívi","pencil","Education"],
+  ["στυλό","stiló","pen","Education"],
+  ["οθόνη","othóni","screen","Technology"],
+  ["πληκτρολόγιο","pliktrológio","keyboard","Technology"],
+  ["ίντερνετ","índernet","internet","Technology"],
+  ["ιστοσελίδα","istoselída","website","Technology"],
+  ["εφαρμογή","efarmoví","app","Technology"],
+  ["κωδικός","kodikós","password","Technology"],
+  ["αρχείο","archío","file","Technology"],
+  ["φόρτωση","fórtosi","upload","Technology"],
+  ["σύνδεση","síndesi","connection","Technology"],
+  ["μπαταρία","batería","battery","Technology"],
+  ["φορτιστής","fortistís","charger","Technology"],
+  ["λογισμικό","logismikó","software","Technology"],
+  ["δεδομένα","dedoména","data","Technology"],
+  ["βίντεο","vínteo","video","Technology"],
+  ["selfie","selfie","selfie","Technology"],
+  ["ψηφιακός","psifiakós","digital","Technology"],
+  ["άθλημα","áthlima","sport","Sports"],
+  ["ποδόσφαιρο","podósfero","football","Sports"],
+  ["μπάσκετ","básket","basketball","Sports"],
+  ["κολύμβηση","kolímvisi","swimming","Sports"],
+  ["τένις","ténis","tennis","Sports"],
+  ["τρέξιμο","tréximo","running","Sports"],
+  ["ποδηλασία","podilasía","cycling","Sports"],
+  ["γυμναστήριο","yimnastírio","gym","Sports"],
+  ["αγώνας","agónas","match / race","Sports"],
+  ["ομάδα","omáda","team","Sports"],
+  ["παίκτης","péktis","player","Sports"],
+  ["νίκη","níki","victory","Sports"],
+  ["ήττα","ítta","defeat","Sports"],
+  ["σκορ","skor","score","Sports"],
+  ["χόμπι","chóbi","hobby","Sports"],
+  ["ζωγραφική","zografiki","painting","Sports"],
+  ["ανάγνωση","anágnosi","reading","Sports"],
+  ["πλοίο","plío","ship","Transport"],
+  ["μοτοσικλέτα","motosikléta","motorcycle","Transport"],
+  ["ποδήλατο","podílato","bicycle","Transport"],
+  ["οδηγός","odigós","driver","Transport"],
+  ["επιβάτης","epivátis","passenger","Transport"],
+  ["δρομολόγιο","dromológio","timetable","Transport"],
+  ["αναχώρηση","anachórisi","departure","Transport"],
+  ["άφιξη","áfixi","arrival","Transport"],
+  ["καθυστέρηση","kathistérisi","delay","Transport"],
+  ["χάρτης","chártis","map","Transport"],
+  ["διαβατήριο","diavatírio","passport","Transport"],
+  ["βίζα","víza","visa","Transport"],
+  ["αποσκευές","aposkevés","luggage","Transport"],
+  ["πτήση","ptísi","flight","Transport"],
+  ["τιμή","timí","price","Shopping"],
+  ["κόστος","kóstos","cost","Shopping"],
+  ["έκπτωση","ékptosi","discount","Shopping"],
+  ["απόδειξη","apódeixi","receipt","Shopping"],
+  ["πιστωτική κάρτα","pistotikí kárta","credit card","Shopping"],
+  ["μετρητά","metritá","cash","Shopping"],
+  ["ψώνια","psónia","shopping","Shopping"],
+  ["καταστήμα","katastíma","shop","Shopping"],
+  ["αρτοποιείο","artopiío","bakery","Shopping"],
+  ["κρεοπωλείο","kreopilío","butcher","Shopping"],
+  ["ταμείο","tamío","cash register","Shopping"],
+  ["παραγγελία","parangilia","order","Shopping"],
+  ["επιστροφή","epistrofí","return / refund","Shopping"],
+  ["εγγύηση","egyísi","warranty","Shopping"],
+  ["εφημερίδα","efimerída","newspaper","Media"],
+  ["περιοδικό","periodikó","magazine","Media"],
+  ["ειδήσεις","eidíseis","news","Media"],
+  ["διαφήμιση","diafímisi","advertisement","Media"],
+  ["συνέντευξη","sinéndeuxi","interview","Media"],
+  ["δημοσιογράφος","dimosioγráfos","journalist","Media"],
+  ["σχόλιο","schólio","comment","Media"],
+  ["μήνυμα","mínima","message","Media"],
+  ["κοινωνικά δίκτυα","kinonikά díktia","social media","Media"],
+  ["συνδρομή","sindromí","subscription","Media"],
+  ["ύπνος","ípnos","sleep (noun)","Health"],
+  ["πυρετός","piretós","fever","Health"],
+  ["βήχας","víhas","cough","Health"],
+  ["κρύωμα","kríoma","cold (illness)","Health"],
+  ["τραυματισμός","travmatizmós","injury","Health"],
+  ["χάπι","chápi","pill","Health"],
+  ["σιρόπι","sirópi","syrup","Health"],
+  ["πίεση","píesi","blood pressure","Health"],
+  ["διατροφή","diatrofí","diet / nutrition","Health"],
+  ["περιβάλλον","perivάlon","environment","Society"],
+  ["κλίμα","klíma","climate","Society"],
+  ["ρύπανση","rípansi","pollution","Society"],
+  ["ανακύκλωση","anaikílosi","recycling","Society"],
+  ["ενέργεια","enéryia","energy","Society"],
+  ["κυβέρνηση","kivérnisi","government","Society"],
+  ["νόμος","nómos","law","Society"],
+  ["δικαίωμα","dikéoma","right","Society"],
+  ["εκλογές","eklogés","elections","Society"],
+  ["οικονομία","ikonomía","economy","Society"],
+  ["κοινωνία","kinonía","society","Society"],
+  ["παράδοση","parádosi","tradition","Society"],
+  ["θρησκεία","thriskía","religion","Society"],
+  ["αρνί","arní","lamb","Food"],
+  ["μοσχάρι","moschári","beef / veal","Food"],
+  ["χοιρινό","chirínó","pork","Food"],
+  ["μπιφτέκι","biftéki","burger / meatball","Food"],
+  ["κεφτέδες","keftédes","meatballs","Food"],
+  ["σπανάκι","spanáki","spinach","Food"],
+  ["κολοκύθι","kolokíthi","zucchini / courgette","Food"],
+  ["μελιτζάνα","melitzána","aubergine / eggplant","Food"],
+  ["φασόλια","fasólia","beans","Food"],
+  ["ρεβίθια","revíthia","chickpeas","Food"],
+  ["ελαιόλαδο","eléolado","olive oil","Food"],
+  ["ξύδι","xídi","vinegar","Food"],
+  ["πιπέρι","pipéri","pepper (spice)","Food"],
+  ["ρίγανη","rígani","oregano","Food"],
+  ["δυόσμος","diósmos","mint","Food"],
+  ["κανέλα","kanéla","cinnamon","Food"],
+  ["μαϊντανός","maïdanós","parsley","Food"],
+  ["γλυκό","glikó","sweet / dessert","Food"],
+  ["παγωτό","pagotó","ice cream","Food"],
+  ["κέικ","kéik","cake","Food"],
+  ["μπισκότο","biskóto","biscuit / cookie","Food"],
+  ["πρόποση","próposi","toast (drinking)","Food"],
+  ["χυμός","chimós","juice","Food"],
+  ["θείος","thíos","uncle","Family"],
+  ["θεία","thía","aunt","Family"],
+  ["εξάδελφος","exádelfos","cousin (m)","Family"],
+  ["εξαδέλφη","exadélfi","cousin (f)","Family"],
+  ["ανιψιός","anipsios","nephew","Family"],
+  ["ανιψιά","anipsià","niece","Family"],
+  ["πεθερός","petherós","father-in-law","Family"],
+  ["πεθερά","petherá","mother-in-law","Family"],
+  ["γαμπρός","gambros","son-in-law / brother-in-law","Family"],
+  ["νύφη","nifi","daughter-in-law / bride","Family"],
+  ["δίδυμοι","dídimi","twins","Family"],
+  ["μονάκριβος","monákribo","only child","Family"],
+  ["βράχος","vrachos","rock / cliff","Nature"],
+  ["σπηλιά","spiliá","cave","Nature"],
+  ["καταρράκτης","katarráktis","waterfall","Nature"],
+  ["ηφαίστειο","iféstio","volcano","Nature"],
+  ["έρημος","érimos","desert","Nature"],
+  ["πεδιάδα","pediáda","plain / flatland","Nature"],
+  ["κοιλάδα","koiláda","valley","Nature"],
+  ["κορυφή","korifi","peak / top","Nature"],
+  ["ακτή","aktí","coast / shore","Nature"],
+  ["λιβάδι","livádi","meadow","Nature"],
+  ["αέρας","aéras","air / breeze","Nature"],
+  ["φύση","físi","nature","Nature"],
+  ["τοπίο","topío","landscape","Nature"],
+  ["οικοσύστημα","ikosístima","ecosystem","Nature"],
+  ["σαλοτραπεζαρία","salotrapezaría","open plan living","Home"],
+  ["αποθήκη","apothíki","storage room","Home"],
+  ["υπόγειο","ipógio","basement","Home"],
+  ["σοφίτα","sofíta","attic","Home"],
+  ["γκαράζ","garáz","garage","Home"],
+  ["αυλή","avlí","yard / courtyard","Home"],
+  ["πισίνα","pisína","swimming pool","Home"],
+  ["κουζινικά","kuziniká","kitchen utensils","Home"],
+  ["πετσέτα","petseta","towel","Home"],
+  ["σεντόνι","sendóni","bed sheet","Home"],
+  ["κουβέρτα","kubérta","blanket","Home"],
+  ["ξυπνητήρι","xipnitíri","alarm clock","Home"],
+  ["σκούπα","skúpa","broom","Home"],
+  ["σφουγγάρι","sfungári","sponge / mop","Home"],
+  ["συνοικία","sinikía","neighbourhood","City"],
+  ["κέντρο","kéndro","centre","City"],
+  ["προάστιο","proástio","suburb","City"],
+  ["χωριό","chorió","village","City"],
+  ["κωμόπολη","komópoli","town","City"],
+  ["πρωτεύουσα","protokúusa","capital city","City"],
+  ["ανελκυστήρας","anelkistíras","elevator / lift","City"],
+  ["σκαλοπάτι","skalopáti","step / stair","City"],
+  ["διάδρομος","diádromos","corridor / path","City"],
+  ["χώρος","chóros","space / area","City"],
+  ["γωνία","gonía","corner","City"],
+  ["πεζοδρόμος","pezódromos","pedestrian street","City"],
+  ["πλατφόρμα","platfórma","platform","City"],
+  ["διαδρομή","diadromí","route / trip","City"],
+  ["απόσταση","apóstasi","distance","City"],
+  ["επάγγελμα","epángelma","profession","Work"],
+  ["καριέρα","karjéra","career","Work"],
+  ["τμήμα","tmíma","department","Work"],
+  ["αίθουσα","éthusa","hall / room","Work"],
+  ["παρουσίαση","parusíasi","presentation","Work"],
+  ["έκθεση","ékthesi","report / exhibition","Work"],
+  ["προϋπολογισμός","proipoloyizmós","budget","Work"],
+  ["κέρδος","kérdos","profit","Work"],
+  ["ζημιά","zimiá","loss / damage","Work"],
+  ["φόρος","foros","tax","Work"],
+  ["τιμολόγιο","timológio","invoice","Work"],
+  ["επένδυση","epéndisi","investment","Work"],
+  ["πελατεία","palatía","clientele","Work"],
+  ["ανταγωνισμός","andagonizmós","competition","Work"],
+  ["στρατηγική","stratigikí","strategy","Work"],
+  ["συγκίνηση","sigkínisi","emotion / feeling","Emotions"],
+  ["τρόμος","trómos","terror / fright","Emotions"],
+  ["αγανάκτηση","aganáktisi","indignation","Emotions"],
+  ["νοσταλγία","nostalγía","nostalgia","Emotions"],
+  ["ευγνωμοσύνη","evgnomosíni","gratitude","Emotions"],
+  ["αδιαφορία","adiaforía","indifference","Emotions"],
+  ["ντροπή","dropí","shame / embarrassment","Emotions"],
+  ["αγωνία","agonía","anxiety / agony","Emotions"],
+  ["ορθοπεδικός","orthopedikós","orthopaedic","Health"],
+  ["δερματολόγος","dermatolóyos","dermatologist","Health"],
+  ["καρδιολόγος","kardiolóyos","cardiologist","Health"],
+  ["οδοντίατρος","odondíatros","dentist","Health"],
+  ["οφθαλμίατρος","ofthalmíatros","ophthalmologist","Health"],
+  ["νοσοκόμα","nosokóma","nurse","Health"],
+  ["ασθενοφόρο","asthenofóro","ambulance","Health"],
+  ["εγχείρηση","enchírisi","operation / surgery","Health"],
+  ["διάγνωση","diágnosi","diagnosis","Health"],
+  ["αποτέλεσμα","apotélesma","result","Health"],
+  ["ανάρρωση","anárrosi","recovery","Health"],
+  ["πρόληψη","prólipsi","prevention","Health"],
+  ["εμβόλιο","emvólio","vaccine","Health"],
+  ["ασφάλεια υγείας","asfalía iyías","health insurance","Health"],
+  ["αξιόπιστος","axiópoistos","reliable / trustworthy","Adjectives"],
+  ["διάσημος","diásimos","famous","Adjectives"],
+  ["ενδιαφέρων","endiaféron","interesting","Adjectives"],
+  ["εκπληκτικός","ekpliktikós","amazing","Adjectives"],
+  ["απαραίτητος","aparétilos","essential","Adjectives"],
+  ["ανθεκτικός","anthektikós","durable / resistant","Adjectives"],
+  ["αποτελεσματικός","apotelezmatikós","effective","Adjectives"],
+  ["ευχάριστος","efcháristos","pleasant","Adjectives"],
+  ["επιτυχημένος","epitichimménos","successful","Adjectives"],
+  ["σοβαρός","sovvarós","serious","Adjectives"],
+  ["γνωστός","gnostós","known / famous","Adjectives"],
+  ["αμφίβολος","amfívolos","doubtful","Adjectives"],
+  ["δημοφιλής","dimofilís","popular","Adjectives"],
+  ["περίεργος","períergos","curious / strange","Adjectives"],
+  ["εθελοντής","ethelondís","volunteer","Society"],
+  ["διαδήλωση","diadílosi","demonstration","Society"],
+  ["ειρήνη","iríni","peace","Society"],
+  ["πόλεμος","pólemos","war","Society"],
+  ["στρατός","stratós","army","Society"],
+  ["αστυνόμος","astinómos","police officer","Society"],
+  ["δικαστής","dikastís","judge","Society"],
+  ["δικηγόρος","dikigóros","lawyer","Society"],
+  ["δήμος","dímos","municipality","Society"],
+  ["πολίτης","polítis","citizen","Society"],
+  ["μετανάστης","metanástis","immigrant","Society"],
+  ["πρόσφυγας","prósfiygas","refugee","Society"],
+  ["ισότητα","isótita","equality","Society"],
+  ["ελευθερία","elefthería","freedom","Society"],
+  ["δικαιοσύνη","dikeosíni","justice","Society"],
+  ["τέχνη","téchni","art","Culture"],
+  ["ζωγράφος","zográfos","painter","Culture"],
+  ["γλυπτό","gliptó","sculpture","Culture"],
+  ["έκθεση","ékthesi","exhibition","Culture"],
+  ["συναυλία","sinávlia","concert","Culture"],
+  ["χορός","chorós","dance","Culture"],
+  ["τραγούδι","tragúdi","song","Culture"],
+  ["μουσικός","musikós","musician","Culture"],
+  ["ηθοποιός","ithopós","actor","Culture"],
+  ["σκηνοθέτης","skinothetis","director (film)","Culture"],
+  ["ταινία","tenía","film / movie","Culture"],
+  ["σειρά","seirá","series","Culture"],
+  ["συγγραφέας","singraféas","author / writer","Culture"],
+  ["ποίηση","píisi","poetry","Culture"],
+  ["μύθος","míthos","myth","Culture"],
+  ["θρύλος","thrílos","legend","Culture"],
+  ["γιορτή","giortí","celebration / feast day","Culture"],
+  ["Πάσχα","Páscha","Easter","Culture"],
+  ["Χριστούγεννα","Christúyena","Christmas","Culture"],
+  ["Πρωτοχρονιά","Protochroná","New Year","Culture"],
+  ["καρναβάλι","karnaváli","carnival","Culture"],
+  ["εθνικός","ethnikós","national","Culture"],
+  ["επίσης","epísis","also / too","Greetings"],
+  ["ωστόσο","ostóso","however","Greetings"],
+  ["παρόλα αυτά","paróla aftá","nevertheless","Greetings"],
+  ["εκτός αυτού","ektós aftú","besides / moreover","Greetings"],
+  ["δηλαδή","diladí","that is / namely","Greetings"],
+  ["επομένως","epómenos","therefore","Greetings"],
+  ["αντίθετα","andítheta","on the contrary","Greetings"],
+  ["εξάλλου","exállu","besides / anyway","Greetings"],
+  ["ακριβώς","akrivós","exactly","Greetings"],
+  ["περίπου","perípou","approximately / about","Greetings"],
+  ["γεια","ya","hi","Greetings"],
+  ["μπράβο","brávo","well done / bravo","Greetings"],
+  ["ωραία","oréa","great / nice","Greetings"],
+  ["τέλεια","télia","perfect","Greetings"],
+  ["συγχαρητήρια","sigcharitíria","congratulations","Greetings"],
+  ["λυπάμαι","lipáme","I am sorry","Greetings"],
+  ["σιγά σιγά","sigá sigá","slowly / little by little","Greetings"],
+  ["αδύνατο","adínato","impossible","Greetings"],
+  ["μηδέν","midén","zero","Numbers"],
+  ["εκατομμύριο","ekatommírio","million","Numbers"],
+  ["δισεκατομμύριο","disekatomírio","billion","Numbers"],
+  ["μισός","misós","half","Numbers"],
+  ["τέταρτος","tétartos","fourth / quarter","Numbers"],
+  ["τελευταίος","teleftéos","last","Numbers"],
+  ["αρκετός","arketós","enough / several","Numbers"],
+  ["μερικός","merikós","some / partial","Numbers"],
+  ["υπόλοιπος","ipólipos","remaining","Numbers"],
+  ["διπλός","diplós","double","Numbers"],
+  ["αιώνας","aiónas","century","Time"],
+  ["δεκαετία","dekaetía","decade","Time"],
+  ["αρχή","archí","beginning","Time"],
+  ["τέλος","télos","end","Time"],
+  ["διάρκεια","diárkia","duration","Time"],
+  ["ώριμος","óriemos","mature / ripe","Time"],
+  ["παρόν","parón","present (time)","Time"],
+  ["μέλλον","mélon","future","Time"],
+  ["παρελθόν","parelthón","past","Time"],
+  ["περίοδος","períodos","period","Time"],
+  ["κολυμβητήριο","kolimvitírio","swimming pool","Sports"],
+  ["γήπεδο τένις","gípedo ténis","tennis court","Sports"],
+  ["αθλητής","athlitís","athlete","Sports"],
+  ["προπονητής","proponitís","coach / trainer","Sports"],
+  ["πρωτάθλημα","protáthlima","championship","Sports"],
+  ["φανέλα","fanéla","jersey / shirt","Sports"],
+  ["μπάλα","bála","ball","Sports"],
+  ["κυκλοφορία","kikloforia","traffic","Transport"],
+  ["πάρκινγκ","párking","parking","Transport"],
+  ["βενζίνη","venzíni","petrol / gasoline","Transport"],
+  ["δίπλωμα οδήγησης","dίploma odígisis","driving licence","Transport"],
+  ["συγκοινωνία","sigkinonía","public transport","Transport"],
+  ["αρχαιότητα","archaiótita","antiquity","Culture"],
+  ["αγαλμα","ágalma","statue","Culture"],
+  ["ναός","naós","temple / church","Culture"],
+  ["ακρόπολη","akrópoli","acropolis","Culture"],
+  ["ολυμπιακός","olimpiakós","Olympic","Culture"],
+  ["αρχαίος","archéos","ancient","Culture"],
+  ["απλά","aplá","simply","Greetings"],
+  ["γενικά","yenikά","generally","Greetings"],
+  ["ειδικά","eidikά","especially","Greetings"],
+  ["τελικά","teliká","finally / in the end","Greetings"]];
 
 const TOPICS = ["All", ...new Set(WORDS.map(w => w[3]))];
 const QM = [
@@ -1034,7 +1786,21 @@ Exactly 3 sentences:
             <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{word[1]}</div>
             <div style={{ fontSize:13, color:"#534AB7", marginTop:2 }}>{word[2]}</div>
           </div>
-          <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit", flexShrink:0 }}>✕</button>
+          <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+            <button onClick={async () => {
+              setCard(null); setLoading(true); setError(null);
+              // Clear cache for this word
+              try {
+                const db = await openDB();
+                const tx = db.transaction(DB_STORE, "readwrite");
+                tx.objectStore(DB_STORE).delete(CARD_CACHE_PREFIX + word[0]);
+              } catch {}
+              fetchWordCard(word[0], word[1], word[2], word[3])
+                .then(r => { if(r) setCard(r); else setError("Could not load."); })
+                .finally(() => setLoading(false));
+            }} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Refresh">🔄</button>
+            <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }}>✕</button>
+          </div>
         </div>
         <div style={{ padding:"18px" }}>
           {loading && <div style={{ textAlign:"center", padding:"2rem", color:"#888", fontSize:13 }}>Generating reference card…</div>}
@@ -1206,10 +1972,25 @@ function DictTab({ mastery }) {
 
 // ─── Flashcards ────────────────────────────────────────────────────
 
-// ─── Offline card detail panel ─────────────────────────────────────
+// ─── AI-powered word card panel ────────────────────────────────────
 function CardDetail({ word, onClose }) {
   if (!word) return null;
-  const card = CARDS[word[0]];
+  const [card, setCard] = React.useState(CARDS[word[0]] || null);
+  const [loading, setLoading] = React.useState(!CARDS[word[0]]);
+  const [error, setError] = React.useState(null);
+
+  React.useEffect(() => {
+    if (card) return; // already have card (from CARDS or cache)
+    setLoading(true);
+    setError(null);
+    fetchWordCard(word[0], word[1], word[2], word[3])
+      .then(result => {
+        if (result) setCard(result);
+        else setError("Could not load. Check connection.");
+      })
+      .catch(() => setError("Could not load."))
+      .finally(() => setLoading(false));
+  }, [word[0]]);
 
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
@@ -1221,10 +2002,36 @@ function CardDetail({ word, onClose }) {
             <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{word[1]}</div>
             <div style={{ fontSize:13, color:"#534AB7" }}>{word[2]}</div>
           </div>
-          <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit", flexShrink:0 }}>✕</button>
+          <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+            <button onClick={async () => {
+              setCard(null); setLoading(true); setError(null);
+              // Clear cache for this word
+              try {
+                const db = await openDB();
+                const tx = db.transaction(DB_STORE, "readwrite");
+                tx.objectStore(DB_STORE).delete(CARD_CACHE_PREFIX + word[0]);
+              } catch {}
+              fetchWordCard(word[0], word[1], word[2], word[3])
+                .then(r => { if(r) setCard(r); else setError("Could not load."); })
+                .finally(() => setLoading(false));
+            }} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Refresh">🔄</button>
+            <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }}>✕</button>
+          </div>
         </div>
         <div style={{ padding:"16px 18px" }}>
-          {!card ? (
+          {loading && (
+            <div style={{ textAlign:"center", padding:"2rem", color:"#888" }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>⏳</div>
+              <div style={{ fontSize:13 }}>Loading card from Claude AI…</div>
+            </div>
+          )}
+          {error && !loading && (
+            <div style={{ textAlign:"center", padding:"2rem", color:"#E24B4A" }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>⚠️</div>
+              <div style={{ fontSize:13 }}>{error}</div>
+            </div>
+          )}
+          {!card && !loading ? (
             <div style={{ textAlign:"center", padding:"2rem", color:"#888" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>📖</div>
               <div style={{ fontSize:13 }}>No reference card yet for this word.</div>
@@ -1234,13 +2041,13 @@ function CardDetail({ word, onClose }) {
               {/* Part of speech */}
               <div style={{ marginBottom:"1rem" }}>
                 <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Part of speech</div>
-                <div style={{ fontSize:13, color:"#333", background:"#f8f8f8", borderRadius:8, padding:"8px 12px" }}>{card.p}</div>
+                <div style={{ fontSize:13, color:"#333", background:"#f8f8f8", borderRadius:8, padding:"8px 12px" }}>{(card.p || card.pos)}</div>
               </div>
 
               {/* Examples */}
               <div style={{ marginBottom:"1rem" }}>
                 <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Examples</div>
-                {card.ex.map((ex,i) => (
+                {(card.ex || card.examples || []).map((ex,i) => (
                   <div key={i} style={{ background:"#f7f7ff", borderRadius:8, padding:"10px 12px", marginBottom:6, borderLeft:"3px solid #AFA9EC" }}>
                     <div style={{ fontSize:14, fontWeight:500, marginBottom:2 }}>{ex.gr}</div>
                     <div style={{ fontSize:12, color:"#888", fontStyle:"italic", marginBottom:2 }}>{ex.tr}</div>
@@ -1251,7 +2058,7 @@ function CardDetail({ word, onClose }) {
               {/* Notes */}
               <div style={{ marginBottom:"1rem" }}>
                 <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Notes</div>
-                <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517" }}>{card.n}</div>
+                <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517" }}>{card.n || card.notes}</div>
               </div>
             </>
           )}
