@@ -1,5 +1,5 @@
-const CACHE = 'greek-vocab-v1';
-const ASSETS = ['/', '/index.html', '/app.js'];
+const CACHE = 'greek-vocab-v3';
+const ASSETS = ['/', '/index.html', '/data.js', '/app.js', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -18,6 +18,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Skip chrome-extension requests
+  if (!e.request.url.startsWith('http')) return;
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
