@@ -3111,6 +3111,29 @@ function ApiKeyModal({ onClose, onSaved }) {
   );
 }
 
+// ─── Render text with clickable Greek words ─────────────────────────
+function GreekText({ text, onWordClick, style }) {
+  if (!text) return null;
+  // Match Greek unicode characters (including extended Greek)
+  const parts = text.split(/([\u0370-\u03FF\u1F00-\u1FFF][\u0370-\u03FF\u1F00-\u1FFF\s]*[\u0370-\u03FF\u1F00-\u1FFF]+|[\u0370-\u03FF\u1F00-\u1FFF]+)/g);
+  return (
+    <span style={style}>
+      {parts.map((part, i) => {
+        const isGreek = /[\u0370-\u03FF\u1F00-\u1FFF]/.test(part);
+        if (isGreek && part.trim()) {
+          return (
+            <span key={i} onClick={e=>{e.stopPropagation(); onWordClick(part.trim());}}
+              style={{ color:"#534AB7", fontWeight:600, cursor:"pointer", borderBottom:"1px dotted #534AB7", textDecoration:"none" }}>
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </span>
+  );
+}
+
 // ─── AI-powered word card panel ────────────────────────────────────
 function CardDetail({ word, onClose }) {
   if (!word) return null;
@@ -3119,10 +3142,14 @@ function CardDetail({ word, onClose }) {
   const [error, setError] = React.useState(null);
   const [noKey, setNoKey] = React.useState(false);
   const [showKeyModal, setShowKeyModal] = React.useState(false);
+  // Navigation history for hyperlink-style browsing
+  const [history, setHistory] = React.useState([word]);
+  const [histIdx, setHistIdx] = React.useState(0);
+  const curWord = history[histIdx];
 
-  function loadCard() {
+  function loadCard(w) {
     setCard(null); setLoading(true); setError(null); setNoKey(false);
-    fetchWordCard(word[0], word[1], word[2], word[3])
+    fetchWordCard(w[0], w[1], w[2], w[3])
       .then(result => {
         if (result) setCard(result);
         else {
@@ -3136,7 +3163,20 @@ function CardDetail({ word, onClose }) {
       .finally(() => setLoading(false));
   }
 
-  React.useEffect(() => { loadCard(); }, [word[0]]);
+  React.useEffect(() => { loadCard(curWord); }, [curWord[0]]);
+
+  function navigateTo(greekWord) {
+    // Find word in WORDS array, or create a stub
+    const found = WORDS.find(w => w[0] === greekWord);
+    const target = found || [greekWord, greekWord, "", ""];
+    const newHistory = [...history.slice(0, histIdx+1), target];
+    setHistory(newHistory);
+    setHistIdx(newHistory.length - 1);
+  }
+
+  function goBack() {
+    if (histIdx > 0) setHistIdx(histIdx - 1);
+  }
 
   return (
     <>
@@ -3145,10 +3185,13 @@ function CardDetail({ word, onClose }) {
       <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:"16px 16px 0 0", width:"100%", maxWidth:540, maxHeight:"75vh", overflowY:"auto", boxShadow:"0 -4px 30px rgba(0,0,0,0.2)" }}>
         {/* header */}
         <div style={{ background:"#EEEDFE", borderRadius:"16px 16px 0 0", padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"flex-start", position:"sticky", top:0 }}>
-          <div>
-            <div style={{ fontSize:22, fontWeight:700, color:"#26215C" }}>{word[0]}</div>
-            <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{word[1]}</div>
-            <div style={{ fontSize:13, color:"#534AB7" }}>{word[2]}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            {histIdx > 0 && (
+              <button onClick={goBack} style={{ background:"none", border:"none", color:"#7F77DD", fontSize:13, cursor:"pointer", padding:"0 0 4px 0", fontFamily:"inherit" }}>← Back</button>
+            )}
+            <div style={{ fontSize:22, fontWeight:700, color:"#26215C" }}>{curWord[0]}</div>
+            <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{curWord[1]}</div>
+            <div style={{ fontSize:13, color:"#534AB7" }}>{curWord[2]}</div>
           </div>
           <div style={{ display:"flex", gap:6, flexShrink:0 }}>
             <button onClick={()=>setShowKeyModal(true)} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Set API Key">🔑</button>
@@ -3157,9 +3200,9 @@ function CardDetail({ word, onClose }) {
               try {
                 const db = await openDB();
                 const tx = db.transaction(DB_STORE, "readwrite");
-                tx.objectStore(DB_STORE).delete(CARD_CACHE_PREFIX + word[0]);
+                tx.objectStore(DB_STORE).delete(CARD_CACHE_PREFIX + curWord[0]);
               } catch {}
-              loadCard();
+              loadCard(curWord);
             }} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Refresh">🔄</button>
             <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }}>✕</button>
           </div>
@@ -3203,7 +3246,9 @@ function CardDetail({ word, onClose }) {
                 <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Examples</div>
                 {(card.ex || card.examples || []).map((ex,i) => (
                   <div key={i} style={{ background:"#f7f7ff", borderRadius:8, padding:"10px 12px", marginBottom:6, borderLeft:"3px solid #AFA9EC" }}>
-                    <div style={{ fontSize:14, fontWeight:500, marginBottom:2 }}>{ex.gr}</div>
+                    <div style={{ fontSize:14, fontWeight:500, marginBottom:2 }}>
+                      <GreekText text={ex.gr} onWordClick={navigateTo} />
+                    </div>
                     <div style={{ fontSize:12, color:"#888", fontStyle:"italic", marginBottom:2 }}>{ex.tr}</div>
                     <div style={{ fontSize:12, color:"#444" }}>{ex.en}</div>
                   </div>
@@ -3212,8 +3257,11 @@ function CardDetail({ word, onClose }) {
               {/* Notes */}
               <div style={{ marginBottom:"1rem" }}>
                 <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Notes</div>
-                <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517" }}>{card.n || card.notes}</div>
+                <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517", lineHeight:1.6 }}>
+                  <GreekText text={card.n || card.notes} onWordClick={navigateTo} />
+                </div>
               </div>
+              {/* Examples - also make Greek clickable */}
             </>
           ) : null}
         </div>
