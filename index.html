@@ -3764,29 +3764,96 @@ function TypeTab({ mastery, rec }) {
 
 // ─── Sentences Tab (Duolingo-style sentence builder) ──────────────
 function SentencesTab({ rec }) {
-  const [phase, setPhase]     = useState("setup");
-  const [topic, setTopic]     = useState("all"); // "all" or verb filter
-  const [qs, setQs]           = useState([]);
-  const [qi, setQi]           = useState(0);
-  const [picked, setPicked]   = useState([]); // words chosen so far
-  const [tiles, setTiles]     = useState([]); // {id, word, used}
-  const [result, setResult]   = useState(null); // null | "ok" | "bad"
-  const [score, setScore]     = useState(0);
-  const [showAnswer, setShowAnswer] = useState(false);
+  const [phase, setPhase]   = useState("setup");
+  const [selTopic, setSelTopic] = useState("All");
+  const [qs, setQs]         = useState([]);
+  const [qi, setQi]         = useState(0);
+  const [picked, setPicked] = useState([]);
+  const [tiles, setTiles]   = useState([]);
+  const [result, setResult] = useState(null);
+  const [score, setScore]   = useState(0);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+
+  const SENT_CACHE_PREFIX = "sent_v1_";
+
+  async function getSentences(topic) {
+    // Check cache first
+    try {
+      const db = await openDB();
+      const cached = await new Promise(resolve => {
+        const tx = db.transaction(DB_STORE, "readonly");
+        const req = tx.objectStore(DB_STORE).get(SENT_CACHE_PREFIX + topic);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+      if (cached && cached.length > 0) return cached;
+    } catch(e) {}
+
+    // Generate via Claude
+    const apiKey = await getApiKey();
+    if (!apiKey) return null;
+
+    const topicWords = topic === "All"
+      ? shuf(WORDS).slice(0, 30).map(w => w[0]).join(", ")
+      : WORDS.filter(w => w[3] === topic).map(w => w[0]).join(", ");
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 1200,
+        messages: [{ role:"user", content:`Create 12 short Greek sentences for A2 language learners using words from this topic: ${topic}.
+Words available: ${topicWords}
+
+Rules:
+- Each sentence: 3-6 words
+- Simple present or past tense
+- Use the provided words where possible
+- Include 3 distractor words per sentence (wrong words from same topic)
+
+Return ONLY a JSON array:
+[{"en":"English sentence","gr":["Greek","words","in","order"],"ex":["wrong1","wrong2","wrong3"]}]` }]
+      })
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    const match = data.content[0].text.match(/\[[\s\S]*\]/);
+    if (!match) return null;
+    const sentences = JSON.parse(match[0]);
+
+    // Cache it
+    try {
+      const db = await openDB();
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(sentences, SENT_CACHE_PREFIX + topic);
+    } catch(e) {}
+
+    return sentences;
+  }
 
   function buildTiles(s) {
     const all = shuf([...s.gr.map((w,i)=>({id:`g${i}`,word:w,used:false})),
                       ...s.ex.map((w,i)=>({id:`e${i}`,word:w,used:false}))]);
-    setTiles(all);
-    setPicked([]);
-    setResult(null);
-    setShowAnswer(false);
+    setTiles(all); setPicked([]); setResult(null);
   }
 
-  function start() {
-    const pool = shuf(SENTENCES);
+  async function start() {
+    setGenerating(true); setGenError("");
+    // Use static SENTENCES for "Verbs", generate for others
+    let pool;
+    if (selTopic === "Verbs") {
+      pool = shuf(SENTENCES);
+    } else {
+      pool = await getSentences(selTopic);
+      if (!pool) { setGenError("Could not generate sentences. Check API key and connection."); setGenerating(false); return; }
+      pool = shuf(pool);
+    }
     setQs(pool); setQi(0); setScore(0);
     buildTiles(pool[0]);
+    setGenerating(false);
     setPhase("game");
   }
 
@@ -3795,12 +3862,10 @@ function SentencesTab({ rec }) {
     setTiles(prev => prev.map(t => t.id===tile.id ? {...t,used:true} : t));
     const newPicked = [...picked, tile];
     setPicked(newPicked);
-    // Auto-check when picked count matches answer length
     const s = qs[qi];
     if (newPicked.length === s.gr.length) {
       const typed = newPicked.map(t=>t.word).join(" ");
-      const correct = s.gr.join(" ");
-      const ok = typed === correct;
+      const ok = typed === s.gr.join(" ");
       setResult(ok ? "ok" : "bad");
       if (ok) setScore(sc=>sc+1);
     }
@@ -3822,49 +3887,61 @@ function SentencesTab({ rec }) {
 
   function showHint() {
     const s = qs[qi];
-    // Reset and reveal full answer
     const newTiles = tiles.map(t=>({...t,used:false}));
     const newPicked = [];
     for (const word of s.gr) {
       const tile = newTiles.find(t=>!t.used&&t.word===word);
       if (tile) { tile.used=true; newPicked.push(tile); }
     }
-    setTiles(newTiles);
-    setPicked(newPicked);
-    setResult("hint");
-    setShowAnswer(true);
+    setTiles(newTiles); setPicked(newPicked); setResult("hint");
   }
 
   if (phase==="setup") return (
-    <div style={{textAlign:"center",padding:"1rem 0"}}>
-      <div style={{fontSize:15,fontWeight:500,marginBottom:8}}>Sentence Builder</div>
-      <div style={{fontSize:13,color:"#888",marginBottom:"1.4rem",lineHeight:1.6}}>
-        Read the English sentence.<br/>Tap the Greek words in the correct order.
+    <div style={{padding:"1rem 0"}}>
+      <div style={{fontSize:15,fontWeight:600,color:"#26215C",marginBottom:4,textAlign:"center"}}>Sentence Builder</div>
+      <div style={{fontSize:13,color:"#888",marginBottom:"1.2rem",textAlign:"center",lineHeight:1.5}}>
+        Read the English — tap Greek words in order.
       </div>
-      <div style={{background:"#f8f8f8",borderRadius:12,padding:"1rem 1.4rem",marginBottom:"1.4rem",textAlign:"left"}}>
-        <div style={{fontSize:12,color:"#888",marginBottom:6}}>How it works:</div>
-        <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>
-          🇬🇧 English sentence shown above<br/>
-          🟦 Tap Greek word tiles to build translation<br/>
-          ✓ Auto-checks when last word placed<br/>
-          💡 Hint reveals the full answer
+
+      <div style={{marginBottom:"1rem"}}>
+        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Choose topic:</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {["All","Verbs",...TOPICS.filter(t=>t!=="All"&&t!=="Verbs")].map(t => (
+            <button key={t} onClick={()=>setSelTopic(t)}
+              style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${selTopic===t?"#534AB7":"#ddd"}`,
+                background:selTopic===t?"#534AB7":"white",color:selTopic===t?"white":"#555",
+                fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:selTopic===t?600:400}}>
+              {t}
+            </button>
+          ))}
         </div>
       </div>
-      <div style={{fontSize:12,color:"#aaa",marginBottom:"1.4rem"}}>{SENTENCES.length} sentences · from verb exercises</div>
-      <Btn onClick={start}>Start →</Btn>
+
+      {genError && <div style={{color:"#E24B4A",fontSize:13,marginBottom:10,textAlign:"center"}}>{genError}</div>}
+
+      <div style={{textAlign:"center",marginTop:"1rem"}}>
+        {generating ? (
+          <div style={{color:"#888",fontSize:13}}>⏳ Generating sentences…</div>
+        ) : (
+          <Btn onClick={start}>Start →</Btn>
+        )}
+      </div>
+      {selTopic !== "Verbs" && (
+        <div style={{fontSize:11,color:"#bbb",textAlign:"center",marginTop:10}}>Sentences generated by Claude AI · cached after first use</div>
+      )}
+      {selTopic === "Verbs" && (
+        <div style={{fontSize:11,color:"#bbb",textAlign:"center",marginTop:10}}>{SENTENCES.length} built-in sentences</div>
+      )}
     </div>
   );
 
   if (phase==="result") return (
-    <ResBox
-      score={score} total={qs.length}
-      onRetry={()=>{
-        const reshuffled = shuf([...qs]);
-        setQs(reshuffled); setQi(0); setScore(0);
-        buildTiles(reshuffled[0]);
-        setPhase("game");
-      }}
-    />
+    <ResBox score={score} total={qs.length} onRetry={()=>{
+      const reshuffled = shuf([...qs]);
+      setQs(reshuffled); setQi(0); setScore(0);
+      buildTiles(reshuffled[0]);
+      setPhase("game");
+    }}/>
   );
 
   const s = qs[qi];
@@ -3873,65 +3950,48 @@ function SentencesTab({ rec }) {
 
   return (
     <div style={{background:bgMain, borderRadius:16, padding:"1.2rem", transition:"background .3s", minHeight:400}}>
-      {/* Progress */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
         <button onClick={()=>setPhase("setup")} style={{fontSize:13,color:"#888",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>← Back</button>
-        <span style={{fontSize:13,color:"#888"}}>{qi+1}/{qs.length}</span>
+        <span style={{fontSize:12,color:"#aaa"}}>{selTopic} · {qi+1}/{qs.length}</span>
         <Pill>{score} correct</Pill>
       </div>
       <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
       <div style={{marginBottom:"1.4rem"}}/>
 
-      {/* English prompt */}
       <div style={{textAlign:"center",marginBottom:"1.6rem"}}>
         <div style={{fontSize:11,color:"#aaa",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Translate to Greek</div>
         <div style={{fontSize:26,fontWeight:700,color:"#222",lineHeight:1.3}}>{s.en}</div>
       </div>
 
-      {/* Answer slots */}
       <div style={{minHeight:52,marginBottom:"1.2rem",display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",padding:"10px 4px",background:"rgba(0,0,0,0.04)",borderRadius:10,border:`1.5px dashed ${result ? accentColor : "#ddd"}`}}>
-        {picked.length === 0 && (
-          <span style={{fontSize:13,color:"#bbb",alignSelf:"center"}}>Tap words below…</span>
-        )}
+        {picked.length === 0 && <span style={{fontSize:13,color:"#bbb",alignSelf:"center"}}>Tap words below…</span>}
         {picked.map((tile,i) => (
           <button key={tile.id} onClick={()=>removePicked(i)} disabled={!!result}
-            style={{padding:"11px 18px",borderRadius:10,border:`1.5px solid ${accentColor}`,
-              background:"white",color:accentColor,fontSize:18,fontWeight:500,
-              cursor:result?"default":"pointer",fontFamily:"inherit",
-              boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>
+            style={{padding:"11px 18px",borderRadius:10,border:`1.5px solid ${accentColor}`,background:"white",color:accentColor,fontSize:18,fontWeight:500,cursor:result?"default":"pointer",fontFamily:"inherit",boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>
             {tile.word}
           </button>
         ))}
       </div>
 
-      {/* Feedback */}
       {result && (
         <div style={{textAlign:"center",marginBottom:"1rem",fontSize:14,fontWeight:600,color:accentColor}}>
-          {result==="ok"   && "✓ Correct!"}
-          {result==="bad"  && `✗ Correct answer: ${s.gr.join(" ")}`}
+          {result==="ok" && "✓ Correct!"}
+          {result==="bad" && `✗ Answer: ${s.gr.join(" ")}`}
           {result==="hint" && `💡 Answer: ${s.gr.join(" ")}`}
         </div>
       )}
 
-      {/* Word tiles */}
       {!result && (
         <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginBottom:"1.2rem"}}>
           {tiles.map(tile => (
             <button key={tile.id} onClick={()=>tapTile(tile)} disabled={tile.used}
-              style={{padding:"14px 20px",borderRadius:12,
-                border: tile.used ? "1.5px solid #eee" : "1.5px solid #7F77DD",
-                background: tile.used ? "#f5f5f5" : "white",
-                color: tile.used ? "#ccc" : "#3C3489",
-                fontSize:18,fontWeight:600,cursor:tile.used?"default":"pointer",
-                fontFamily:"inherit",transition:"all .12s",
-                boxShadow:tile.used?"none":"0 2px 6px rgba(127,119,221,0.15)"}}>
+              style={{padding:"14px 20px",borderRadius:12,border:tile.used?"1.5px solid #eee":"1.5px solid #7F77DD",background:tile.used?"#f5f5f5":"white",color:tile.used?"#ccc":"#3C3489",fontSize:18,fontWeight:600,cursor:tile.used?"default":"pointer",fontFamily:"inherit",transition:"all .12s",boxShadow:tile.used?"none":"0 2px 6px rgba(127,119,221,0.15)"}}>
               {tile.word}
             </button>
           ))}
         </div>
       )}
 
-      {/* Action buttons */}
       <div style={{display:"flex",gap:8,justifyContent:"center"}}>
         {!result ? (
           <>
@@ -3946,9 +4006,7 @@ function SentencesTab({ rec }) {
           </>
         ) : (
           <button onClick={next}
-            style={{padding:"12px 36px",borderRadius:10,border:"none",
-              background: result==="ok" ? "#1D9E75" : result==="hint" ? "#BA7517" : "#E24B4A",
-              color:"white",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            style={{padding:"12px 36px",borderRadius:10,border:"none",background:result==="ok"?"#1D9E75":result==="hint"?"#BA7517":"#E24B4A",color:"white",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
             Next →
           </button>
         )}
