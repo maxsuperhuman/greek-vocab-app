@@ -2605,6 +2605,59 @@ async function saveCustomWords(words) {
   } catch { return false; }
 }
 
+// ─── Photo Word List with checkboxes and card preview ───────────────
+function PhotoWordList({ words, onAdd, onReset }) {
+  const [checked, setChecked] = React.useState(() => new Set(words.map((_,i)=>i)));
+  const [cardWord, setCardWord] = React.useState(null);
+
+  function toggle(i) {
+    setChecked(prev => {
+      const s = new Set(prev);
+      s.has(i) ? s.delete(i) : s.add(i);
+      return s;
+    });
+  }
+
+  const selected = words.filter((_,i) => checked.has(i));
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <div style={{ fontSize:13, color:"#444" }}>Found {words.length} word(s) — select to add:</div>
+        <button onClick={()=>setChecked(checked.size===words.length ? new Set() : new Set(words.map((_,i)=>i)))}
+          style={{ fontSize:12, color:"#534AB7", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+          {checked.size===words.length ? "Deselect all" : "Select all"}
+        </button>
+      </div>
+      {cardWord && <CardDetail word={[cardWord.gr, cardWord.tr, cardWord.en, cardWord.topic]} onClose={()=>setCardWord(null)} />}
+      {words.map((w,i) => (
+        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background: checked.has(i) ? "#f0f0ff" : "#f8f8f8", borderRadius:10, padding:"10px 12px", marginBottom:6, cursor:"pointer" }}
+          onClick={()=>toggle(i)}>
+          <input type="checkbox" checked={checked.has(i)} onChange={()=>toggle(i)} onClick={e=>e.stopPropagation()}
+            style={{ width:18, height:18, accentColor:"#534AB7", flexShrink:0 }} />
+          <div style={{ flex:1, minWidth:0 }}>
+            <span style={{ fontWeight:700, fontSize:14 }}>{w.gr}</span>
+            {" "}<span style={{ color:"#888", fontStyle:"italic", fontSize:12 }}>{w.tr}</span>
+            <br/>
+            <span style={{ fontSize:13, color:"#333" }}>{w.en}</span>
+            {" "}<span style={{ color:"#534AB7", fontSize:11 }}>({w.topic})</span>
+          </div>
+          <button onClick={e=>{e.stopPropagation(); setCardWord(w);}}
+            style={{ background:"#EEEDFE", border:"none", borderRadius:8, padding:"6px 10px", fontSize:14, cursor:"pointer", flexShrink:0 }}
+            title="View full card">ℹ️</button>
+        </div>
+      ))}
+      <button onClick={()=>onAdd(selected)} disabled={selected.length===0}
+        style={{ width:"100%", marginTop:10, padding:"11px", borderRadius:8, border:"none", background: selected.length ? "#534AB7" : "#ccc", color:"white", fontSize:14, cursor: selected.length ? "pointer" : "default", fontWeight:600 }}>
+        Add {selected.length} word{selected.length!==1?"s":""} to Dictionary
+      </button>
+      <button onClick={onReset} style={{ width:"100%", marginTop:6, padding:"8px", borderRadius:8, border:"1px solid #ccc", background:"white", fontSize:13, cursor:"pointer" }}>
+        Try Another Image
+      </button>
+    </div>
+  );
+}
+
 // ─── Add Word Modal ──────────────────────────────────────────────────
 async function enrichWord(greek, english) {
   const apiKey = await getApiKey();
@@ -2647,12 +2700,16 @@ async function addWordToList(greek, english, tr, topic, onAdded) {
 }
 
 function AddWordModal({ onClose, onAdded }) {
-  const [tab, setTab] = React.useState("type"); // "type" | "photo"
+  const [tab, setTab] = React.useState("type");
   // Type tab
   const [greek, setGreek] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [added, setAdded] = React.useState([]);
+  // Preview before confirm
+  const [preview, setPreview] = React.useState(null); // {gr, tr, en, topic}
+  const [customTopic, setCustomTopic] = React.useState("");
+  const [showTopicInput, setShowTopicInput] = React.useState(false);
   // Photo tab
   const [imgData, setImgData] = React.useState(null);
   const [imgPreview, setImgPreview] = React.useState(null);
@@ -2660,31 +2717,47 @@ function AddWordModal({ onClose, onAdded }) {
   const [photoResults, setPhotoResults] = React.useState(null);
   const fileRef = React.useRef();
 
-  async function handleTypeAdd() {
+  const allTopics = [...new Set(WORDS.map(w=>w[3]))].sort();
+
+  async function handleTypeAnalyze() {
     const g = greek.trim();
     if (!g) { setError("Enter a Greek word or phrase."); return; }
-    setLoading(true); setError("");
-    const { tr, topic } = await enrichWord(g, "");
-    // Get English translation too
+    setLoading(true); setError(""); setPreview(null);
     const apiKey = await getApiKey();
-    let english = "";
+    let result = { tr: g, en: g, topic: "Subjects" };
     if (apiKey) {
       try {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:50,
-            messages:[{ role:"user", content:`Translate this Greek word/phrase to English in 1-5 words: "${g}". Reply with ONLY the translation.` }]
+          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:150,
+            messages:[{ role:"user", content:`For the Greek word/phrase "${g}":
+1. Transliteration (Latin letters)
+2. English translation (1-5 words)
+3. Best topic from existing list: ${allTopics.join(", ")}
+   OR suggest a new topic name if none fit well.
+Return ONLY JSON: {"tr":"...","en":"...","topic":"..."}` }]
           })
         });
-        if (res.ok) { const d = await res.json(); english = d.content[0].text.trim(); }
+        if (res.ok) {
+          const d = await res.json();
+          const match = d.content[0].text.match(/\{[\s\S]*\}/);
+          if (match) result = { ...result, ...JSON.parse(match[0]) };
+        }
       } catch(e) {}
     }
-    if (!english) english = g;
-    await addWordToList(g, english, tr, topic, onAdded);
-    setAdded(prev => [...prev, [g, tr, english, topic]]);
-    setGreek("");
+    setPreview({ gr: g, ...result });
+    setCustomTopic(result.topic);
+    setShowTopicInput(false);
     setLoading(false);
+  }
+
+  async function handleConfirmAdd() {
+    if (!preview) return;
+    const finalTopic = customTopic.trim() || preview.topic;
+    await addWordToList(preview.gr, preview.en, preview.tr, finalTopic, onAdded);
+    setAdded(prev => [...prev, [preview.gr, preview.tr, preview.en, finalTopic]]);
+    setGreek(""); setPreview(null); setCustomTopic(""); setShowTopicInput(false);
   }
 
   async function handlePhoto(e) {
@@ -2754,19 +2827,53 @@ Return ONLY a JSON array: [{"gr":"...","tr":"...","en":"...","topic":"..."}]` }
 
         {tab === "type" && (
           <div>
-            <div style={{ fontSize:13, color:"#666", marginBottom:12 }}>Type a Greek word or phrase — Claude will translate and categorize it automatically.</div>
-            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
-              <input value={greek} onChange={e=>setGreek(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleTypeAdd()} placeholder="Greek word or phrase…" style={{ ...inputStyle, flex:1 }} />
-              <button onClick={handleTypeAdd} disabled={loading} style={{ padding:"10px 16px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
-                {loading ? "…" : "Add"}
+            <div style={{ fontSize:13, color:"#666", marginBottom:12 }}>Type a Greek word — Claude translates, transcribes, and suggests a topic.</div>
+            <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+              <input value={greek} onChange={e=>{setGreek(e.target.value);setPreview(null);}} onKeyDown={e=>e.key==="Enter"&&handleTypeAnalyze()} placeholder="Greek word or phrase…" style={{ ...inputStyle, flex:1 }} />
+              <button onClick={handleTypeAnalyze} disabled={loading} style={{ padding:"10px 14px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
+                {loading ? "…" : "Analyse"}
               </button>
             </div>
             {error && <div style={{ color:"#E24B4A", fontSize:13, marginBottom:8 }}>{error}</div>}
+
+            {preview && (
+              <div style={{ background:"#f0f0ff", borderRadius:12, padding:"14px", marginBottom:12 }}>
+                <div style={{ marginBottom:8 }}>
+                  <span style={{ fontSize:18, fontWeight:700 }}>{preview.gr}</span>
+                  {" "}<span style={{ fontSize:13, color:"#888", fontStyle:"italic" }}>{preview.tr}</span>
+                </div>
+                <div style={{ fontSize:14, color:"#333", marginBottom:10 }}>🇬🇧 {preview.en}</div>
+
+                {/* Topic selector */}
+                <div style={{ fontSize:12, color:"#888", marginBottom:6 }}>Topic:</div>
+                {!showTopicInput ? (
+                  <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                    <select value={customTopic} onChange={e=>setCustomTopic(e.target.value)}
+                      style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"inherit", background:"white" }}>
+                      {allTopics.map(t=><option key={t} value={t}>{t}</option>)}
+                      {!allTopics.includes(customTopic) && customTopic && <option value={customTopic}>{customTopic} ✨</option>}
+                    </select>
+                    <button onClick={()=>setShowTopicInput(true)} style={{ padding:"8px 10px", borderRadius:8, border:"1px solid #AFA9EC", background:"white", fontSize:12, cursor:"pointer", color:"#534AB7", whiteSpace:"nowrap" }}>+ New topic</button>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", gap:6 }}>
+                    <input value={customTopic} onChange={e=>setCustomTopic(e.target.value)} placeholder="New topic name…"
+                      style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"inherit" }} />
+                    <button onClick={()=>setShowTopicInput(false)} style={{ padding:"8px 10px", borderRadius:8, border:"1px solid #AFA9EC", background:"white", fontSize:12, cursor:"pointer" }}>✓</button>
+                  </div>
+                )}
+
+                <button onClick={handleConfirmAdd} style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:8, border:"none", background:"#1D9E75", color:"white", fontSize:14, cursor:"pointer", fontWeight:600 }}>
+                  ✓ Add to Dictionary
+                </button>
+              </div>
+            )}
+
             {added.length > 0 && (
-              <div style={{ marginTop:12 }}>
+              <div style={{ marginTop:8 }}>
                 <div style={{ fontSize:12, color:"#888", marginBottom:6 }}>Added:</div>
                 {added.map((w,i) => (
-                  <div key={i} style={{ background:"#f0f0ff", borderRadius:8, padding:"8px 12px", marginBottom:6, fontSize:13 }}>
+                  <div key={i} style={{ background:"#e8f8f2", borderRadius:8, padding:"8px 12px", marginBottom:6, fontSize:13 }}>
                     <span style={{ fontWeight:600 }}>{w[0]}</span> <span style={{ color:"#888", fontStyle:"italic" }}>{w[1]}</span> — {w[2]} <span style={{ color:"#534AB7", fontSize:12 }}>({w[3]})</span>
                   </div>
                 ))}
@@ -2793,20 +2900,11 @@ Return ONLY a JSON array: [{"gr":"...","tr":"...","en":"...","topic":"..."}]` }
                   </button>
                 )}
                 {photoResults && (
-                  <div>
-                    <div style={{ fontSize:13, color:"#444", marginBottom:8 }}>Found {photoResults.length} word(s):</div>
-                    {photoResults.map((w,i) => (
-                      <div key={i} style={{ background:"#f0f0ff", borderRadius:8, padding:"8px 12px", marginBottom:6, fontSize:13 }}>
-                        <span style={{ fontWeight:600 }}>{w.gr}</span> <span style={{ color:"#888", fontStyle:"italic" }}>{w.tr}</span> — {w.en} <span style={{ color:"#534AB7", fontSize:12 }}>({w.topic})</span>
-                      </div>
-                    ))}
-                    <button onClick={()=>handleAddPhotoWords(photoResults)} style={{ width:"100%", marginTop:10, padding:"10px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600 }}>
-                      Add All to Dictionary
-                    </button>
-                    <button onClick={()=>{setImgPreview(null);setImgData(null);setPhotoResults(null);}} style={{ width:"100%", marginTop:6, padding:"8px", borderRadius:8, border:"1px solid #ccc", background:"white", fontSize:13, cursor:"pointer" }}>
-                      Try Another Image
-                    </button>
-                  </div>
+                  <PhotoWordList
+                    words={photoResults}
+                    onAdd={handleAddPhotoWords}
+                    onReset={()=>{setImgPreview(null);setImgData(null);setPhotoResults(null);}}
+                  />
                 )}
               </div>
             )}
