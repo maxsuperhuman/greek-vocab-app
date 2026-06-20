@@ -1,3 +1,5 @@
+const { useState, useEffect, useMemo, useCallback } = React;
+
 
 // ─── IndexedDB storage (PWA - reliable, never clears) ────────────
 const DB_NAME = "greek_vocab_db";
@@ -3186,6 +3188,5 @@ function App() {
 
 
 // Mount app
-const { useState, useEffect, useMemo, useCallback } = React;
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
