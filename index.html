@@ -4078,6 +4078,26 @@ function StatsTab({ mastery }) {
             })}
           </div>
       }
+
+      {/* Clear cache */}
+      <div style={{ marginTop:"2rem", paddingTop:"1rem", borderTop:"0.5px solid #eee" }}>
+        <div style={{ fontSize:12, color:"#aaa", marginBottom:8 }}>App maintenance</div>
+        <button onClick={async () => {
+          if (!confirm("Clear app cache? Your progress is safe.")) return;
+          try {
+            await caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k))));
+            if (navigator.serviceWorker) {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister()));
+            }
+            alert("Cache cleared! Reloading…");
+            location.reload(true);
+          } catch(e) { alert("Could not clear cache."); }
+        }} style={{ padding:"10px 18px", borderRadius:10, border:"1px solid #ddd", background:"white", fontSize:14, cursor:"pointer", color:"#666", fontFamily:"inherit" }}>
+          🗑️ Clear app cache
+        </button>
+        <div style={{ fontSize:11, color:"#bbb", marginTop:6 }}>Removes cached AI cards and service worker. Progress is not affected.</div>
+      </div>
     </div>
   );
 }
@@ -4250,6 +4270,23 @@ function App() {
             style={{ fontSize:12, padding:"3px 9px", borderRadius:10, border:"0.5px solid #ccc", background:"transparent", color:"#888", cursor:"pointer", fontFamily:"inherit" }}>
             📥 Restore
           </button>
+          <button onClick={async () => {
+            if (!confirm("Clear app cache? Your progress is safe.")) return;
+            try {
+              await caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k))));
+              if (navigator.serviceWorker) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(r => r.unregister()));
+              }
+              setRestoreMsg({ ok:true, text:"✓ Cache cleared! Reloading…" });
+              setTimeout(() => location.reload(true), 1000);
+            } catch(e) {
+              setRestoreMsg({ ok:false, text:"Could not clear cache." });
+            }
+          }} style={{ fontSize:12, padding:"3px 9px", borderRadius:10, border:"0.5px solid #ccc", background:"transparent", color:"#888", cursor:"pointer", fontFamily:"inherit" }}>
+            🗑️ Cache
+          </button>
+
         </div>
       </div>
 
