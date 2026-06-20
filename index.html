@@ -2720,23 +2720,26 @@ function AddWordModal({ onClose, onAdded }) {
   const allTopics = [...new Set(WORDS.map(w=>w[3]))].sort();
 
   async function handleTypeAnalyze() {
-    const g = greek.trim();
-    if (!g) { setError("Enter a Greek word or phrase."); return; }
+    const input = greek.trim();
+    if (!input) { setError("Enter a word in any language."); return; }
     setLoading(true); setError(""); setPreview(null);
     const apiKey = await getApiKey();
-    let result = { tr: g, en: g, topic: "Subjects" };
+    let result = { gr: input, tr: input, en: input, topic: "Subjects" };
     if (apiKey) {
       try {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:150,
-            messages:[{ role:"user", content:`For the Greek word/phrase "${g}":
-1. Transliteration (Latin letters)
-2. English translation (1-5 words)
-3. Best topic from existing list: ${allTopics.join(", ")}
-   OR suggest a new topic name if none fit well.
-Return ONLY JSON: {"tr":"...","en":"...","topic":"..."}` }]
+          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:200,
+            messages:[{ role:"user", content:`The user entered: "${input}"
+This could be in Greek, Latin transliteration, English, or Russian.
+Your task:
+1. Identify what word/phrase this refers to
+2. Provide the Greek word/phrase
+3. Latin transliteration of the Greek
+4. English translation (1-5 words)
+5. Best topic from: ${allTopics.join(", ")} — or suggest a new topic if none fit
+Return ONLY JSON: {"gr":"...","tr":"...","en":"...","topic":"..."}` }]
           })
         });
         if (res.ok) {
@@ -2744,9 +2747,12 @@ Return ONLY JSON: {"tr":"...","en":"...","topic":"..."}` }]
           const match = d.content[0].text.match(/\{[\s\S]*\}/);
           if (match) result = { ...result, ...JSON.parse(match[0]) };
         }
-      } catch(e) {}
+      } catch(e) { setError("Could not connect. Check API key."); setLoading(false); return; }
+    } else {
+      setError("API key required. Tap 🔑 in a word card to add it.");
+      setLoading(false); return;
     }
-    setPreview({ gr: g, ...result });
+    setPreview(result);
     setCustomTopic(result.topic);
     setShowTopicInput(false);
     setLoading(false);
@@ -2827,9 +2833,9 @@ Return ONLY a JSON array: [{"gr":"...","tr":"...","en":"...","topic":"..."}]` }
 
         {tab === "type" && (
           <div>
-            <div style={{ fontSize:13, color:"#666", marginBottom:12 }}>Type a Greek word — Claude translates, transcribes, and suggests a topic.</div>
+            <div style={{ fontSize:13, color:"#666", marginBottom:12 }}>Type in any language — Greek, English, Russian, or Latin transcription. Claude will find the Greek word automatically.</div>
             <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-              <input value={greek} onChange={e=>{setGreek(e.target.value);setPreview(null);}} onKeyDown={e=>e.key==="Enter"&&handleTypeAnalyze()} placeholder="Greek word or phrase…" style={{ ...inputStyle, flex:1 }} />
+              <input value={greek} onChange={e=>{setGreek(e.target.value);setPreview(null);}} onKeyDown={e=>e.key==="Enter"&&handleTypeAnalyze()} placeholder="αγάπη / love / любовь / agápi…" style={{ ...inputStyle, flex:1 }} />
               <button onClick={handleTypeAnalyze} disabled={loading} style={{ padding:"10px 14px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
                 {loading ? "…" : "Analyse"}
               </button>
