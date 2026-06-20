@@ -1058,8 +1058,32 @@ const WORDS = [
   ["τελικά","teliká","finally / in the end","Greetings"]];
 
 // ─── Claude API for interactive word cards ────────────────────────
-const CLAUDE_API_KEY = "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";
 const CARD_CACHE_PREFIX = "card_v1_";
+const API_KEY_STORE = "api_key";
+
+async function getApiKey() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(API_KEY_STORE);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function saveApiKey(key) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(key, API_KEY_STORE);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch { return false; }
+}
 
 async function getCardFromCache(greek) {
   try {
@@ -1090,6 +1114,9 @@ async function fetchWordCard(greek, transcription, english, topic) {
   const cached = await getCardFromCache(greek);
   if (cached) return cached;
 
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+
   const prompt = `You are a Greek language teacher. Give a concise reference card for the Greek word "${greek}" (${transcription}) meaning "${english}" (topic: ${topic}).
 
 Return ONLY a JSON object with this exact structure:
@@ -1111,7 +1138,7 @@ Use simple A2-level Greek in examples. Include negation or question form in one 
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": CLAUDE_API_KEY,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true",
       },
@@ -2551,10 +2578,270 @@ Exactly 3 sentences:
 }
 
 // ─── Dictionary ────────────────────────────────────────────────────
+// ─── Custom words storage ───────────────────────────────────────────
+const CUSTOM_WORDS_KEY = "custom_words";
+
+async function loadCustomWords() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(CUSTOM_WORDS_KEY);
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch { return []; }
+}
+
+async function saveCustomWords(words) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(words, CUSTOM_WORDS_KEY);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch { return false; }
+}
+
+// ─── Add Word Modal ──────────────────────────────────────────────────
+async function enrichWord(greek, english) {
+  const apiKey = await getApiKey();
+  if (!apiKey) return { tr: greek, topic: "Subjects" };
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 100,
+        messages: [{ role: "user", content: `For the Greek word/phrase "${greek}" meaning "${english}":
+1. Provide the Latin transliteration
+2. Choose the best topic from: Greetings, Numbers, Family, Food, City, Time, Health, Adjectives, Verbs, Subjects, Alphabet, Animals, Nature, Home, Clothes, Work, Emotions, Education, Technology, Sports, Transport, Shopping, Media, Society, Culture
+Return ONLY JSON: {"tr": "...", "topic": "..."}` }]
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const match = data.content[0].text.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+    }
+  } catch(e) {}
+  return { tr: greek, topic: "Subjects" };
+}
+
+async function addWordToList(greek, english, tr, topic, onAdded) {
+  const newWord = [greek, tr, english, topic];
+  const existing = await loadCustomWords();
+  if (existing.find(w => w[0] === greek)) return; // avoid duplicates
+  const updated = [...existing, newWord];
+  await saveCustomWords(updated);
+  if (!WORDS.find(w => w[0] === greek)) WORDS.push(newWord);
+  if (onAdded) onAdded(newWord);
+}
+
+function AddWordModal({ onClose, onAdded }) {
+  const [tab, setTab] = React.useState("type"); // "type" | "photo"
+  // Type tab
+  const [greek, setGreek] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [added, setAdded] = React.useState([]);
+  // Photo tab
+  const [imgData, setImgData] = React.useState(null);
+  const [imgPreview, setImgPreview] = React.useState(null);
+  const [photoLoading, setPhotoLoading] = React.useState(false);
+  const [photoResults, setPhotoResults] = React.useState(null);
+  const fileRef = React.useRef();
+
+  async function handleTypeAdd() {
+    const g = greek.trim();
+    if (!g) { setError("Enter a Greek word or phrase."); return; }
+    setLoading(true); setError("");
+    const { tr, topic } = await enrichWord(g, "");
+    // Get English translation too
+    const apiKey = await getApiKey();
+    let english = "";
+    if (apiKey) {
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:50,
+            messages:[{ role:"user", content:`Translate this Greek word/phrase to English in 1-5 words: "${g}". Reply with ONLY the translation.` }]
+          })
+        });
+        if (res.ok) { const d = await res.json(); english = d.content[0].text.trim(); }
+      } catch(e) {}
+    }
+    if (!english) english = g;
+    await addWordToList(g, english, tr, topic, onAdded);
+    setAdded(prev => [...prev, [g, tr, english, topic]]);
+    setGreek("");
+    setLoading(false);
+  }
+
+  async function handlePhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      setImgPreview(ev.target.result);
+      setImgData(ev.target.result.split(",")[1]);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handlePhotoExtract() {
+    if (!imgData) return;
+    setPhotoLoading(true); setPhotoResults(null);
+    const apiKey = await getApiKey();
+    if (!apiKey) { setPhotoLoading(false); setError("API key required."); return; }
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          max_tokens: 800,
+          messages: [{ role:"user", content: [
+            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: imgData }},
+            { type:"text", text:`Extract all Greek words or phrases visible in this image. For each one provide transliteration, English translation, and best topic from: Greetings, Numbers, Family, Food, City, Time, Health, Adjectives, Verbs, Subjects, Alphabet, Animals, Nature, Home, Clothes, Work, Emotions, Education, Technology, Sports, Transport, Shopping, Media, Society, Culture.
+Return ONLY a JSON array: [{"gr":"...","tr":"...","en":"...","topic":"..."}]` }
+          ]}]
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const match = data.content[0].text.match(/\[[\s\S]*\]/);
+        if (match) setPhotoResults(JSON.parse(match[0]));
+        else setError("Could not extract words from image.");
+      }
+    } catch(e) { setError("Error processing image."); }
+    setPhotoLoading(false);
+  }
+
+  async function handleAddPhotoWords(words) {
+    for (const w of words) {
+      await addWordToList(w.gr, w.en, w.tr, w.topic, onAdded);
+    }
+    setAdded(prev => [...prev, ...words.map(w=>[w.gr,w.tr,w.en,w.topic])]);
+    setPhotoResults(null); setImgPreview(null); setImgData(null);
+  }
+
+  const inputStyle = { width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:15, fontFamily:"inherit", boxSizing:"border-box" };
+  const tabStyle = (active) => ({ flex:1, padding:"8px", borderRadius:8, border:"none", background: active ? "#534AB7" : "#f0f0ff", color: active ? "white" : "#534AB7", fontSize:14, cursor:"pointer", fontWeight:600 });
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:16, padding:24, width:"100%", maxWidth:420, boxShadow:"0 8px 40px rgba(0,0,0,0.2)", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div style={{ fontSize:18, fontWeight:700, color:"#26215C" }}>➕ Add Words</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#888" }}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+          <button style={tabStyle(tab==="type")} onClick={()=>setTab("type")}>⌨️ Type</button>
+          <button style={tabStyle(tab==="photo")} onClick={()=>setTab("photo")}>📷 Photo</button>
+        </div>
+
+        {tab === "type" && (
+          <div>
+            <div style={{ fontSize:13, color:"#666", marginBottom:12 }}>Type a Greek word or phrase — Claude will translate and categorize it automatically.</div>
+            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+              <input value={greek} onChange={e=>setGreek(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleTypeAdd()} placeholder="Greek word or phrase…" style={{ ...inputStyle, flex:1 }} />
+              <button onClick={handleTypeAdd} disabled={loading} style={{ padding:"10px 16px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
+                {loading ? "…" : "Add"}
+              </button>
+            </div>
+            {error && <div style={{ color:"#E24B4A", fontSize:13, marginBottom:8 }}>{error}</div>}
+            {added.length > 0 && (
+              <div style={{ marginTop:12 }}>
+                <div style={{ fontSize:12, color:"#888", marginBottom:6 }}>Added:</div>
+                {added.map((w,i) => (
+                  <div key={i} style={{ background:"#f0f0ff", borderRadius:8, padding:"8px 12px", marginBottom:6, fontSize:13 }}>
+                    <span style={{ fontWeight:600 }}>{w[0]}</span> <span style={{ color:"#888", fontStyle:"italic" }}>{w[1]}</span> — {w[2]} <span style={{ color:"#534AB7", fontSize:12 }}>({w[3]})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "photo" && (
+          <div>
+            <div style={{ fontSize:13, color:"#666", marginBottom:12 }}>Upload a screenshot with Greek text — Claude will extract all words automatically.</div>
+            {!imgPreview ? (
+              <div onClick={()=>fileRef.current.click()} style={{ border:"2px dashed #AFA9EC", borderRadius:12, padding:"2rem", textAlign:"center", cursor:"pointer", color:"#534AB7" }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>📷</div>
+                <div style={{ fontSize:14 }}>Tap to upload image</div>
+                <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} style={{ display:"none" }} />
+              </div>
+            ) : (
+              <div>
+                <img src={imgPreview} style={{ width:"100%", borderRadius:8, marginBottom:12, maxHeight:200, objectFit:"contain" }} />
+                {!photoResults && (
+                  <button onClick={handlePhotoExtract} disabled={photoLoading} style={{ width:"100%", padding:"10px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600 }}>
+                    {photoLoading ? "Extracting words…" : "Extract Words"}
+                  </button>
+                )}
+                {photoResults && (
+                  <div>
+                    <div style={{ fontSize:13, color:"#444", marginBottom:8 }}>Found {photoResults.length} word(s):</div>
+                    {photoResults.map((w,i) => (
+                      <div key={i} style={{ background:"#f0f0ff", borderRadius:8, padding:"8px 12px", marginBottom:6, fontSize:13 }}>
+                        <span style={{ fontWeight:600 }}>{w.gr}</span> <span style={{ color:"#888", fontStyle:"italic" }}>{w.tr}</span> — {w.en} <span style={{ color:"#534AB7", fontSize:12 }}>({w.topic})</span>
+                      </div>
+                    ))}
+                    <button onClick={()=>handleAddPhotoWords(photoResults)} style={{ width:"100%", marginTop:10, padding:"10px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600 }}>
+                      Add All to Dictionary
+                    </button>
+                    <button onClick={()=>{setImgPreview(null);setImgData(null);setPhotoResults(null);}} style={{ width:"100%", marginTop:6, padding:"8px", borderRadius:8, border:"1px solid #ccc", background:"white", fontSize:13, cursor:"pointer" }}>
+                      Try Another Image
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {error && <div style={{ color:"#E24B4A", fontSize:13, marginTop:8 }}>{error}</div>}
+            {added.length > 0 && (
+              <div style={{ marginTop:12 }}>
+                <div style={{ fontSize:12, color:"#888", marginBottom:6 }}>Added:</div>
+                {added.map((w,i) => (
+                  <div key={i} style={{ background:"#f0f0ff", borderRadius:8, padding:"8px 12px", marginBottom:6, fontSize:13 }}>
+                    <span style={{ fontWeight:600 }}>{w[0]}</span> — {w[2]} <span style={{ color:"#534AB7", fontSize:12 }}>({w[3]})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DictTab({ mastery }) {
   const [q, setQ]           = useState("");
   const [topic, setTopic]   = useState("All");
   const [selected, setSel]  = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [, forceUpdate]     = useState(0);
+
+  // Load custom words on mount
+  React.useEffect(() => {
+    loadCustomWords().then(cw => {
+      cw.forEach(w => { if (!WORDS.find(x=>x[0]===w[0])) WORDS.push(w); });
+      forceUpdate(n=>n+1);
+    });
+  }, []);
   function wStats(w) {
     const e = mastery[w[0]];
     if (!e) return { ok:0, fail:0, level:0 };
@@ -2585,7 +2872,11 @@ function DictTab({ mastery }) {
   return (
     <div style={{ position:"relative" }}>
       <CardDetail word={selected} onClose={()=>setSel(null)} />
-      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" style={{ width:"100%", padding:"7px 11px", border:"0.5px solid #ccc", borderRadius:8, fontSize:13, marginBottom:".8rem", background:"transparent", fontFamily:"inherit" }} />
+      {showAdd && <AddWordModal onClose={()=>setShowAdd(false)} onAdded={()=>forceUpdate(n=>n+1)} />}
+      <div style={{ display:"flex", gap:8, marginBottom:".8rem" }}>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" style={{ flex:1, padding:"7px 11px", border:"0.5px solid #ccc", borderRadius:8, fontSize:13, background:"transparent", fontFamily:"inherit" }} />
+        <button onClick={()=>setShowAdd(true)} style={{ padding:"7px 14px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:13, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>+ Add</button>
+      </div>
 
       {/* Topic chips with word counts */}
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
@@ -2680,25 +2971,72 @@ function DictTab({ mastery }) {
 
 // ─── Flashcards ────────────────────────────────────────────────────
 
+// ─── API Key settings modal ─────────────────────────────────────────
+function ApiKeyModal({ onClose, onSaved }) {
+  const [val, setVal] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => { getApiKey().then(k => { if(k) setVal(k); }); }, []);
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:16, padding:24, width:"100%", maxWidth:420, boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
+        <div style={{ fontSize:18, fontWeight:700, color:"#26215C", marginBottom:8 }}>🔑 Anthropic API Key</div>
+        <div style={{ fontSize:13, color:"#666", marginBottom:16, lineHeight:1.5 }}>
+          Enter your API key from <strong>console.anthropic.com</strong>. It is stored only on this device (IndexedDB) and never sent to GitHub.
+        </div>
+        <input
+          type="password"
+          value={val}
+          onChange={e=>setVal(e.target.value)}
+          placeholder="sk-ant-api03-..."
+          style={{ width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"monospace", boxSizing:"border-box", marginBottom:12 }}
+        />
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid #ccc", background:"white", fontSize:13, cursor:"pointer" }}>Cancel</button>
+          <button onClick={async () => {
+            setSaving(true);
+            await saveApiKey(val.trim());
+            setSaving(false);
+            onSaved();
+            onClose();
+          }} style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── AI-powered word card panel ────────────────────────────────────
 function CardDetail({ word, onClose }) {
   if (!word) return null;
   const [card, setCard] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
+  const [noKey, setNoKey] = React.useState(false);
+  const [showKeyModal, setShowKeyModal] = React.useState(false);
 
-  React.useEffect(() => {
-    setCard(null); setLoading(true); setError(null);
+  function loadCard() {
+    setCard(null); setLoading(true); setError(null); setNoKey(false);
     fetchWordCard(word[0], word[1], word[2], word[3])
       .then(result => {
         if (result) setCard(result);
-        else setError("Could not load. Check connection.");
+        else {
+          getApiKey().then(k => {
+            if (!k) setNoKey(true);
+            else setError("Could not load. Check connection.");
+          });
+        }
       })
       .catch(() => setError("Could not load."))
       .finally(() => setLoading(false));
-  }, [word[0]]);
+  }
+
+  React.useEffect(() => { loadCard(); }, [word[0]]);
 
   return (
+    <>
+    {showKeyModal && <ApiKeyModal onClose={()=>setShowKeyModal(false)} onSaved={loadCard} />}
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
       <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:"16px 16px 0 0", width:"100%", maxWidth:540, maxHeight:"75vh", overflowY:"auto", boxShadow:"0 -4px 30px rgba(0,0,0,0.2)" }}>
         {/* header */}
@@ -2709,17 +3047,15 @@ function CardDetail({ word, onClose }) {
             <div style={{ fontSize:13, color:"#534AB7" }}>{word[2]}</div>
           </div>
           <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+            <button onClick={()=>setShowKeyModal(true)} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Set API Key">🔑</button>
             <button onClick={async () => {
-              setCard(null); setLoading(true); setError(null);
-              // Clear cache for this word
+              setCard(null); setLoading(true); setError(null); setNoKey(false);
               try {
                 const db = await openDB();
                 const tx = db.transaction(DB_STORE, "readwrite");
                 tx.objectStore(DB_STORE).delete(CARD_CACHE_PREFIX + word[0]);
               } catch {}
-              fetchWordCard(word[0], word[1], word[2], word[3])
-                .then(r => { if(r) setCard(r); else setError("Could not load."); })
-                .finally(() => setLoading(false));
+              loadCard();
             }} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Refresh">🔄</button>
             <button onClick={onClose} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:16, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }}>✕</button>
           </div>
@@ -2729,6 +3065,14 @@ function CardDetail({ word, onClose }) {
             <div style={{ textAlign:"center", padding:"2rem", color:"#888" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⏳</div>
               <div style={{ fontSize:13 }}>Loading card from Claude AI…</div>
+            </div>
+          )}
+          {noKey && !loading && (
+            <div style={{ textAlign:"center", padding:"2rem" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>🔑</div>
+              <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:8 }}>API key required</div>
+              <div style={{ fontSize:13, color:"#666", marginBottom:16, lineHeight:1.5 }}>Add your Anthropic API key to enable AI reference cards.</div>
+              <button onClick={()=>setShowKeyModal(true)} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:"#534AB7", color:"white", fontSize:14, cursor:"pointer", fontWeight:600 }}>Add API Key</button>
             </div>
           )}
           {error && !loading && (
@@ -2771,6 +3115,7 @@ function CardDetail({ word, onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
