@@ -1058,7 +1058,7 @@ const WORDS = [
   ["τελικά","teliká","finally / in the end","Greetings"]];
 
 // ─── Claude API for interactive word cards ────────────────────────
-const CLAUDE_API_KEY = "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";
+const CLAUDE_API_KEY = "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";
 const CARD_CACHE_PREFIX = "card_v1_";
 
 async function getCardFromCache(greek) {
@@ -1116,7 +1116,7 @@ Use simple A2-level Greek in examples. Include negation or question form in one 
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-haiku-4-5",
         max_tokens: 600,
         messages: [{ role: "user", content: prompt }]
       })
@@ -2412,7 +2412,7 @@ Exactly 3 sentences:
     fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:900, messages:[{role:"user",content:prompt}] }),
+      body:JSON.stringify({ model:"claude-haiku-4-5", max_tokens:900, messages:[{role:"user",content:prompt}] }),
     })
       .then(r => {
         if (!r.ok && r.status !== 401) throw new Error("blocked");
@@ -2683,14 +2683,12 @@ function DictTab({ mastery }) {
 // ─── AI-powered word card panel ────────────────────────────────────
 function CardDetail({ word, onClose }) {
   if (!word) return null;
-  const [card, setCard] = React.useState(CARDS[word[0]] || null);
-  const [loading, setLoading] = React.useState(!CARDS[word[0]]);
+  const [card, setCard] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
   React.useEffect(() => {
-    if (card) return; // already have card (from CARDS or cache)
-    setLoading(true);
-    setError(null);
+    setCard(null); setLoading(true); setError(null);
     fetchWordCard(word[0], word[1], word[2], word[3])
       .then(result => {
         if (result) setCard(result);
@@ -2739,12 +2737,12 @@ function CardDetail({ word, onClose }) {
               <div style={{ fontSize:13 }}>{error}</div>
             </div>
           )}
-          {!card && !loading ? (
+          {!card && !loading && !error ? (
             <div style={{ textAlign:"center", padding:"2rem", color:"#888" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>📖</div>
               <div style={{ fontSize:13 }}>No reference card yet for this word.</div>
             </div>
-          ) : (
+          ) : card ? (
             <>
               {/* Part of speech */}
               <div style={{ marginBottom:"1rem" }}>
@@ -2769,7 +2767,7 @@ function CardDetail({ word, onClose }) {
                 <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517" }}>{card.n || card.notes}</div>
               </div>
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
