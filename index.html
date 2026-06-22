@@ -1085,6 +1085,65 @@ async function saveApiKey(key) {
   } catch { return false; }
 }
 
+const UNSPLASH_KEY_STORE = "unsplash_key";
+
+async function getUnsplashKey() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(UNSPLASH_KEY_STORE);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function saveUnsplashKey(key) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(key, UNSPLASH_KEY_STORE);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch { return false; }
+}
+
+// Unsplash image cache
+const UNSPLASH_CACHE_KEY = "unsplash_images_v1";
+let UNSPLASH_MAP = {}; // english word → image URL
+
+async function loadUnsplashMap() {
+  try {
+    const db = await openDB();
+    const cached = await new Promise(resolve => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(UNSPLASH_CACHE_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (cached) { UNSPLASH_MAP = cached; return true; }
+  } catch(e) {}
+  return false;
+}
+
+async function fetchUnsplashImage(englishWord, apiKey) {
+  try {
+    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(englishWord)}&per_page=1&orientation=squarish`, {
+      headers: { "Authorization": `Client-ID ${apiKey}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        return data.results[0].urls.small;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
 // ─── Emoji cache ─────────────────────────────────────────────────────
 const EMOJI_KEY = "word_emojis_v1";
 let EMOJI_MAP = {};
@@ -3182,27 +3241,34 @@ function DictTab({ mastery }) {
 // ─── API Key settings modal ─────────────────────────────────────────
 function ApiKeyModal({ onClose, onSaved }) {
   const [val, setVal] = React.useState("");
+  const [unsplashVal, setUnsplashVal] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  React.useEffect(() => { getApiKey().then(k => { if(k) setVal(k); }); }, []);
+  React.useEffect(() => {
+    getApiKey().then(k => { if(k) setVal(k); });
+    getUnsplashKey().then(k => { if(k) setUnsplashVal(k); });
+  }, []);
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:16, padding:24, width:"100%", maxWidth:420, boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
-        <div style={{ fontSize:18, fontWeight:700, color:"#26215C", marginBottom:8 }}>🔑 Anthropic API Key</div>
-        <div style={{ fontSize:13, color:"#666", marginBottom:16, lineHeight:1.5 }}>
-          Enter your API key from <strong>console.anthropic.com</strong>. It is stored only on this device (IndexedDB) and never sent to GitHub.
+        <div style={{ fontSize:18, fontWeight:700, color:"#26215C", marginBottom:16 }}>🔑 API Keys</div>
+
+        <div style={{ fontSize:13, fontWeight:600, color:"#444", marginBottom:6 }}>Anthropic API Key</div>
+        <input type="password" value={val} onChange={e=>setVal(e.target.value)} placeholder="sk-ant-api03-..."
+          style={{ width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"monospace", boxSizing:"border-box", marginBottom:16 }} />
+
+        <div style={{ fontSize:13, fontWeight:600, color:"#444", marginBottom:6 }}>Unsplash Access Key <span style={{fontWeight:400,color:"#888"}}>(for photos)</span></div>
+        <input type="password" value={unsplashVal} onChange={e=>setUnsplashVal(e.target.value)} placeholder="Unsplash Access Key..."
+          style={{ width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"monospace", boxSizing:"border-box", marginBottom:16 }} />
+
+        <div style={{ fontSize:12, color:"#888", marginBottom:16, lineHeight:1.5 }}>
+          Keys stored only on this device, never in GitHub.
         </div>
-        <input
-          type="password"
-          value={val}
-          onChange={e=>setVal(e.target.value)}
-          placeholder="sk-ant-api03-..."
-          style={{ width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"monospace", boxSizing:"border-box", marginBottom:12 }}
-        />
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
           <button onClick={onClose} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid #ccc", background:"white", fontSize:13, cursor:"pointer" }}>Cancel</button>
           <button onClick={async () => {
             setSaving(true);
-            await saveApiKey(val.trim());
+            if (val.trim()) await saveApiKey(val.trim());
+            if (unsplashVal.trim()) await saveUnsplashKey(unsplashVal.trim());
             setSaving(false);
             onSaved();
             onClose();
@@ -3478,7 +3544,11 @@ function FlashTab({ mastery, rec }) {
           {[false,true].map(back => (
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
-              {EMOJI_MAP[w[0]] && <TwemojiImg emoji={EMOJI_MAP[w[0]]} size={64} style={{marginBottom:8}} />}
+              {UNSPLASH_MAP[w[2]] ? (
+                <img src={UNSPLASH_MAP[w[2]]} style={{width:100,height:100,objectFit:"cover",borderRadius:12,marginBottom:8}} />
+              ) : EMOJI_MAP[w[0]] ? (
+                <TwemojiImg emoji={EMOJI_MAP[w[0]]} size={64} style={{marginBottom:8}} />
+              ) : null}
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
@@ -3686,7 +3756,11 @@ function QuizTab({ mastery, rec }) {
             return (
               <button key={o} disabled={locked} onClick={()=>pick(o)}
                 style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                {optEmoji && <TwemojiImg emoji={optEmoji} size={56} />}
+                {UNSPLASH_MAP[optWord?.[2]] ? (
+                <img src={UNSPLASH_MAP[optWord[2]]} style={{width:70,height:70,objectFit:"cover",borderRadius:10}} />
+              ) : optEmoji ? (
+                <TwemojiImg emoji={optEmoji} size={56} />
+              ) : null}
                 {o}
               </button>
             );
@@ -4410,6 +4484,72 @@ Return ONLY a JSON array:
 // ─── Stats Tab ─────────────────────────────────────────────────────
 // ─── Emoji storage ───────────────────────────────────────────────────
 
+// ─── Unsplash Image Generator ────────────────────────────────────────
+function UnsplashGenerator({ onDone }) {
+  const [loading, setLoading] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  const [count, setCount] = React.useState(Object.keys(UNSPLASH_MAP).length);
+  const [error, setError] = React.useState("");
+
+  async function generate() {
+    const apiKey = await getUnsplashKey();
+    if (!apiKey) { setError("Add Unsplash key first (tap 🔑 on any word card)"); return; }
+    setLoading(true); setError(""); setProgress(0);
+
+    // Only fetch for concrete nouns — skip verbs, adjectives, numbers
+    const targets = WORDS.filter(w =>
+      !["Verbs","Adjectives","Numbers","Subjects","Alphabet"].includes(w[3]) &&
+      !UNSPLASH_MAP[w[2]]
+    );
+
+    console.log("Fetching Unsplash for", targets.length, "words");
+    let done = 0;
+
+    for (const w of targets) {
+      const url = await fetchUnsplashImage(w[2], apiKey);
+      if (url) UNSPLASH_MAP[w[2]] = url;
+      done++;
+      setProgress(Math.round(done / targets.length * 100));
+      // Rate limit: 50 req/hour demo = ~1 per 72ms, be safe with 80ms
+      await new Promise(r => setTimeout(r, 80));
+    }
+
+    // Save to IndexedDB
+    try {
+      const db = await openDB();
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(UNSPLASH_MAP, UNSPLASH_CACHE_KEY);
+    } catch(e) {}
+
+    setCount(Object.keys(UNSPLASH_MAP).length);
+    setLoading(false);
+    if (onDone) onDone();
+  }
+
+  return (
+    <div style={{ background:"#f0f8ff", border:"0.5px solid #7EC8E3", borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div>
+          <div style={{ fontSize:13, fontWeight:500, color:"#26215C" }}>📸 Word Photos</div>
+          <div style={{ fontSize:12, color:"#888", marginTop:2 }}>
+            {error ? <span style={{color:"#E24B4A"}}>{error}</span> :
+             count > 0 ? `${count} photos loaded` : "Real photos for nouns via Unsplash"}
+          </div>
+        </div>
+        <button onClick={generate} disabled={loading}
+          style={{ padding:"7px 14px", borderRadius:8, border:"none", background: count>0?"#f0f0ff":"#0070f3", color: count>0?"#534AB7":"white", fontSize:13, cursor:"pointer", fontWeight:500 }}>
+          {loading ? `${progress}%…` : count > 0 ? "↺ Refresh" : "Generate"}
+        </button>
+      </div>
+      {loading && (
+        <div style={{ marginTop:8, height:4, background:"#e0e0e0", borderRadius:2 }}>
+          <div style={{ height:"100%", background:"#0070f3", borderRadius:2, width:`${progress}%`, transition:"width 0.3s" }}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatsTab({ mastery }) {
   const [filter, setFilter] = useState("all");
   const [, forceUpdate] = useState(0);
@@ -4478,6 +4618,9 @@ function StatsTab({ mastery }) {
           <span>Level 0 (unseen)</span><span>{mastPct}% mastered</span><span>Level 5 ★</span>
         </div>
       </div>
+
+      {/* Unsplash image generator */}
+      <UnsplashGenerator onDone={()=>forceUpdate(n=>n+1)} />
 
       {/* Emoji generator */}
       <div style={{ background:"#f7f7ff", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
@@ -4597,6 +4740,7 @@ function App() {
   // Load from Supabase on mount
   useEffect(() => {
     loadEmojiMap(); // Load emoji cache
+    loadUnsplashMap(); // Load unsplash cache
     async function load() {
       try {
         const saved = await supabaseLoad();
@@ -4740,7 +4884,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1632</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1645</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
