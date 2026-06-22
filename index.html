@@ -1135,15 +1135,20 @@ Response format: {"greek_word":"emoji",...}` }]
       if (res.ok) {
         const data = await res.json();
         const text = data.content[0].text;
-        const match = text.match(/\{[\s\S]*?\}/);
+        if (b === 0) console.log("Batch 0 raw:", text.substring(0, 200));
+        const match = text.match(/\{[\s\S]*\}/);
         if (match) {
           try {
             Object.assign(result, JSON.parse(match[0]));
             console.log("Batch", b, "OK, total:", Object.keys(result).length);
           } catch(pe) {
+            console.log("Batch", b, "parse error, trying pairs");
             const pairs = [...text.matchAll(/"([^"]+)"\s*:\s*"([^"]+)"/g)];
             for (const [,k,v] of pairs) { if(k && v) result[k] = v; }
+            console.log("Batch", b, "pairs extracted:", Object.keys(result).length);
           }
+        } else {
+          console.log("Batch", b, "no JSON match, raw:", text.substring(0, 100));
         }
       } else {
         console.error("Batch", b, "failed:", res.status);
@@ -4738,7 +4743,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1620</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1625</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
