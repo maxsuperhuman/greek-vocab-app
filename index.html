@@ -1085,6 +1085,68 @@ async function saveApiKey(key) {
   } catch { return false; }
 }
 
+// ─── Emoji cache ─────────────────────────────────────────────────────
+const EMOJI_KEY = "word_emojis_v1";
+let EMOJI_MAP = {};
+
+async function loadEmojiMap() {
+  try {
+    const db = await openDB();
+    const cached = await new Promise(resolve => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(EMOJI_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (cached) { EMOJI_MAP = cached; return true; }
+  } catch(e) {}
+  return false;
+}
+
+async function generateEmojiMap(onProgress) {
+  const apiKey = await getApiKey();
+  if (!apiKey) return false;
+
+  // Split into batches of 200
+  const batches = [];
+  for (let i = 0; i < WORDS.length; i += 200) {
+    batches.push(WORDS.slice(i, i + 200));
+  }
+
+  const result = {};
+  for (let b = 0; b < batches.length; b++) {
+    if (onProgress) onProgress(Math.round(b / batches.length * 100));
+    const batch = batches[b];
+    const list = batch.map(w => `${w[0]}=${w[2]}`).join(", ");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          max_tokens: 1000,
+          messages: [{ role:"user", content:`For each Greek=English word pair, pick ONE emoji that best represents the meaning. Return ONLY a JSON object {"greek_word": "emoji"}.
+Words: ${list}` }]
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const match = data.content[0].text.match(/\{[\s\S]*\}/);
+        if (match) Object.assign(result, JSON.parse(match[0]));
+      }
+    } catch(e) {}
+  }
+
+  EMOJI_MAP = result;
+  try {
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(result, EMOJI_KEY);
+  } catch(e) {}
+  if (onProgress) onProgress(100);
+  return true;
+}
+
 async function getCardFromCache(greek) {
   try {
     const db = await openDB();
@@ -3377,6 +3439,7 @@ function FlashTab({ mastery, rec }) {
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
               {!back && EMOJI_MAP[w[0]] && <div style={{ fontSize:36, marginBottom:6 }}>{EMOJI_MAP[w[0]]}</div>}
+              {EMOJI_MAP[w[0]] && <div style={{ fontSize:36, marginBottom:6 }}>{EMOJI_MAP[w[0]]}</div>}
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
@@ -4270,22 +4333,33 @@ async function saveEmojiMap() {
 
 async function generateEmojisBatch(words, apiKey) {
   const prompt = `For each Greek word below, give ONE emoji that best represents its meaning visually.
-Return ONLY a JSON object mapping Greek word to emoji: {"word1":"🏠","word2":"🐕",...}
+Return ONLY a JSON object mapping Greek word to emoji, no explanation, no markdown:
+{"word1":"🏠","word2":"🐕"}
 
 Words: ${words.map(w => `${w[0]} (${w[2]})`).join(", ")}`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-    body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:800,
+    body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:1200,
       messages:[{ role:"user", content:prompt }]
     })
   });
-  if (!res.ok) throw new Error("API error");
+  if (!res.ok) throw new Error("API error " + res.status);
   const data = await res.json();
-  const match = data.content[0].text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("Parse error");
-  return JSON.parse(match[0]);
+  const text = data.content[0].text;
+  // Try multiple parse strategies
+  try {
+    // Remove markdown code blocks if present
+    const clean = text.replace(/```json|```/g, "").trim();
+    // Find first { to last }
+    const start = clean.indexOf("{");
+    const end = clean.lastIndexOf("}");
+    if (start === -1 || end === -1) throw new Error("No JSON found");
+    return JSON.parse(clean.slice(start, end + 1));
+  } catch(e) {
+    throw new Error("Parse error: " + e.message);
+  }
 }
 
 // ─── Emoji Generator UI ──────────────────────────────────────────────
@@ -4362,6 +4436,16 @@ function EmojiGenerator({ onDone }) {
 function StatsTab({ mastery }) {
   const [filter, setFilter] = useState("all");
   const [, forceUpdate] = useState(0);
+  const [emojiLoading, setEmojiLoading] = useState(false);
+  const [emojiProgress, setEmojiProgress] = useState(0);
+  const [emojiDone, setEmojiDone] = useState(Object.keys(EMOJI_MAP).length > 0);
+
+  async function handleGenerateEmojis() {
+    setEmojiLoading(true); setEmojiProgress(0);
+    await generateEmojiMap(p => setEmojiProgress(p));
+    setEmojiDone(true); setEmojiLoading(false);
+    forceUpdate(n=>n+1);
+  }
 
   // Apply decay on render
   const m = useMemo(() => applyDecay(mastery), [mastery]);
@@ -4417,6 +4501,27 @@ function StatsTab({ mastery }) {
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#aaa", marginTop:3 }}>
           <span>Level 0 (unseen)</span><span>{mastPct}% mastered</span><span>Level 5 ★</span>
         </div>
+      </div>
+
+      {/* Emoji generator */}
+      <div style={{ background:"#f7f7ff", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:500, color:"#26215C" }}>🎨 Word Emojis</div>
+            <div style={{ fontSize:12, color:"#888", marginTop:2 }}>
+              {emojiDone ? `${Object.keys(EMOJI_MAP).length} emojis loaded` : "Add emoji icons to dictionary and flashcards"}
+            </div>
+          </div>
+          <button onClick={handleGenerateEmojis} disabled={emojiLoading}
+            style={{ padding:"7px 14px", borderRadius:8, border:"none", background: emojiDone?"#f0f0ff":"#534AB7", color: emojiDone?"#534AB7":"white", fontSize:13, cursor:"pointer", fontWeight:500 }}>
+            {emojiLoading ? `${emojiProgress}%…` : emojiDone ? "↺ Refresh" : "Generate"}
+          </button>
+        </div>
+        {emojiLoading && (
+          <div style={{ marginTop:8, height:4, background:"#e0e0e0", borderRadius:2 }}>
+            <div style={{ height:"100%", background:"#534AB7", borderRadius:2, width:`${emojiProgress}%`, transition:"width 0.3s" }}/>
+          </div>
+        )}
       </div>
 
       {/* what's next hint */}
