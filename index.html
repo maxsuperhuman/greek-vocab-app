@@ -2648,6 +2648,29 @@ Exactly 3 sentences:
 }
 
 // ─── Dictionary ────────────────────────────────────────────────────
+
+// ─── Twemoji image helper ────────────────────────────────────────────
+function emojiToCode(emoji) {
+  if (!emoji) return null;
+  const codePoints = [...emoji].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f');
+  return codePoints.join('-');
+}
+
+function TwemojiImg({ emoji, size=40, style={} }) {
+  if (!emoji) return null;
+  const code = emojiToCode(emoji);
+  if (!code) return null;
+  return (
+    <img
+      src={`https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${code}.png`}
+      width={size} height={size}
+      style={{ objectFit:"contain", ...style }}
+      onError={e => { e.target.style.display="none"; }}
+    />
+  );
+}
+
+
 // ─── Custom words storage ───────────────────────────────────────────
 const CUSTOM_WORDS_KEY = "custom_words";
 
@@ -3122,7 +3145,7 @@ function DictTab({ mastery }) {
                   onMouseLeave={e=>e.currentTarget.style.background=""}>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", fontSize:14 }}>
                     {ok && <span style={{ color:"#1D9E75", marginRight:4, fontSize:11 }}>✓</span>}
-                    {EMOJI_MAP[w[0]] && <span style={{ marginRight:5 }}>{EMOJI_MAP[w[0]]}</span>}
+                    {EMOJI_MAP[w[0]] && <TwemojiImg emoji={EMOJI_MAP[w[0]]} size={22} style={{marginRight:6,verticalAlign:"middle"}} />}
                     {w[0]}
                   </td>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", color:"#888", fontStyle:"italic", fontSize:12 }}>{w[1]}</td>
@@ -3446,7 +3469,7 @@ function FlashTab({ mastery, rec }) {
           {[false,true].map(back => (
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
-              {EMOJI_MAP[w[0]] && <div style={{ fontSize:36, marginBottom:6 }}>{EMOJI_MAP[w[0]]}</div>}
+              {EMOJI_MAP[w[0]] && <TwemojiImg emoji={EMOJI_MAP[w[0]]} size={64} style={{marginBottom:8}} />}
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
@@ -3654,7 +3677,7 @@ function QuizTab({ mastery, rec }) {
             return (
               <button key={o} disabled={locked} onClick={()=>pick(o)}
                 style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                {optEmoji && <span style={{fontSize:36}}>{optEmoji}</span>}
+                {optEmoji && <TwemojiImg emoji={optEmoji} size={56} />}
                 {o}
               </button>
             );
@@ -4708,7 +4731,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1540</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1552</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
