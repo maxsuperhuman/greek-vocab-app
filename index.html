@@ -3213,7 +3213,7 @@ function DictTab({ mastery }) {
                   onMouseLeave={e=>e.currentTarget.style.background=""}>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", fontSize:14 }}>
                     {ok && <span style={{ color:"#1D9E75", marginRight:4, fontSize:11 }}>✓</span>}
-                    {EMOJI_MAP[w[0]] && <TwemojiImg emoji={EMOJI_MAP[w[0]]} size={22} style={{marginRight:6,verticalAlign:"middle"}} />}
+                    
                     {w[0]}
                   </td>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", color:"#888", fontStyle:"italic", fontSize:12 }}>{w[1]}</td>
@@ -3544,11 +3544,7 @@ function FlashTab({ mastery, rec }) {
           {[false,true].map(back => (
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
-              {UNSPLASH_MAP[w[2]] ? (
-                <img src={UNSPLASH_MAP[w[2]]} style={{width:100,height:100,objectFit:"cover",borderRadius:12,marginBottom:8}} />
-              ) : EMOJI_MAP[w[0]] ? (
-                <TwemojiImg emoji={EMOJI_MAP[w[0]]} size={64} style={{marginBottom:8}} />
-              ) : null}
+              <UnsplashPhoto englishWord={w[2]} size={90} style={{marginBottom:8}} />
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
@@ -3756,11 +3752,7 @@ function QuizTab({ mastery, rec }) {
             return (
               <button key={o} disabled={locked} onClick={()=>pick(o)}
                 style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                {UNSPLASH_MAP[optWord?.[2]] ? (
-                <img src={UNSPLASH_MAP[optWord[2]]} style={{width:70,height:70,objectFit:"cover",borderRadius:10}} />
-              ) : optEmoji ? (
-                <TwemojiImg emoji={optEmoji} size={56} />
-              ) : null}
+                {optWord && <UnsplashPhoto englishWord={optWord[2]} size={60} />}
                 {o}
               </button>
             );
@@ -4484,68 +4476,70 @@ Return ONLY a JSON array:
 // ─── Stats Tab ─────────────────────────────────────────────────────
 // ─── Emoji storage ───────────────────────────────────────────────────
 
-// ─── Unsplash Image Generator ────────────────────────────────────────
-function UnsplashGenerator({ onDone }) {
-  const [loading, setLoading] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-  const [count, setCount] = React.useState(Object.keys(UNSPLASH_MAP).length);
-  const [error, setError] = React.useState("");
+// ─── Unsplash lazy image loader ──────────────────────────────────────
+const unsplashPending = new Set();
 
-  async function generate() {
-    const apiKey = await getUnsplashKey();
-    if (!apiKey) { setError("Add Unsplash key first (tap 🔑 on any word card)"); return; }
-    setLoading(true); setError(""); setProgress(0);
+async function getUnsplashPhoto(englishWord, forceUpdate) {
+  if (!englishWord) return;
+  if (UNSPLASH_MAP[englishWord] !== undefined) return; // already cached or failed
+  if (unsplashPending.has(englishWord)) return; // already in flight
+  unsplashPending.add(englishWord);
 
-    // Only fetch for concrete nouns — skip verbs, adjectives, numbers
-    const targets = WORDS.filter(w =>
-      !["Verbs","Adjectives","Numbers","Subjects","Alphabet"].includes(w[3]) &&
-      !UNSPLASH_MAP[w[2]]
-    );
+  const apiKey = await getUnsplashKey();
+  if (!apiKey) { unsplashPending.delete(englishWord); return; }
 
-    console.log("Fetching Unsplash for", targets.length, "words");
-    let done = 0;
+  const url = await fetchUnsplashImage(englishWord, apiKey);
+  UNSPLASH_MAP[englishWord] = url || null; // null = not found, don't retry
+  unsplashPending.delete(englishWord);
 
-    for (const w of targets) {
-      const url = await fetchUnsplashImage(w[2], apiKey);
-      if (url) UNSPLASH_MAP[w[2]] = url;
-      done++;
-      setProgress(Math.round(done / targets.length * 100));
-      // Rate limit: 50 req/hour demo = ~1 per 72ms, be safe with 80ms
-      await new Promise(r => setTimeout(r, 80));
+  // Save to IndexedDB
+  try {
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put({...UNSPLASH_MAP}, UNSPLASH_CACHE_KEY);
+  } catch(e) {}
+
+  if (forceUpdate) forceUpdate(n => n+1);
+}
+
+// Component that lazily loads and shows Unsplash photo
+function UnsplashPhoto({ englishWord, size=80, style={} }) {
+  const [, forceUpdate] = React.useState(0);
+
+  React.useEffect(() => {
+    if (englishWord && UNSPLASH_MAP[englishWord] === undefined) {
+      getUnsplashPhoto(englishWord, forceUpdate);
     }
+  }, [englishWord]);
 
-    // Save to IndexedDB
-    try {
-      const db = await openDB();
-      const tx = db.transaction(DB_STORE, "readwrite");
-      tx.objectStore(DB_STORE).put(UNSPLASH_MAP, UNSPLASH_CACHE_KEY);
-    } catch(e) {}
+  const url = UNSPLASH_MAP[englishWord];
+  if (!url) return null;
+  return (
+    <img src={url} width={size} height={size}
+      style={{ objectFit:"cover", borderRadius:10, ...style }}
+      onError={e => { e.target.style.display="none"; }}
+    />
+  );
+}
 
-    setCount(Object.keys(UNSPLASH_MAP).length);
-    setLoading(false);
-    if (onDone) onDone();
-  }
+// Stats panel showing photo count
+function UnsplashGenerator({ onDone }) {
+  const [count, setCount] = React.useState(Object.keys(UNSPLASH_MAP).length);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const c = Object.keys(UNSPLASH_MAP).filter(k => UNSPLASH_MAP[k]).length;
+      setCount(c);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div style={{ background:"#f0f8ff", border:"0.5px solid #7EC8E3", borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div>
-          <div style={{ fontSize:13, fontWeight:500, color:"#26215C" }}>📸 Word Photos</div>
-          <div style={{ fontSize:12, color:"#888", marginTop:2 }}>
-            {error ? <span style={{color:"#E24B4A"}}>{error}</span> :
-             count > 0 ? `${count} photos loaded` : "Real photos for nouns via Unsplash"}
-          </div>
-        </div>
-        <button onClick={generate} disabled={loading}
-          style={{ padding:"7px 14px", borderRadius:8, border:"none", background: count>0?"#f0f0ff":"#0070f3", color: count>0?"#534AB7":"white", fontSize:13, cursor:"pointer", fontWeight:500 }}>
-          {loading ? `${progress}%…` : count > 0 ? "↺ Refresh" : "Generate"}
-        </button>
+      <div style={{ fontSize:13, fontWeight:500, color:"#26215C" }}>📸 Word Photos</div>
+      <div style={{ fontSize:12, color:"#888", marginTop:2 }}>
+        {count > 0 ? `${count} photos loaded — loads automatically as you study` : "Photos load automatically as you study (Unsplash)"}
       </div>
-      {loading && (
-        <div style={{ marginTop:8, height:4, background:"#e0e0e0", borderRadius:2 }}>
-          <div style={{ height:"100%", background:"#0070f3", borderRadius:2, width:`${progress}%`, transition:"width 0.3s" }}/>
-        </div>
-      )}
     </div>
   );
 }
@@ -4884,7 +4878,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1645</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1715</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
