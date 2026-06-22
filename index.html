@@ -1109,8 +1109,8 @@ async function generateEmojiMap(onProgress) {
 
   // Split into batches of 200
   const batches = [];
-  for (let i = 0; i < WORDS.length; i += 200) {
-    batches.push(WORDS.slice(i, i + 200));
+  for (let i = 0; i < WORDS.length; i += 80) {
+    batches.push(WORDS.slice(i, i + 80));
   }
 
   const result = {};
@@ -1124,15 +1124,23 @@ async function generateEmojiMap(onProgress) {
         headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
         body: JSON.stringify({
           model: "claude-haiku-4-5",
-          max_tokens: 1000,
+          max_tokens: 600,
           messages: [{ role:"user", content:`For each Greek=English word pair, pick ONE emoji that best represents the meaning. Return ONLY a JSON object {"greek_word": "emoji"}.
 Words: ${list}` }]
         })
       });
       if (res.ok) {
         const data = await res.json();
-        const match = data.content[0].text.match(/\{[\s\S]*\}/);
-        if (match) Object.assign(result, JSON.parse(match[0]));
+        const text = data.content[0].text;
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { Object.assign(result, JSON.parse(match[0])); }
+          catch(pe) {
+            // Try to extract partial valid pairs
+            const pairs = text.matchAll(/"([^"]+)"\s*:\s*"([^"]+)"/g);
+            for (const [,k,v] of pairs) { if(k && v) result[k] = v; }
+          }
+        }
       }
     } catch(e) {}
   }
