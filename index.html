@@ -1105,46 +1105,53 @@ async function loadEmojiMap() {
 
 async function generateEmojiMap(onProgress) {
   const apiKey = await getApiKey();
-  if (!apiKey) return false;
+  if (!apiKey) { console.error("No API key"); return false; }
 
-  // Split into batches of 200
+  const BATCH = 30;
   const batches = [];
-  for (let i = 0; i < WORDS.length; i += 80) {
-    batches.push(WORDS.slice(i, i + 80));
+  for (let i = 0; i < WORDS.length; i += BATCH) {
+    batches.push(WORDS.slice(i, i + BATCH));
   }
 
+  console.log("Generating emojis, batches:", batches.length);
   const result = {};
+
   for (let b = 0; b < batches.length; b++) {
     if (onProgress) onProgress(Math.round(b / batches.length * 100));
     const batch = batches[b];
-    const list = batch.map(w => `${w[0]}=${w[2]}`).join(", ");
+    const list = batch.map(w => `"${w[0]}":"${w[2]}"`).join(", ");
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
         body: JSON.stringify({
           model: "claude-haiku-4-5",
-          max_tokens: 600,
-          messages: [{ role:"user", content:`For each Greek=English word pair, pick ONE emoji that best represents the meaning. Return ONLY a JSON object {"greek_word": "emoji"}.
-Words: ${list}` }]
+          max_tokens: 400,
+          messages: [{ role:"user", content:`Pick ONE emoji per word. Return ONLY JSON object.
+Words: {${list}}
+Response format: {"greek_word":"emoji",...}` }]
         })
       });
       if (res.ok) {
         const data = await res.json();
         const text = data.content[0].text;
-        const match = text.match(/\{[\s\S]*\}/);
+        const match = text.match(/\{[\s\S]*?\}/);
         if (match) {
-          try { Object.assign(result, JSON.parse(match[0])); }
-          catch(pe) {
-            // Try to extract partial valid pairs
-            const pairs = text.matchAll(/"([^"]+)"\s*:\s*"([^"]+)"/g);
+          try {
+            Object.assign(result, JSON.parse(match[0]));
+            console.log("Batch", b, "OK, total:", Object.keys(result).length);
+          } catch(pe) {
+            const pairs = [...text.matchAll(/"([^"]+)"\s*:\s*"([^"]+)"/g)];
             for (const [,k,v] of pairs) { if(k && v) result[k] = v; }
           }
         }
+      } else {
+        console.error("Batch", b, "failed:", res.status);
       }
-    } catch(e) {}
+    } catch(e) { console.error("Batch", b, "error:", e); }
   }
 
+  console.log("Done! Total emojis:", Object.keys(result).length);
   EMOJI_MAP = result;
   try {
     const db = await openDB();
@@ -4731,7 +4738,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1552</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1620</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
