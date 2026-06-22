@@ -3648,7 +3648,16 @@ function QuizTab({ mastery, rec }) {
             const isC=o===correct, isP=o===chosen;
             let bg="transparent", border="0.5px solid #ccc", color="#333";
             if(locked){if(isC){bg="#E1F5EE";border="0.5px solid #1D9E75";color="#085041";}else if(isP){bg="#FCEBEB";border="0.5px solid #E24B4A";color="#501313";}}
-            return <button key={o} disabled={locked} onClick={()=>pick(o)} style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s" }}>{o}</button>;
+            // Find the Greek word for this option to get its emoji
+            const optWord = WORDS.find(w => w[0]===o || w[2]===o || w[1]===o);
+            const optEmoji = optWord ? EMOJI_MAP[optWord[0]] : null;
+            return (
+              <button key={o} disabled={locked} onClick={()=>pick(o)}
+                style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+                {optEmoji && <span style={{fontSize:36}}>{optEmoji}</span>}
+                {o}
+              </button>
+            );
           })}
         </div>
       </div>
@@ -4058,12 +4067,12 @@ function FalleeTab({ mastery }) {
             const op = answered ? (isCorrect || answered==="timeout" ? 1 : 0.35) : (p < 0.1 ? p*10 : p > 0.9 ? (1-p)*10 : 1);
             return (
               <button key={opt[0]} onClick={()=>handleAnswer(i)} disabled={!!answered}
-                style={{padding:"20px 10px",borderRadius:14,border:"none",background:bg,color:"white",
-                  fontSize:14,fontWeight:600,cursor:answered?"default":"pointer",fontFamily:"inherit",
+                style={{padding:"32px 16px",borderRadius:18,border:"none",background:bg,color:"white",
+                  fontSize:20,fontWeight:700,cursor:answered?"default":"pointer",fontFamily:"inherit",
                   transform:`translateY(${ty}px)`,
                   opacity: op,
                   transition:answered?"all 0.3s":"none",
-                  boxShadow:"0 4px 16px rgba(0,0,0,0.3)",minHeight:64}}>
+                  boxShadow:"0 6px 20px rgba(0,0,0,0.35)",minHeight:100}}>
                 {tileText(opt)}
               </button>
             );
@@ -4699,7 +4708,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1525</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1540</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
