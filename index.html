@@ -4028,7 +4028,7 @@ function FalleeTab({ mastery }) {
   const COLS = ["#E8445A","#D4A017","#9B4DCA","#5BAEF5"];
 
   return (
-    <div style={{minHeight:520,background:"linear-gradient(180deg,#1a237e 0%,#283593 60%,#3949ab 100%)",borderRadius:16,padding:"1rem",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+    <div style={{minHeight:520,background:"linear-gradient(180deg,#1a237e 0%,#283593 60%,#3949ab 100%)",borderRadius:16,padding:"1rem",position:"relative",display:"flex",flexDirection:"column"}}>
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.5rem"}}>
         <button onClick={()=>setPhase("setup")} style={{color:"white",background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button>
@@ -4053,13 +4053,15 @@ function FalleeTab({ mastery }) {
             if (answered==="correct" && isCorrect) bg="#1D9E75";
             if (answered==="wrong"   && isCorrect) bg="#1D9E75";
             if (answered==="timeout" && isCorrect) bg="#FFD700";
-            const ty = answered ? 0 : p*220;
+            // Tiles fall from top: translateY goes from -120px to 0
+            const ty = answered ? 0 : -120 * (1 - p);
+            const op = answered ? (isCorrect || answered==="timeout" ? 1 : 0.35) : 0.3 + p*0.7;
             return (
               <button key={opt[0]} onClick={()=>handleAnswer(i)} disabled={!!answered}
                 style={{padding:"20px 10px",borderRadius:14,border:"none",background:bg,color:"white",
                   fontSize:14,fontWeight:600,cursor:answered?"default":"pointer",fontFamily:"inherit",
                   transform:`translateY(${ty}px)`,
-                  opacity: answered && !isCorrect && answered!=="timeout" ? 0.35 : 1,
+                  opacity: op,
                   transition:answered?"all 0.3s":"none",
                   boxShadow:"0 4px 16px rgba(0,0,0,0.3)",minHeight:64}}>
                 {tileText(opt)}
@@ -4804,7 +4806,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.4</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.5</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
