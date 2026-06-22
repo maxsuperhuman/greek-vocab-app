@@ -3887,49 +3887,51 @@ function TypeTab({ mastery, rec }) {
 const FALLEE_COLORS = ["#E8445A","#D4A017","#9B4DCA","#5BAEF5","#1D9E75","#E8734A"];
 
 function FalleeTab({ mastery }) {
-  const [phase, setPhase]   = useState("setup");
-  const [topic, setTopic]   = useState("All");
-  const [pool, setPool]     = useState([]);
-  const [qi, setQi]         = useState(0);
-  const [score, setScore]   = useState(0);
-  const [streak, setStreak] = useState(0);
+  const [phase, setPhase]     = useState("setup");
+  const [topic, setTopic]     = useState("All");
+  const [pool, setPool]       = useState([]);
+  const [qi, setQi]           = useState(0);
+  const [score, setScore]     = useState(0);
+  const [streak, setStreak]   = useState(0);
   const [options, setOptions] = useState([]);
-  const [answered, setAnswered] = useState(null); // null | "correct" | "wrong"
-  const [progress, setProgress] = useState(1); // 0→1 falling animation
-  const [total, setTotal]   = useState(20);
-  const animRef = React.useRef(null);
+  const [correctIdx, setCorrectIdx] = useState(0);
+  const [answered, setAnswered] = useState(null);
+  const [tileY, setTileY]     = useState([0,0,0,0]); // 0=top, 1=bottom
+  const [total, setTotal]     = useState(20);
+  const [direction, setDirection] = useState("gr2en"); // "gr2en" | "en2gr"
+  const animRef  = React.useRef(null);
   const startRef = React.useRef(null);
   const DURATION = 5000;
+  const SPEEDS   = [0.88, 1.12, 0.82, 1.18];
 
-  function buildOptions(correctWord, allWords) {
-    const wrong = shuf(allWords.filter(w => w[0] !== correctWord[0])).slice(0, 3);
-    return shuf([correctWord, ...wrong]);
+  function buildOptions(correct, allWords) {
+    const wrong = shuf(allWords.filter(w => w[0] !== correct[0])).slice(0, 3);
+    const opts  = shuf([correct, ...wrong]);
+    const ci    = opts.findIndex(o => o[0] === correct[0]);
+    return { opts, ci };
   }
 
   function startGame() {
     const src = topic === "All" ? WORDS : WORDS.filter(w => w[3] === topic);
     const shuffled = shuf(src).slice(0, total);
-    setPool(shuffled);
-    setQi(0); setScore(0); setStreak(0); setAnswered(null);
-    setOptions(buildOptions(shuffled[0], src));
-    setProgress(0);
+    const { opts, ci } = buildOptions(shuffled[0], src);
+    setPool(shuffled); setQi(0); setScore(0); setStreak(0);
+    setOptions(opts); setCorrectIdx(ci);
+    setAnswered(null); setTileY([0,0,0,0]);
     setPhase("game");
   }
 
-  // Falling animation
   React.useEffect(() => {
     if (phase !== "game" || answered !== null) return;
     startRef.current = Date.now();
-    setProgress(0);
-
+    setTileY([0,0,0,0]);
     function tick() {
       const elapsed = Date.now() - startRef.current;
-      const p = Math.min(elapsed / DURATION, 1);
-      setProgress(p);
-      if (p >= 1) {
-        // Time's up
-        setAnswered("wrong");
-        setStreak(0);
+      const pos = SPEEDS.map(s => Math.min(elapsed / (DURATION / s), 1));
+      setTileY(pos);
+      if (pos.every(p => p >= 1)) {
+        setAnswered("timeout"); setStreak(0);
+        setTimeout(() => nextQ(), 1200);
       } else {
         animRef.current = requestAnimationFrame(tick);
       }
@@ -3938,13 +3940,12 @@ function FalleeTab({ mastery }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [qi, phase, answered]);
 
-  function handleAnswer(opt) {
+  function handleAnswer(i) {
     if (answered) return;
     cancelAnimationFrame(animRef.current);
-    const correct = opt[0] === pool[qi][0];
+    const correct = i === correctIdx;
     setAnswered(correct ? "correct" : "wrong");
-    if (correct) { setScore(s=>s+1); setStreak(s=>s+1); }
-    else setStreak(0);
+    if (correct) { setScore(s=>s+1); setStreak(s=>s+1); } else setStreak(0);
     setTimeout(() => nextQ(), 900);
   }
 
@@ -3952,22 +3953,38 @@ function FalleeTab({ mastery }) {
     const next = qi + 1;
     if (next >= pool.length) { setPhase("result"); return; }
     const src = topic === "All" ? WORDS : WORDS.filter(w => w[3] === topic);
-    setQi(next);
-    setOptions(buildOptions(pool[next], src));
-    setAnswered(null);
-    setProgress(0);
+    const { opts, ci } = buildOptions(pool[next], src);
+    setQi(next); setOptions(opts); setCorrectIdx(ci);
+    setAnswered(null); setTileY([0,0,0,0]);
   }
 
   if (phase === "setup") return (
     <div style={{padding:"1rem 0"}}>
       <div style={{fontSize:15,fontWeight:600,color:"#26215C",marginBottom:4,textAlign:"center"}}>⚡ Fallee</div>
-      <div style={{fontSize:13,color:"#888",marginBottom:"1.2rem",textAlign:"center",lineHeight:1.5}}>
-        Greek word falls — tap the correct translation before time runs out!
+      <div style={{fontSize:13,color:"#888",marginBottom:"1.2rem",textAlign:"center"}}>
+        Word shown at bottom — tap the correct falling answer!
       </div>
+
+      {/* Direction */}
+      <div style={{marginBottom:"1rem"}}>
+        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Mode:</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["gr2en","🇬🇷 Greek → English"],["en2gr","🇬🇧 English → Greek"]].map(([val,label])=>(
+            <button key={val} onClick={()=>setDirection(val)}
+              style={{flex:1,padding:"9px 8px",borderRadius:10,border:`1.5px solid ${direction===val?"#534AB7":"#ddd"}`,
+                background:direction===val?"#534AB7":"white",color:direction===val?"white":"#555",
+                fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:direction===val?600:400}}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Topic */}
       <div style={{marginBottom:"1rem"}}>
         <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Topic:</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {TOPICS.map(t => (
+          {TOPICS.map(t=>(
             <button key={t} onClick={()=>setTopic(t)}
               style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${topic===t?"#534AB7":"#ddd"}`,
                 background:topic===t?"#534AB7":"white",color:topic===t?"white":"#555",
@@ -3977,13 +3994,16 @@ function FalleeTab({ mastery }) {
           ))}
         </div>
       </div>
+
+      {/* Count */}
       <div style={{marginBottom:"1.5rem"}}>
         <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Number of words:</div>
         <select value={total} onChange={e=>setTotal(Number(e.target.value))}
           style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:"inherit",background:"white",width:"100%"}}>
-          {[10,20,30,50].map(v=><option key={v} value={v}>{v} words</option>)}
+          {[10,20,30,50,75,100,150].map(v=><option key={v} value={v}>{v} words</option>)}
         </select>
       </div>
+
       <div style={{textAlign:"center"}}><Btn onClick={startGame}>Start ⚡</Btn></div>
     </div>
   );
@@ -3993,11 +4013,14 @@ function FalleeTab({ mastery }) {
   );
 
   const w = pool[qi];
-  const cardTop = `${Math.round(progress * 45)}%`;
-  const timeLeft = Math.ceil((1 - progress) * 5);
+  // What to show static at bottom vs falling tiles
+  const bottomText  = direction === "gr2en" ? w[0] : w[2];
+  const bottomSub   = direction === "gr2en" ? w[1] : null;
+  const tileText    = (opt) => direction === "gr2en" ? opt[2] : opt[0];
+  const COLS = ["#E8445A","#D4A017","#9B4DCA","#5BAEF5"];
 
   return (
-    <div style={{minHeight:480, background:"linear-gradient(180deg,#1a237e 0%,#283593 60%,#3949ab 100%)", borderRadius:16, padding:"1rem", position:"relative", overflow:"hidden"}}>
+    <div style={{minHeight:520,background:"linear-gradient(180deg,#1a237e 0%,#283593 60%,#3949ab 100%)",borderRadius:16,padding:"1rem",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.5rem"}}>
         <button onClick={()=>setPhase("setup")} style={{color:"white",background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button>
@@ -4007,37 +4030,46 @@ function FalleeTab({ mastery }) {
 
       {/* Timer bar */}
       <div style={{height:4,background:"rgba(255,255,255,0.2)",borderRadius:2,marginBottom:"0.8rem"}}>
-        <div style={{height:"100%",background:progress>0.7?"#E8445A":progress>0.4?"#FFD700":"#1D9E75",borderRadius:2,width:`${(1-progress)*100}%`,transition:"width 0.1s linear"}}/>
+        <div style={{height:"100%",borderRadius:2,
+          background:tileY[0]>0.7?"#E8445A":tileY[0]>0.4?"#FFD700":"#1D9E75",
+          width:`${(1-Math.max(...tileY))*100}%`,transition:"width 0.1s linear"}}/>
       </div>
 
-      {/* Falling word card */}
-      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",top:cardTop,transition:"top 0.1s linear",zIndex:10,textAlign:"center",
-        background: answered==="correct"?"#1D9E75":answered==="wrong"?"#E8445A":"rgba(255,255,255,0.15)",
-        borderRadius:16,padding:"16px 32px",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.3)"}}>
-        <div style={{fontSize:28,fontWeight:700,color:"white"}}>{w[0]}</div>
-        <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",fontStyle:"italic"}}>{w[1]}</div>
-      </div>
-
-      {/* Answer options */}
-      <div style={{position:"absolute",bottom:20,left:16,right:16}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {options.map((opt,i) => {
-            const isCorrect = opt[0] === w[0];
-            const bg = answered
-              ? isCorrect ? "#1D9E75" : (opt[0]===options.find(o=>o[0]===opt[0])?.[0] && answered==="wrong") ? "#E8445A" : FALLEE_COLORS[i]
-              : FALLEE_COLORS[i];
+      {/* Falling tiles area */}
+      <div style={{flex:1,position:"relative",minHeight:280}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,padding:"0 2px"}}>
+          {options.map((opt,i)=>{
+            const p = tileY[i]||0;
+            const isCorrect = i===correctIdx;
+            let bg = COLS[i];
+            if (answered==="correct" && isCorrect) bg="#1D9E75";
+            if (answered==="wrong"   && isCorrect) bg="#1D9E75";
+            if (answered==="timeout" && isCorrect) bg="#FFD700";
+            const ty = answered ? 0 : p*220;
             return (
-              <button key={opt[0]} onClick={()=>handleAnswer(opt)}
-                style={{padding:"20px 12px",borderRadius:14,border:"none",background:bg,color:"white",
-                  fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
-                  opacity: answered && !isCorrect ? 0.5 : 1,
-                  transform: answered && isCorrect ? "scale(1.04)" : "scale(1)",
-                  transition:"all 0.2s",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
-                {opt[2]}
+              <button key={opt[0]} onClick={()=>handleAnswer(i)} disabled={!!answered}
+                style={{padding:"20px 10px",borderRadius:14,border:"none",background:bg,color:"white",
+                  fontSize:14,fontWeight:600,cursor:answered?"default":"pointer",fontFamily:"inherit",
+                  transform:`translateY(${ty}px)`,
+                  opacity: answered && !isCorrect && answered!=="timeout" ? 0.35 : 1,
+                  transition:answered?"all 0.3s":"none",
+                  boxShadow:"0 4px 16px rgba(0,0,0,0.3)",minHeight:64}}>
+                {tileText(opt)}
               </button>
             );
           })}
         </div>
+      </div>
+
+      {/* Static word at bottom */}
+      <div style={{textAlign:"center",padding:"16px 0 8px",borderTop:"1px solid rgba(255,255,255,0.15)"}}>
+        {answered==="timeout" && (
+          <div style={{color:"#FFD700",fontSize:13,fontWeight:600,marginBottom:6}}>
+            ⏱ Time! → {tileText(options[correctIdx])}
+          </div>
+        )}
+        <div style={{fontSize:30,fontWeight:700,color:"white"}}>{bottomText}</div>
+        {bottomSub && <div style={{fontSize:14,color:"rgba(255,255,255,0.6)",fontStyle:"italic",marginTop:2}}>{bottomSub}</div>}
       </div>
     </div>
   );
