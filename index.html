@@ -3051,7 +3051,9 @@ function DictTab({ mastery }) {
                   onMouseEnter={e=>e.currentTarget.style.background="#f5f4ff"}
                   onMouseLeave={e=>e.currentTarget.style.background=""}>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", fontSize:14 }}>
-                    {ok && <span style={{ color:"#1D9E75", marginRight:4, fontSize:11 }}>✓</span>}{w[0]}
+                    {ok && <span style={{ color:"#1D9E75", marginRight:4, fontSize:11 }}>✓</span>}
+                    {EMOJI_MAP[w[0]] && <span style={{ marginRight:5 }}>{EMOJI_MAP[w[0]]}</span>}
+                    {w[0]}
                   </td>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0", color:"#888", fontStyle:"italic", fontSize:12 }}>{w[1]}</td>
                   <td style={{ padding:"8px", borderBottom:"0.5px solid #f0f0f0" }}>{w[2]}</td>
@@ -3374,10 +3376,11 @@ function FlashTab({ mastery, rec }) {
           {[false,true].map(back => (
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
+              {!back && EMOJI_MAP[w[0]] && <div style={{ fontSize:36, marginBottom:6 }}>{EMOJI_MAP[w[0]]}</div>}
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
-              {back && CARDS[w[0]] && (
+              {back && (
                 <button
                   onClick={e=>{ e.stopPropagation(); setShowDetail(true); }}
                   style={{ marginTop:10, padding:"5px 14px", borderRadius:20, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
@@ -3520,7 +3523,7 @@ function QuizTab({ mastery, rec }) {
       <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
         <span style={{ fontSize:13, color:"#888" }}>Questions:</span>
         <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
-          {["10","20","30","all"].map(v=><option key={v}>{v}</option>)}
+          {["10","20","30","50","75","100","150","all"].map(v=><option key={v}>{v}</option>)}
         </select>
       </div>
       <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
@@ -3713,7 +3716,7 @@ function TypeTab({ mastery, rec }) {
       <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
         <span style={{ fontSize:13, color:"#888" }}>Words:</span>
         <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
-          {["10","20","30","all"].map(v=><option key={v}>{v}</option>)}
+          {["10","20","30","50","75","100","150","all"].map(v=><option key={v}>{v}</option>)}
         </select>
       </div>
       <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
@@ -3817,6 +3820,166 @@ function TypeTab({ mastery, rec }) {
 
 
 // ─── Sentences Tab (Duolingo-style sentence builder) ──────────────
+// ─── Fallee Tab ─────────────────────────────────────────────────────
+const FALLEE_COLORS = ["#E8445A","#D4A017","#9B4DCA","#5BAEF5","#1D9E75","#E8734A"];
+
+function FalleeTab({ mastery }) {
+  const [phase, setPhase]   = useState("setup");
+  const [topic, setTopic]   = useState("All");
+  const [pool, setPool]     = useState([]);
+  const [qi, setQi]         = useState(0);
+  const [score, setScore]   = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [options, setOptions] = useState([]);
+  const [answered, setAnswered] = useState(null); // null | "correct" | "wrong"
+  const [progress, setProgress] = useState(1); // 0→1 falling animation
+  const [total, setTotal]   = useState(20);
+  const animRef = React.useRef(null);
+  const startRef = React.useRef(null);
+  const DURATION = 5000;
+
+  function buildOptions(correctWord, allWords) {
+    const wrong = shuf(allWords.filter(w => w[0] !== correctWord[0])).slice(0, 3);
+    return shuf([correctWord, ...wrong]);
+  }
+
+  function startGame() {
+    const src = topic === "All" ? WORDS : WORDS.filter(w => w[3] === topic);
+    const shuffled = shuf(src).slice(0, total);
+    setPool(shuffled);
+    setQi(0); setScore(0); setStreak(0); setAnswered(null);
+    setOptions(buildOptions(shuffled[0], src));
+    setProgress(0);
+    setPhase("game");
+  }
+
+  // Falling animation
+  React.useEffect(() => {
+    if (phase !== "game" || answered !== null) return;
+    startRef.current = Date.now();
+    setProgress(0);
+
+    function tick() {
+      const elapsed = Date.now() - startRef.current;
+      const p = Math.min(elapsed / DURATION, 1);
+      setProgress(p);
+      if (p >= 1) {
+        // Time's up
+        setAnswered("wrong");
+        setStreak(0);
+      } else {
+        animRef.current = requestAnimationFrame(tick);
+      }
+    }
+    animRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [qi, phase, answered]);
+
+  function handleAnswer(opt) {
+    if (answered) return;
+    cancelAnimationFrame(animRef.current);
+    const correct = opt[0] === pool[qi][0];
+    setAnswered(correct ? "correct" : "wrong");
+    if (correct) { setScore(s=>s+1); setStreak(s=>s+1); }
+    else setStreak(0);
+    setTimeout(() => nextQ(), 900);
+  }
+
+  function nextQ() {
+    const next = qi + 1;
+    if (next >= pool.length) { setPhase("result"); return; }
+    const src = topic === "All" ? WORDS : WORDS.filter(w => w[3] === topic);
+    setQi(next);
+    setOptions(buildOptions(pool[next], src));
+    setAnswered(null);
+    setProgress(0);
+  }
+
+  if (phase === "setup") return (
+    <div style={{padding:"1rem 0"}}>
+      <div style={{fontSize:15,fontWeight:600,color:"#26215C",marginBottom:4,textAlign:"center"}}>⚡ Fallee</div>
+      <div style={{fontSize:13,color:"#888",marginBottom:"1.2rem",textAlign:"center",lineHeight:1.5}}>
+        Greek word falls — tap the correct translation before time runs out!
+      </div>
+      <div style={{marginBottom:"1rem"}}>
+        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Topic:</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {TOPICS.map(t => (
+            <button key={t} onClick={()=>setTopic(t)}
+              style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${topic===t?"#534AB7":"#ddd"}`,
+                background:topic===t?"#534AB7":"white",color:topic===t?"white":"#555",
+                fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:topic===t?600:400}}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{marginBottom:"1.5rem"}}>
+        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Number of words:</div>
+        <select value={total} onChange={e=>setTotal(Number(e.target.value))}
+          style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:"inherit",background:"white",width:"100%"}}>
+          {[10,20,30,50].map(v=><option key={v} value={v}>{v} words</option>)}
+        </select>
+      </div>
+      <div style={{textAlign:"center"}}><Btn onClick={startGame}>Start ⚡</Btn></div>
+    </div>
+  );
+
+  if (phase === "result") return (
+    <ResBox score={score} total={pool.length} onRetry={startGame}/>
+  );
+
+  const w = pool[qi];
+  const cardTop = `${Math.round(progress * 45)}%`;
+  const timeLeft = Math.ceil((1 - progress) * 5);
+
+  return (
+    <div style={{minHeight:480, background:"linear-gradient(180deg,#1a237e 0%,#283593 60%,#3949ab 100%)", borderRadius:16, padding:"1rem", position:"relative", overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.5rem"}}>
+        <button onClick={()=>setPhase("setup")} style={{color:"white",background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button>
+        <span style={{color:"white",fontSize:14,fontWeight:500}}>{qi+1}/{pool.length}</span>
+        <span style={{color:"#FFD700",fontSize:14,fontWeight:700}}>{streak} ⚡</span>
+      </div>
+
+      {/* Timer bar */}
+      <div style={{height:4,background:"rgba(255,255,255,0.2)",borderRadius:2,marginBottom:"0.8rem"}}>
+        <div style={{height:"100%",background:progress>0.7?"#E8445A":progress>0.4?"#FFD700":"#1D9E75",borderRadius:2,width:`${(1-progress)*100}%`,transition:"width 0.1s linear"}}/>
+      </div>
+
+      {/* Falling word card */}
+      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",top:cardTop,transition:"top 0.1s linear",zIndex:10,textAlign:"center",
+        background: answered==="correct"?"#1D9E75":answered==="wrong"?"#E8445A":"rgba(255,255,255,0.15)",
+        borderRadius:16,padding:"16px 32px",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.3)"}}>
+        <div style={{fontSize:28,fontWeight:700,color:"white"}}>{w[0]}</div>
+        <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",fontStyle:"italic"}}>{w[1]}</div>
+      </div>
+
+      {/* Answer options */}
+      <div style={{position:"absolute",bottom:20,left:16,right:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {options.map((opt,i) => {
+            const isCorrect = opt[0] === w[0];
+            const bg = answered
+              ? isCorrect ? "#1D9E75" : (opt[0]===options.find(o=>o[0]===opt[0])?.[0] && answered==="wrong") ? "#E8445A" : FALLEE_COLORS[i]
+              : FALLEE_COLORS[i];
+            return (
+              <button key={opt[0]} onClick={()=>handleAnswer(opt)}
+                style={{padding:"20px 12px",borderRadius:14,border:"none",background:bg,color:"white",
+                  fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                  opacity: answered && !isCorrect ? 0.5 : 1,
+                  transform: answered && isCorrect ? "scale(1.04)" : "scale(1)",
+                  transition:"all 0.2s",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+                {opt[2]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SentencesTab({ rec }) {
   const [phase, setPhase]   = useState("setup");
   const [selTopic, setSelTopic] = useState("All");
@@ -3828,16 +3991,17 @@ function SentencesTab({ rec }) {
   const [score, setScore]   = useState(0);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
+  const [sentCount, setSentCount] = useState("12");
 
-  const SENT_CACHE_PREFIX = "sent_v1_";
+  const SENT_CACHE_PREFIX = "sent_v2_";
 
-  async function getSentences(topic) {
+  async function getSentences(topic, count=12) {
     // Check cache first
     try {
       const db = await openDB();
       const cached = await new Promise(resolve => {
         const tx = db.transaction(DB_STORE, "readonly");
-        const req = tx.objectStore(DB_STORE).get(SENT_CACHE_PREFIX + topic);
+        const req = tx.objectStore(DB_STORE).get(SENT_CACHE_PREFIX + topic + "_" + count);
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
@@ -3858,7 +4022,7 @@ function SentencesTab({ rec }) {
       body: JSON.stringify({
         model: "claude-haiku-4-5",
         max_tokens: 1200,
-        messages: [{ role:"user", content:`Create 12 short Greek sentences for A2 language learners using words from this topic: ${topic}.
+        messages: [{ role:"user", content:`Create ${count} short Greek sentences for A2 language learners using words from this topic: ${topic}.
 Words available: ${topicWords}
 
 Rules:
@@ -3882,7 +4046,7 @@ Return ONLY a JSON array:
     try {
       const db = await openDB();
       const tx = db.transaction(DB_STORE, "readwrite");
-      tx.objectStore(DB_STORE).put(sentences, SENT_CACHE_PREFIX + topic);
+      tx.objectStore(DB_STORE).put(sentences, SENT_CACHE_PREFIX + topic + "_" + count);
     } catch(e) {}
 
     return sentences;
@@ -3901,7 +4065,7 @@ Return ONLY a JSON array:
     if (selTopic === "Verbs") {
       pool = shuf(SENTENCES);
     } else {
-      pool = await getSentences(selTopic);
+      pool = await getSentences(selTopic, parseInt(sentCount) || 12);
       if (!pool) { setGenError("Could not generate sentences. Check API key and connection."); setGenerating(false); return; }
       pool = shuf(pool);
     }
@@ -3969,6 +4133,14 @@ Return ONLY a JSON array:
             </button>
           ))}
         </div>
+      </div>
+
+      <div style={{marginBottom:"1rem"}}>
+        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Number of sentences:</div>
+        <select value={sentCount} onChange={e=>setSentCount(e.target.value)}
+          style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:"inherit",background:"white",width:"100%"}}>
+          {["10","20","30","50","75","100"].map(v=><option key={v} value={v}>{v} sentences</option>)}
+        </select>
       </div>
 
       {genError && <div style={{color:"#E24B4A",fontSize:13,marginBottom:10,textAlign:"center"}}>{genError}</div>}
@@ -4071,8 +4243,125 @@ Return ONLY a JSON array:
 
 
 // ─── Stats Tab ─────────────────────────────────────────────────────
+// ─── Emoji storage ───────────────────────────────────────────────────
+const EMOJI_KEY = "word_emoji_v1";
+let EMOJI_MAP = {}; // greek word → emoji, loaded at startup
+
+async function loadEmojiMap() {
+  try {
+    const db = await openDB();
+    const data = await new Promise(resolve => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(EMOJI_KEY);
+      req.onsuccess = () => resolve(req.result || {});
+      req.onerror = () => resolve({});
+    });
+    EMOJI_MAP = data;
+  } catch(e) { EMOJI_MAP = {}; }
+}
+
+async function saveEmojiMap() {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(EMOJI_MAP, EMOJI_KEY);
+  } catch(e) {}
+}
+
+async function generateEmojisBatch(words, apiKey) {
+  const prompt = `For each Greek word below, give ONE emoji that best represents its meaning visually.
+Return ONLY a JSON object mapping Greek word to emoji: {"word1":"🏠","word2":"🐕",...}
+
+Words: ${words.map(w => `${w[0]} (${w[2]})`).join(", ")}`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+    body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:800,
+      messages:[{ role:"user", content:prompt }]
+    })
+  });
+  if (!res.ok) throw new Error("API error");
+  const data = await res.json();
+  const match = data.content[0].text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("Parse error");
+  return JSON.parse(match[0]);
+}
+
+// ─── Emoji Generator UI ──────────────────────────────────────────────
+function EmojiGenerator({ onDone }) {
+  const [status, setStatus] = useState("idle"); // idle | running | done | error
+  const [progress, setProgress] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [errMsg, setErrMsg] = useState("");
+
+  async function generate() {
+    const apiKey = await getApiKey();
+    if (!apiKey) { setErrMsg("API key required."); return; }
+
+    // Only generate for words without emoji
+    const missing = WORDS.filter(w => !EMOJI_MAP[w[0]]);
+    if (missing.length === 0) { setStatus("done"); onDone && onDone(); return; }
+
+    setStatus("running");
+    setTotal(missing.length);
+    setProgress(0);
+
+    const BATCH = 80;
+    for (let i = 0; i < missing.length; i += BATCH) {
+      const batch = missing.slice(i, i + BATCH);
+      try {
+        const result = await generateEmojisBatch(batch, apiKey);
+        Object.assign(EMOJI_MAP, result);
+        await saveEmojiMap();
+        setProgress(Math.min(i + BATCH, missing.length));
+      } catch(e) {
+        setErrMsg("Error at batch " + (i/BATCH+1) + ": " + e.message);
+        setStatus("error");
+        return;
+      }
+    }
+    setStatus("done");
+    onDone && onDone();
+  }
+
+  const pct = total ? Math.round(progress/total*100) : 0;
+  const already = WORDS.filter(w => EMOJI_MAP[w[0]]).length;
+
+  return (
+    <div style={{background:"#f8f8ff",borderRadius:12,padding:"16px",marginBottom:16,border:"1px solid #AFA9EC"}}>
+      <div style={{fontSize:14,fontWeight:600,color:"#26215C",marginBottom:4}}>🎨 Word Emoji</div>
+      <div style={{fontSize:13,color:"#666",marginBottom:10}}>
+        {already}/{WORDS.length} words have emoji.
+        {already < WORDS.length && " Generate for all using Claude AI."}
+      </div>
+      {status === "running" && (
+        <div>
+          <div style={{height:6,background:"#eee",borderRadius:3,marginBottom:6}}>
+            <div style={{height:"100%",background:"#534AB7",borderRadius:3,width:`${pct}%`,transition:"width 0.3s"}}/>
+          </div>
+          <div style={{fontSize:12,color:"#888"}}>{progress}/{total} words… {pct}%</div>
+        </div>
+      )}
+      {status === "done" && <div style={{fontSize:13,color:"#1D9E75",fontWeight:600}}>✓ All emoji generated!</div>}
+      {status === "error" && <div style={{fontSize:13,color:"#E24B4A"}}>{errMsg}</div>}
+      {(status === "idle" || status === "error") && already < WORDS.length && (
+        <button onClick={generate} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#534AB7",color:"white",fontSize:13,cursor:"pointer",fontWeight:600}}>
+          Generate {WORDS.length - already} emoji
+        </button>
+      )}
+      {already === WORDS.length && status !== "running" && (
+        <button onClick={generate} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #ccc",background:"white",color:"#888",fontSize:12,cursor:"pointer"}}>
+          Regenerate all
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StatsTab({ mastery }) {
   const [filter, setFilter] = useState("all");
+  const [, forceUpdate] = useState(0);
 
   // Apply decay on render
   const m = useMemo(() => applyDecay(mastery), [mastery]);
@@ -4098,7 +4387,8 @@ function StatsTab({ mastery }) {
 
   return (
     <div>
-      {/* level legend */}
+      <EmojiGenerator onDone={()=>forceUpdate(n=>n+1)} />
+      {/* level legend */}}
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
         {LEVEL_INFO.map((li,i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:20, background:li.bg, border:`0.5px solid ${li.color}` }}>
@@ -4225,6 +4515,7 @@ function App() {
 
   // Load from Supabase on mount
   useEffect(() => {
+    loadEmojiMap(); // Load emoji cache
     async function load() {
       try {
         const saved = await supabaseLoad();
@@ -4352,6 +4643,7 @@ function App() {
     { id:"quiz",      label:"Quiz" },
     { id:"type",      label:"Type" },
     { id:"sentences", label:"Sentences" },
+    { id:"fallee",    label:"Fallee" },
     { id:"stats",     label:`Progress (${level5}/${WORDS.length})` },
   ];
 
@@ -4477,6 +4769,7 @@ function App() {
       {tab==="quiz"  && <QuizTab  mastery={mastery} rec={rec}/>}
       {tab==="type"  && <TypeTab  mastery={mastery} rec={rec}/>}
       {tab==="sentences" && <SentencesTab rec={rec}/>}
+      {tab==="fallee"    && <FalleeTab mastery={mastery}/>}
       {tab==="stats"     && <StatsTab mastery={mastery}/>}
     </div>
   );
