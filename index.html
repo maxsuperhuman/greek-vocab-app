@@ -3909,7 +3909,7 @@ function FalleeTab({ mastery }) {
   const animRef  = React.useRef(null);
   const startRef = React.useRef(null);
   const DURATION = 5000;
-  const SPEEDS   = [0.88, 1.12, 0.82, 1.18];
+  const SPEEDS   = [1, 1, 1, 1];
 
   function buildOptions(correct, allWords) {
     const wrong = shuf(allWords.filter(w => w[0] !== correct[0])).slice(0, 3);
@@ -4052,9 +4052,9 @@ function FalleeTab({ mastery }) {
             if (answered==="correct" && isCorrect) bg="#1D9E75";
             if (answered==="wrong"   && isCorrect) bg="#1D9E75";
             if (answered==="timeout" && isCorrect) bg="#FFD700";
-            // Tiles fall from top: translateY goes from -120px to 0
-            const ty = answered ? 0 : -120 * (1 - p);
-            const op = answered ? (isCorrect || answered==="timeout" ? 1 : 0.35) : 0.3 + p*0.7;
+            // Tiles fall from top (-500px) to bottom (+500px)
+            const ty = answered ? 0 : -500 + p * 1000;
+            const op = answered ? (isCorrect || answered==="timeout" ? 1 : 0.35) : (p < 0.1 ? p*10 : p > 0.9 ? (1-p)*10 : 1);
             return (
               <button key={opt[0]} onClick={()=>handleAnswer(i)} disabled={!!answered}
                 style={{padding:"20px 10px",borderRadius:14,border:"none",background:bg,color:"white",
@@ -4387,7 +4387,6 @@ function StatsTab({ mastery }) {
 
   return (
     <div>
-      <EmojiGenerator onDone={()=>forceUpdate(n=>n+1)} />
       {/* level legend */}}
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
         {LEVEL_INFO.map((li,i) => (
@@ -4680,7 +4679,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.5</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.6</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
