@@ -3908,7 +3908,7 @@ function FalleeTab({ mastery }) {
   const [direction, setDirection] = useState("gr2en"); // "gr2en" | "en2gr"
   const animRef  = React.useRef(null);
   const startRef = React.useRef(null);
-  const DURATION = 5000;
+  const DURATION = 10000;
   const SPEEDS   = [1, 1, 1, 1];
 
   function buildOptions(correct, allWords) {
@@ -3952,8 +3952,9 @@ function FalleeTab({ mastery }) {
     cancelAnimationFrame(animRef.current);
     const correct = i === correctIdx;
     setAnswered(correct ? "correct" : "wrong");
-    if (correct) { setScore(s=>s+1); setStreak(s=>s+1); } else setStreak(0);
-    setTimeout(() => nextQ(), 900);
+    if (correct) { setScore(s=>s+1); setStreak(s=>s+1); setTimeout(() => nextQ(), 900); }
+    else setStreak(0);
+    // wrong: don't auto-advance, show buttons
   }
 
   function nextQ() {
@@ -4070,11 +4071,30 @@ function FalleeTab({ mastery }) {
         </div>
       </div>
 
+      {/* Restart/Continue buttons on wrong */}
+      {answered==="wrong" && (
+        <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:10}}>
+          <button onClick={startGame}
+            style={{padding:"10px 20px",borderRadius:10,border:"none",background:"#E8445A",color:"white",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            🔄 Restart
+          </button>
+          <button onClick={nextQ}
+            style={{padding:"10px 20px",borderRadius:10,border:"none",background:"#1D9E75",color:"white",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            ▶️ Continue
+          </button>
+        </div>
+      )}
+
       {/* Static word at bottom */}
       <div style={{textAlign:"center",padding:"16px 0 8px",borderTop:"1px solid rgba(255,255,255,0.15)"}}>
         {answered==="timeout" && (
           <div style={{color:"#FFD700",fontSize:13,fontWeight:600,marginBottom:6}}>
             ⏱ Time! → {tileText(options[correctIdx])}
+          </div>
+        )}
+        {answered==="wrong" && (
+          <div style={{color:"#ff6b6b",fontSize:13,fontWeight:600,marginBottom:6}}>
+            ✗ → {tileText(options[correctIdx])}
           </div>
         )}
         <div style={{fontSize:30,fontWeight:700,color:"white"}}>{bottomText}</div>
