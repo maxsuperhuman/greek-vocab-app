@@ -3544,7 +3544,7 @@ function FlashTab({ mastery, rec }) {
           {[false,true].map(back => (
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
-              <UnsplashPhoto englishWord={w[2]} size={90} style={{marginBottom:8}} />
+              <WordImage greekWord={w[0]} englishWord={w[2]} size={90} showRefresh={true} />
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
@@ -3752,7 +3752,7 @@ function QuizTab({ mastery, rec }) {
             return (
               <button key={o} disabled={locked} onClick={()=>pick(o)}
                 style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                {optWord && <UnsplashPhoto englishWord={optWord[2]} size={60} />}
+                {optWord && <WordImage greekWord={optWord[0]} englishWord={optWord[2]} size={60} showRefresh={false} />}
                 {o}
               </button>
             );
@@ -4476,50 +4476,99 @@ Return ONLY a JSON array:
 // ─── Stats Tab ─────────────────────────────────────────────────────
 // ─── Emoji storage ───────────────────────────────────────────────────
 
-// ─── Unsplash lazy image loader ──────────────────────────────────────
+// ─── Smart word image: Noto emoji or Unsplash ────────────────────────
 const unsplashPending = new Set();
+const UNSPLASH_PAGE_MAP = {}; // track which page we're on for refresh
 
-async function getUnsplashPhoto(englishWord, forceUpdate) {
+async function getUnsplashPhoto(englishWord, page, forceUpdate) {
   if (!englishWord) return;
-  if (UNSPLASH_MAP[englishWord] !== undefined) return; // already cached or failed
-  if (unsplashPending.has(englishWord)) return; // already in flight
-  unsplashPending.add(englishWord);
+  const key = `${englishWord}_p${page}`;
+  if (unsplashPending.has(key)) return;
+  unsplashPending.add(key);
 
   const apiKey = await getUnsplashKey();
-  if (!apiKey) { unsplashPending.delete(englishWord); return; }
+  if (!apiKey) { unsplashPending.delete(key); return; }
 
-  const url = await fetchUnsplashImage(englishWord, apiKey);
-  UNSPLASH_MAP[englishWord] = url || null; // null = not found, don't retry
-  unsplashPending.delete(englishWord);
-
-  // Save to IndexedDB
   try {
-    const db = await openDB();
-    const tx = db.transaction(DB_STORE, "readwrite");
-    tx.objectStore(DB_STORE).put({...UNSPLASH_MAP}, UNSPLASH_CACHE_KEY);
+    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(englishWord)}&per_page=1&page=${page}&orientation=squarish`, {
+      headers: { "Authorization": `Client-ID ${apiKey}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        UNSPLASH_MAP[englishWord] = data.results[0].urls.small;
+        // Save to IndexedDB
+        try {
+          const db = await openDB();
+          const tx = db.transaction(DB_STORE, "readwrite");
+          tx.objectStore(DB_STORE).put({...UNSPLASH_MAP}, UNSPLASH_CACHE_KEY);
+        } catch(e) {}
+      } else {
+        UNSPLASH_MAP[englishWord] = null;
+      }
+    }
   } catch(e) {}
-
+  unsplashPending.delete(key);
   if (forceUpdate) forceUpdate(n => n+1);
 }
 
-// Component that lazily loads and shows Unsplash photo
-function UnsplashPhoto({ englishWord, size=80, style={} }) {
+function emojiToNotoUrl(emoji) {
+  if (!emoji) return null;
+  const code = [...emoji].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('-');
+  return `https://fonts.gstatic.com/s/e/notoemoji/latest/${code}/512.png`;
+}
+
+// Smart component: Noto if emoji, else Unsplash with refresh button
+function WordImage({ greekWord, englishWord, size=80, showRefresh=false }) {
   const [, forceUpdate] = React.useState(0);
+  const [page, setPage] = React.useState(1);
+  const emoji = EMOJI_MAP[greekWord];
 
   React.useEffect(() => {
-    if (englishWord && UNSPLASH_MAP[englishWord] === undefined) {
-      getUnsplashPhoto(englishWord, forceUpdate);
+    if (!emoji && englishWord && UNSPLASH_MAP[englishWord] === undefined) {
+      getUnsplashPhoto(englishWord, page, forceUpdate);
     }
-  }, [englishWord]);
+  }, [greekWord, englishWord, page]);
 
-  const url = UNSPLASH_MAP[englishWord];
-  if (!url) return null;
+  if (emoji) {
+    return (
+      <img src={emojiToNotoUrl(emoji)} width={size} height={size}
+        style={{ objectFit:"contain" }}
+        onError={e => e.target.style.display="none"}
+      />
+    );
+  }
+
+  const photo = UNSPLASH_MAP[englishWord];
+  if (!photo && photo !== null) return <div style={{width:size,height:size,background:"#f0f0f0",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏳</div>;
+  if (!photo) return null;
+
   return (
-    <img src={url} width={size} height={size}
-      style={{ objectFit:"cover", borderRadius:10, ...style }}
-      onError={e => { e.target.style.display="none"; }}
-    />
+    <div style={{position:"relative",display:"inline-block"}}>
+      <img src={photo} width={size} height={size}
+        style={{ objectFit:"cover", borderRadius:10, display:"block" }}
+        onError={e => e.target.style.display="none"}
+      />
+      {showRefresh && (
+        <button onClick={e=>{
+          e.stopPropagation();
+          delete UNSPLASH_MAP[englishWord];
+          const newPage = page + 1;
+          setPage(newPage);
+          getUnsplashPhoto(englishWord, newPage, forceUpdate);
+        }} style={{
+          position:"absolute", top:2, right:2,
+          background:"rgba(0,0,0,0.5)", border:"none", borderRadius:6,
+          color:"white", fontSize:11, cursor:"pointer", padding:"2px 5px", lineHeight:1
+        }}>🔄</button>
+      )}
+    </div>
   );
+}
+
+// Keep UnsplashPhoto as alias for backward compat
+function UnsplashPhoto({ englishWord, size=80, style={} }) {
+  return <WordImage greekWord="" englishWord={englishWord} size={size} />;
 }
 
 // Stats panel showing photo count
@@ -4735,6 +4784,7 @@ function App() {
   useEffect(() => {
     loadEmojiMap(); // Load emoji cache
     loadUnsplashMap(); // Load unsplash cache
+    loadEmojiMap(); // Load emoji cache
     async function load() {
       try {
         const saved = await supabaseLoad();
@@ -4878,7 +4928,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1715</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.22-1725</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
