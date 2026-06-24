@@ -3790,10 +3790,37 @@ function QuizTab({ mastery, rec }) {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
         {QM.map((m,i)=><MCard key={i} title={m.label} on={mi===i} onClick={()=>setMi(i)}/>)}
       </div>
+      {/* Topic stats block */}
+      {(()=>{
+        const words = filterWords(WORDS, topic, subtopic);
+        const total = words.length;
+        const learning = words.filter(w=>{ const m=rec[w[0]]; return m&&m.level>0&&m.level<5; }).length;
+        const mastered = words.filter(w=>{ const m=rec[w[0]]; return m&&(m.level>=5||m.frozen); }).length;
+        const unseen = total - words.filter(w=>rec[w[0]]&&rec[w[0]].level>0).length;
+        const label = topic==="All" ? "All words" : subtopic!=="All" ? `${topic}: ${subtopic}` : topic;
+        return (
+          <div style={{ background:"#f7f7ff", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"10px 16px", marginBottom:"1rem", fontSize:13 }}>
+            <div style={{ fontWeight:600, color:"#26215C", marginBottom:6 }}>{label}</div>
+            <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+              <span>📚 <strong>{total}</strong> words</span>
+              <span style={{color:"#888"}}>👁 <strong>{unseen}</strong> unseen</span>
+              <span style={{color:"#BA7517"}}>◑ <strong>{learning}</strong> learning</span>
+              <span style={{color:"#1D9E75"}}>★ <strong>{mastered}</strong> mastered</span>
+              {total > 0 && <span style={{color:"#534AB7"}}>📈 <strong>{Math.round(mastered/total*100)}%</strong></span>}
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
         <span style={{ fontSize:13, color:"#888" }}>Questions:</span>
         <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
-          {["10","20","30","50","75","100","150","all"].map(v=><option key={v}>{v}</option>)}
+          {(()=>{
+            const total = filterWords(WORDS, topic, subtopic).length;
+            const opts = ["10","20","30","50","75","100","150","all"];
+            return opts.filter(v => v==="all" || Number(v) <= total)
+              .map(v=><option key={v} value={v}>{v==="all" ? `all (${total})` : v}</option>);
+          })()}
         </select>
       </div>
       <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
@@ -3995,7 +4022,12 @@ function TypeTab({ mastery, rec }) {
       <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
         <span style={{ fontSize:13, color:"#888" }}>Words:</span>
         <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
-          {["10","20","30","50","75","100","150","all"].map(v=><option key={v}>{v}</option>)}
+          {(()=>{
+            const total = filterWords(WORDS, topic, subtopic).length;
+            const opts = ["10","20","30","50","75","100","150","all"];
+            return opts.filter(v => v==="all" || Number(v) <= total)
+              .map(v=><option key={v} value={v}>{v==="all" ? `all (${total})` : v}</option>);
+          })()}
         </select>
       </div>
       <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
@@ -5078,7 +5110,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.24-1254</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.24-1320</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
