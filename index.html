@@ -1114,6 +1114,57 @@ async function saveUnsplashKey(key) {
 // Unsplash image cache
 const UNSPLASH_CACHE_KEY = "unsplash_images_v1";
 let UNSPLASH_MAP = {}; // english word → image URL
+const ICONS8_CACHE_KEY = "icons8_v1";
+let ICONS8_MAP = {}; // english word → icons8 icon name
+
+async function loadIcons8Map() {
+  try {
+    const db = await openDB();
+    const cached = await new Promise(resolve => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(ICONS8_CACHE_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (cached) { ICONS8_MAP = cached; return true; }
+  } catch(e) {}
+  return false;
+}
+
+async function getIcons8Name(englishWord, forceUpdate) {
+  if (!englishWord) return;
+  if (ICONS8_MAP[englishWord] !== undefined) { if (forceUpdate) forceUpdate(n=>n+1); return; }
+
+  const apiKey = await getApiKey();
+  if (!apiKey) return;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5", max_tokens: 30,
+        messages: [{ role:"user", content:`Give the exact Icons8 icon name for "${englishWord}". Use lowercase-with-hyphens format (e.g. "apple", "washing-machine", "school-building"). Reply with ONLY the icon name, nothing else.` }]
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const name = data.content[0].text.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      ICONS8_MAP[englishWord] = name;
+      try {
+        const db = await openDB();
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put({...ICONS8_MAP}, ICONS8_CACHE_KEY);
+      } catch(e) {}
+    }
+  } catch(e) {}
+  if (forceUpdate) forceUpdate(n=>n+1);
+}
+
+function icons8Url(name) {
+  return `https://img.icons8.com/color/96/${name}.png`;
+}
+
 
 async function loadUnsplashMap() {
   try {
@@ -3628,6 +3679,7 @@ function QuizTab({ mastery, rec }) {
   const [mi, setMi]       = useState(0);
   const [cnt, setCnt]     = useState("20");
   const [topic, setTopic] = useState("All");
+  const [subtopic, setSubtopic] = useState("All");
   const [phase, setPhase] = useState("setup");
   const [qs, setQs]       = useState([]);
   const [qi, setQi]       = useState(0);
@@ -4557,7 +4609,8 @@ async function getUnsplashPhoto(englishWord, page, forceUpdate) {
   if (!apiKey) { unsplashPending.delete(key); return; }
 
   try {
-    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(englishWord)}&per_page=1&page=${page}&orientation=squarish`, {
+    const searchQuery = `${englishWord} flat icon illustration minimal`;
+    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=1&page=${page}&orientation=squarish`, {
       headers: { "Authorization": `Client-ID ${apiKey}` }
     });
     if (res.ok) {
@@ -4586,49 +4639,78 @@ function emojiToNotoUrl(emoji) {
 }
 
 // Smart component: Noto if emoji, else Unsplash with refresh button
-function WordImage({ greekWord, englishWord, size=80, showRefresh=false }) {
+function WordImage({ greekWord, englishWord, size=80, showRefresh=true }) {
   const [, forceUpdate] = React.useState(0);
-  const [page, setPage] = React.useState(1);
+  const [mode, setMode] = React.useState("noto"); // "noto" | "icons8"
   const emoji = EMOJI_MAP[greekWord];
 
   React.useEffect(() => {
-    if (!emoji && englishWord && UNSPLASH_MAP[englishWord] === undefined) {
-      getUnsplashPhoto(englishWord, page, forceUpdate);
+    if (mode === "icons8" && englishWord && ICONS8_MAP[englishWord] === undefined) {
+      getIcons8Name(englishWord, forceUpdate);
     }
-  }, [greekWord, englishWord, page]);
+  }, [mode, englishWord]);
 
-  if (emoji) {
+  function handleRefresh(e) {
+    e.stopPropagation();
+    if (mode === "noto") {
+      setMode("icons8");
+      if (englishWord && ICONS8_MAP[englishWord] === undefined) {
+        getIcons8Name(englishWord, forceUpdate);
+      }
+    } else {
+      setMode("noto");
+    }
+  }
+
+  const btnStyle = {
+    position:"absolute", top:2, right:2,
+    background:"rgba(0,0,0,0.45)", border:"none", borderRadius:6,
+    color:"white", fontSize:11, cursor:"pointer", padding:"2px 5px", lineHeight:1
+  };
+
+  if (mode === "icons8") {
+    const iconName = ICONS8_MAP[englishWord];
+    if (!iconName) return (
+      <div style={{width:size,height:size,background:"#f0f0f0",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#aaa"}}>⏳</div>
+    );
     return (
-      <img src={emojiToNotoUrl(emoji)} width={size} height={size}
-        style={{ objectFit:"contain" }}
-        onError={e => e.target.style.display="none"}
-      />
+      <div style={{position:"relative",display:"inline-block"}}>
+        <img src={icons8Url(iconName)} width={size} height={size}
+          style={{ objectFit:"contain" }}
+          onError={e=>{ e.target.src=icons8Url("question-mark"); }}
+        />
+        {showRefresh && <button onClick={handleRefresh} style={btnStyle}>🔄</button>}
+      </div>
     );
   }
 
-  const photo = UNSPLASH_MAP[englishWord];
-  if (!photo && photo !== null) return <div style={{width:size,height:size,background:"#f0f0f0",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏳</div>;
-  if (!photo) return null;
+  // Default: Noto emoji
+  if (emoji) {
+    return (
+      <div style={{position:"relative",display:"inline-block"}}>
+        <img src={emojiToNotoUrl(emoji)} width={size} height={size}
+          style={{ objectFit:"contain" }}
+          onError={e => e.target.style.display="none"}
+        />
+        {showRefresh && <button onClick={handleRefresh} style={btnStyle}>🔄</button>}
+      </div>
+    );
+  }
 
+  // No emoji — go straight to icons8
+  if (ICONS8_MAP[englishWord] === undefined && englishWord) {
+    getIcons8Name(englishWord, forceUpdate);
+    return <div style={{width:size,height:size,background:"#f0f0f0",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#aaa"}}>⏳</div>;
+  }
+  const iconName = ICONS8_MAP[englishWord];
+  if (!iconName) return null;
   return (
     <div style={{position:"relative",display:"inline-block"}}>
-      <img src={photo} width={size} height={size}
-        style={{ objectFit:"cover", borderRadius:10, display:"block" }}
-        onError={e => e.target.style.display="none"}
+      <img src={icons8Url(iconName)} width={size} height={size}
+        style={{ objectFit:"contain" }}
+        onError={e=>{ e.target.style.display="none"; }}
       />
-      {showRefresh && (
-        <button onClick={e=>{
-          e.stopPropagation();
-          delete UNSPLASH_MAP[englishWord];
-          const newPage = page + 1;
-          setPage(newPage);
-          getUnsplashPhoto(englishWord, newPage, forceUpdate);
-        }} style={{
-          position:"absolute", top:2, right:2,
-          background:"rgba(0,0,0,0.5)", border:"none", borderRadius:6,
-          color:"white", fontSize:11, cursor:"pointer", padding:"2px 5px", lineHeight:1
-        }}>🔄</button>
-      )}
+      {showRefresh && <button onClick={handleRefresh} style={btnStyle}>🔄</button>}
     </div>
   );
 }
@@ -4851,6 +4933,7 @@ function App() {
   useEffect(() => {
     loadEmojiMap(); // Load emoji cache
     loadUnsplashMap(); // Load unsplash cache
+    loadIcons8Map(); // Load icons8 cache
     loadEmojiMap(); // Load emoji cache
     async function load() {
       try {
@@ -4995,7 +5078,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.24-1234</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.24-1254</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
