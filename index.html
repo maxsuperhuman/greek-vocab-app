@@ -1085,194 +1085,6 @@ async function saveApiKey(key) {
   } catch { return false; }
 }
 
-const UNSPLASH_KEY_STORE = "unsplash_key";
-
-async function getUnsplashKey() {
-  try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readonly");
-      const req = tx.objectStore(DB_STORE).get(UNSPLASH_KEY_STORE);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-  } catch { return null; }
-}
-
-async function saveUnsplashKey(key) {
-  try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readwrite");
-      tx.objectStore(DB_STORE).put(key, UNSPLASH_KEY_STORE);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
-    });
-  } catch { return false; }
-}
-
-// Unsplash image cache
-const UNSPLASH_CACHE_KEY = "unsplash_images_v1";
-let UNSPLASH_MAP = {}; // english word → image URL
-const ICONS8_CACHE_KEY = "icons8_v1";
-let ICONS8_MAP = {}; // english word → icons8 icon name
-
-async function loadIcons8Map() {
-  try {
-    const db = await openDB();
-    const cached = await new Promise(resolve => {
-      const tx = db.transaction(DB_STORE, "readonly");
-      const req = tx.objectStore(DB_STORE).get(ICONS8_CACHE_KEY);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-    if (cached) { ICONS8_MAP = cached; return true; }
-  } catch(e) {}
-  return false;
-}
-
-async function getIcons8Name(englishWord, forceUpdate) {
-  if (!englishWord) return;
-  if (ICONS8_MAP[englishWord] !== undefined) { if (forceUpdate) forceUpdate(n=>n+1); return; }
-
-  const apiKey = await getApiKey();
-  if (!apiKey) return;
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5", max_tokens: 30,
-        messages: [{ role:"user", content:`Give the exact Icons8 icon name for "${englishWord}". Use lowercase-with-hyphens format (e.g. "apple", "washing-machine", "school-building"). Reply with ONLY the icon name, nothing else.` }]
-      })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const name = data.content[0].text.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
-      ICONS8_MAP[englishWord] = name;
-      try {
-        const db = await openDB();
-        const tx = db.transaction(DB_STORE, "readwrite");
-        tx.objectStore(DB_STORE).put({...ICONS8_MAP}, ICONS8_CACHE_KEY);
-      } catch(e) {}
-    }
-  } catch(e) {}
-  if (forceUpdate) forceUpdate(n=>n+1);
-}
-
-function icons8Url(name) {
-  return `https://img.icons8.com/color/96/${name}.png`;
-}
-
-
-async function loadUnsplashMap() {
-  try {
-    const db = await openDB();
-    const cached = await new Promise(resolve => {
-      const tx = db.transaction(DB_STORE, "readonly");
-      const req = tx.objectStore(DB_STORE).get(UNSPLASH_CACHE_KEY);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-    if (cached) { UNSPLASH_MAP = cached; return true; }
-  } catch(e) {}
-  return false;
-}
-
-async function fetchUnsplashImage(englishWord, apiKey) {
-  try {
-    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(englishWord)}&per_page=1&orientation=squarish`, {
-      headers: { "Authorization": `Client-ID ${apiKey}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results && data.results.length > 0) {
-        return data.results[0].urls.small;
-      }
-    }
-  } catch(e) {}
-  return null;
-}
-
-// ─── Emoji cache ─────────────────────────────────────────────────────
-const EMOJI_KEY = "word_emojis_v1";
-let EMOJI_MAP = {};
-
-async function loadEmojiMap() {
-  try {
-    const db = await openDB();
-    const cached = await new Promise(resolve => {
-      const tx = db.transaction(DB_STORE, "readonly");
-      const req = tx.objectStore(DB_STORE).get(EMOJI_KEY);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-    if (cached) { EMOJI_MAP = cached; return true; }
-  } catch(e) {}
-  return false;
-}
-
-async function generateEmojiMap(onProgress) {
-  const apiKey = await getApiKey();
-  if (!apiKey) { console.error("No API key"); return false; }
-
-  const BATCH = 30;
-  const batches = [];
-  for (let i = 0; i < WORDS.length; i += BATCH) {
-    batches.push(WORDS.slice(i, i + BATCH));
-  }
-
-  console.log("Generating emojis, batches:", batches.length);
-  const result = {};
-
-  for (let b = 0; b < batches.length; b++) {
-    if (onProgress) onProgress(Math.round(b / batches.length * 100));
-    const batch = batches[b];
-    const list = batch.map(w => `"${w[0]}":"${w[2]}"`).join(", ");
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5",
-          max_tokens: 400,
-          messages: [{ role:"user", content:`Pick ONE emoji per word. Return ONLY JSON object.
-Words: {${list}}
-Response format: {"greek_word":"emoji",...}` }]
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.content[0].text;
-        if (b === 0) console.log("Batch 0 raw:", text.substring(0, 200));
-        // Extract pairs directly - more robust than JSON.parse
-        const pairs = [...text.matchAll(/"([^"]+)"\s*:\s*"([^"\n]+)"/g)];
-        let added = 0;
-        for (const [,k,v] of pairs) {
-          if(k && v && v.trim()) { result[k] = v.trim(); added++; }
-        }
-        if (added > 0) {
-          console.log("Batch", b, "OK, added:", added, "total:", Object.keys(result).length);
-        } else {
-          console.log("Batch", b, "no pairs, raw:", text.substring(0, 80));
-        }
-      } else {
-        console.error("Batch", b, "failed:", res.status);
-      }
-    } catch(e) { console.error("Batch", b, "error:", e); }
-  }
-
-  console.log("Done! Total emojis:", Object.keys(result).length);
-  EMOJI_MAP = result;
-  try {
-    const db = await openDB();
-    const tx = db.transaction(DB_STORE, "readwrite");
-    tx.objectStore(DB_STORE).put(result, EMOJI_KEY);
-  } catch(e) {}
-  if (onProgress) onProgress(100);
-  return true;
-}
 
 async function getCardFromCache(greek) {
   try {
@@ -2874,27 +2686,6 @@ Exactly 3 sentences:
 
 // ─── Dictionary ────────────────────────────────────────────────────
 
-// ─── Twemoji image helper ────────────────────────────────────────────
-function emojiToCode(emoji) {
-  if (!emoji) return null;
-  const codePoints = [...emoji].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f');
-  return codePoints.join('-');
-}
-
-function TwemojiImg({ emoji, size=40, style={} }) {
-  if (!emoji) return null;
-  const code = emojiToCode(emoji);
-  if (!code) return null;
-  return (
-    <img
-      src={`https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${code}.png`}
-      width={size} height={size}
-      style={{ objectFit:"contain", ...style }}
-      onError={e => { e.target.style.display="none"; }}
-    />
-  );
-}
-
 
 // ─── Custom words storage ───────────────────────────────────────────
 const CUSTOM_WORDS_KEY = "custom_words";
@@ -3417,34 +3208,27 @@ function DictTab({ mastery }) {
 // ─── API Key settings modal ─────────────────────────────────────────
 function ApiKeyModal({ onClose, onSaved }) {
   const [val, setVal] = React.useState("");
-  const [unsplashVal, setUnsplashVal] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     getApiKey().then(k => { if(k) setVal(k); });
-    getUnsplashKey().then(k => { if(k) setUnsplashVal(k); });
   }, []);
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:16, padding:24, width:"100%", maxWidth:420, boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
-        <div style={{ fontSize:18, fontWeight:700, color:"#26215C", marginBottom:16 }}>🔑 API Keys</div>
+        <div style={{ fontSize:18, fontWeight:700, color:"#26215C", marginBottom:16 }}>🔑 API Key</div>
 
         <div style={{ fontSize:13, fontWeight:600, color:"#444", marginBottom:6 }}>Anthropic API Key</div>
         <input type="password" value={val} onChange={e=>setVal(e.target.value)} placeholder="sk-ant-api03-..."
           style={{ width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"monospace", boxSizing:"border-box", marginBottom:16 }} />
 
-        <div style={{ fontSize:13, fontWeight:600, color:"#444", marginBottom:6 }}>Unsplash Access Key <span style={{fontWeight:400,color:"#888"}}>(for photos)</span></div>
-        <input type="password" value={unsplashVal} onChange={e=>setUnsplashVal(e.target.value)} placeholder="Unsplash Access Key..."
-          style={{ width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #AFA9EC", fontSize:13, fontFamily:"monospace", boxSizing:"border-box", marginBottom:16 }} />
-
         <div style={{ fontSize:12, color:"#888", marginBottom:16, lineHeight:1.5 }}>
-          Keys stored only on this device, never in GitHub.
+          Key stored only on this device, never in GitHub.
         </div>
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
           <button onClick={onClose} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid #ccc", background:"white", fontSize:13, cursor:"pointer" }}>Cancel</button>
           <button onClick={async () => {
             setSaving(true);
             if (val.trim()) await saveApiKey(val.trim());
-            if (unsplashVal.trim()) await saveUnsplashKey(unsplashVal.trim());
             setSaving(false);
             onSaved();
             onClose();
@@ -3743,6 +3527,32 @@ function CardSection({ title, badge, isOpen, onToggle, children }) {
   );
 }
 
+// ─── Per-word stats badge — shown faintly on exercise cards ─────────
+// Sums attempts/accuracy across all modes (flash, quiz_gr_en, quiz_en_gr, tile)
+// for a single word. Returns null if the word has never been attempted.
+function wordStats(mastery, greekWord) {
+  const e = mastery && mastery[greekWord];
+  if (!e) return null;
+  const totals = Object.values(e.modes).reduce((acc,m) => ({ ok: acc.ok+m.ok, fail: acc.fail+m.fail }), { ok:0, fail:0 });
+  const attempts = totals.ok + totals.fail;
+  if (attempts === 0) return null;
+  const pct = Math.round((totals.ok / attempts) * 100);
+  return { attempts, pct, ok: totals.ok, fail: totals.fail };
+}
+
+function WordStatsBadge({ mastery, greekWord, style }) {
+  const stats = wordStats(mastery, greekWord);
+  if (!stats) return null;
+  const color = stats.pct >= 80 ? "#1D9E75" : stats.pct >= 50 ? "#BA7517" : "#E24B4A";
+  return (
+    <div style={{ fontSize:11, color:"#aaa", display:"flex", alignItems:"center", gap:5, ...style }} title={`${stats.ok} correct, ${stats.fail} wrong across all exercises`}>
+      <span>{stats.attempts} {stats.attempts===1 ? "attempt" : "attempts"}</span>
+      <span style={{ color:"#ddd" }}>·</span>
+      <span style={{ color, fontWeight:500 }}>{stats.pct}%</span>
+    </div>
+  );
+}
+
 function FlashTab({ mastery, rec }) {
   const [face, setFace]         = useState(0);
   const [topic, setTopic]       = useState("All");
@@ -3854,7 +3664,6 @@ function FlashTab({ mastery, rec }) {
           {[false,true].map(back => (
             <div key={String(back)} style={{ position:"absolute", width:"100%", height:"100%", backfaceVisibility:"hidden", transform:back?"rotateY(180deg)":"none", border:"0.5px solid #e0e0e0", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.4rem", background:back?"#f8f8f8":"white" }}>
               <div style={{ fontSize:11, color:"#aaa", textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>{back?v.bl:v.fl}</div>
-              <WordImage greekWord={w[0]} englishWord={w[2]} size={90} showRefresh={true} />
               <div style={{ fontSize:22, fontWeight:500, textAlign:"center", lineHeight:1.3 }}>{back?v.back:v.front}</div>
               <div style={{ fontSize:12, color:"#aaa", marginTop:6, fontStyle:"italic" }}>{back?v.bsub:v.fsub}</div>
               {!back && <div style={{ fontSize:11, color:"#ccc", marginTop:8 }}>Tap to flip</div>}
@@ -3865,6 +3674,7 @@ function FlashTab({ mastery, rec }) {
                   📖 More
                 </button>
               )}
+              {back && <WordStatsBadge mastery={mastery} greekWord={w[0]} style={{ marginTop:8 }} />}
             </div>
           ))}
         </div>
@@ -4086,18 +3896,15 @@ function QuizTab({ mastery, rec }) {
           }
         </div>
         <div style={{ fontSize:15, color:"#888", marginBottom:"1.6rem" }}>{m.h}</div>
+        {locked && <div style={{ marginBottom:"0.8rem", display:"flex", justifyContent:"center" }}><WordStatsBadge mastery={mastery} greekWord={w[0]} /></div>}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
           {opts.map(o => {
             const isC=o===correct, isP=o===chosen;
             let bg="transparent", border="0.5px solid #ccc", color="#333";
             if(locked){if(isC){bg="#E1F5EE";border="0.5px solid #1D9E75";color="#085041";}else if(isP){bg="#FCEBEB";border="0.5px solid #E24B4A";color="#501313";}}
-            // Find the Greek word for this option to get its emoji
-            const optWord = WORDS.find(w => w[0]===o || w[2]===o || w[1]===o);
-            const optEmoji = optWord ? EMOJI_MAP[optWord[0]] : null;
             return (
               <button key={o} disabled={locked} onClick={()=>pick(o)}
                 style={{ padding:"16px 12px", border, borderRadius:10, background:bg, color, fontSize:16, cursor:locked?"default":"pointer", textAlign:"center", lineHeight:1.3, fontFamily:"inherit", transition:"background .15s", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                {optWord && <WordImage greekWord={optWord[0]} englishWord={optWord[2]} size={60} showRefresh={false} />}
                 {o}
               </button>
             );
@@ -4307,8 +4114,13 @@ function TypeTab({ mastery, rec }) {
 
       {/* feedback */}
       {res && (
-        <div style={{ textAlign:"center", marginBottom:"1rem", fontSize:14, fontWeight:500, color:accentColor }}>
-          {res==="ok" ? "✓ Correct!" : `✗ Answer: ${answer}`}
+        <div style={{ textAlign:"center", marginBottom:"1rem" }}>
+          <div style={{ fontSize:14, fontWeight:500, color:accentColor }}>
+            {res==="ok" ? "✓ Correct!" : `✗ Answer: ${answer}`}
+          </div>
+          <div style={{ display:"flex", justifyContent:"center", marginTop:6 }}>
+            <WordStatsBadge mastery={mastery} greekWord={w[0]} />
+          </div>
         </div>
       )}
 
@@ -4850,169 +4662,10 @@ Return ONLY a JSON array:
   );
 }
 
-
 // ─── Stats Tab ─────────────────────────────────────────────────────
-// ─── Emoji storage ───────────────────────────────────────────────────
-
-// ─── Smart word image: Noto emoji or Unsplash ────────────────────────
-const unsplashPending = new Set();
-const UNSPLASH_PAGE_MAP = {}; // track which page we're on for refresh
-
-async function getUnsplashPhoto(englishWord, page, forceUpdate) {
-  if (!englishWord) return;
-  const key = `${englishWord}_p${page}`;
-  if (unsplashPending.has(key)) return;
-  unsplashPending.add(key);
-
-  const apiKey = await getUnsplashKey();
-  if (!apiKey) { unsplashPending.delete(key); return; }
-
-  try {
-    const searchQuery = `${englishWord} flat icon illustration minimal`;
-    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=1&page=${page}&orientation=squarish`, {
-      headers: { "Authorization": `Client-ID ${apiKey}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results && data.results.length > 0) {
-        UNSPLASH_MAP[englishWord] = data.results[0].urls.small;
-        // Save to IndexedDB
-        try {
-          const db = await openDB();
-          const tx = db.transaction(DB_STORE, "readwrite");
-          tx.objectStore(DB_STORE).put({...UNSPLASH_MAP}, UNSPLASH_CACHE_KEY);
-        } catch(e) {}
-      } else {
-        UNSPLASH_MAP[englishWord] = null;
-      }
-    }
-  } catch(e) {}
-  unsplashPending.delete(key);
-  if (forceUpdate) forceUpdate(n => n+1);
-}
-
-function emojiToNotoUrl(emoji) {
-  if (!emoji) return null;
-  const code = [...emoji].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('-');
-  return `https://fonts.gstatic.com/s/e/notoemoji/latest/${code}/512.png`;
-}
-
-// Smart component: Noto if emoji, else Unsplash with refresh button
-function WordImage({ greekWord, englishWord, size=80, showRefresh=true }) {
-  const [, forceUpdate] = React.useState(0);
-  const [mode, setMode] = React.useState("noto"); // "noto" | "icons8"
-  const emoji = EMOJI_MAP[greekWord];
-
-  React.useEffect(() => {
-    if (mode === "icons8" && englishWord && ICONS8_MAP[englishWord] === undefined) {
-      getIcons8Name(englishWord, forceUpdate);
-    }
-  }, [mode, englishWord]);
-
-  function handleRefresh(e) {
-    e.stopPropagation();
-    if (mode === "noto") {
-      setMode("icons8");
-      if (englishWord && ICONS8_MAP[englishWord] === undefined) {
-        getIcons8Name(englishWord, forceUpdate);
-      }
-    } else {
-      setMode("noto");
-    }
-  }
-
-  const btnStyle = {
-    position:"absolute", top:2, right:2,
-    background:"rgba(0,0,0,0.45)", border:"none", borderRadius:6,
-    color:"white", fontSize:11, cursor:"pointer", padding:"2px 5px", lineHeight:1
-  };
-
-  if (mode === "icons8") {
-    const iconName = ICONS8_MAP[englishWord];
-    if (!iconName) return (
-      <div style={{width:size,height:size,background:"#f0f0f0",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#aaa"}}>⏳</div>
-    );
-    return (
-      <div style={{position:"relative",display:"inline-block"}}>
-        <img src={icons8Url(iconName)} width={size} height={size}
-          style={{ objectFit:"contain" }}
-          onError={e=>{ e.target.src=icons8Url("question-mark"); }}
-        />
-        {showRefresh && <button onClick={handleRefresh} style={btnStyle}>🔄</button>}
-      </div>
-    );
-  }
-
-  // Default: Noto emoji
-  if (emoji && mode === "noto") {
-    return (
-      <div style={{position:"relative",display:"inline-block"}}>
-        <span style={{ fontSize:size*0.75, lineHeight:1, display:"block", textAlign:"center", width:size, height:size, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          {emoji}
-        </span>
-        {showRefresh && <button onClick={handleRefresh} style={btnStyle}>🔄</button>}
-      </div>
-    );
-  }
-
-  // No emoji — go straight to icons8
-  if (ICONS8_MAP[englishWord] === undefined && englishWord) {
-    getIcons8Name(englishWord, forceUpdate);
-    return <div style={{width:size,height:size,background:"#f0f0f0",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#aaa"}}>⏳</div>;
-  }
-  const iconName = ICONS8_MAP[englishWord];
-  if (!iconName) return null;
-  return (
-    <div style={{position:"relative",display:"inline-block"}}>
-      <img src={icons8Url(iconName)} width={size} height={size}
-        style={{ objectFit:"contain" }}
-        onError={e=>{ e.target.style.display="none"; }}
-      />
-      {showRefresh && <button onClick={handleRefresh} style={btnStyle}>🔄</button>}
-    </div>
-  );
-}
-
-// Keep UnsplashPhoto as alias for backward compat
-function UnsplashPhoto({ englishWord, size=80, style={} }) {
-  return <WordImage greekWord="" englishWord={englishWord} size={size} />;
-}
-
-// Stats panel showing photo count
-function UnsplashGenerator({ onDone }) {
-  const [count, setCount] = React.useState(Object.keys(UNSPLASH_MAP).length);
-
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      const c = Object.keys(UNSPLASH_MAP).filter(k => UNSPLASH_MAP[k]).length;
-      setCount(c);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div style={{ background:"#f0f8ff", border:"0.5px solid #7EC8E3", borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
-      <div style={{ fontSize:13, fontWeight:500, color:"#26215C" }}>📸 Word Photos</div>
-      <div style={{ fontSize:12, color:"#888", marginTop:2 }}>
-        {count > 0 ? `${count} photos loaded — loads automatically as you study` : "Photos load automatically as you study (Unsplash)"}
-      </div>
-    </div>
-  );
-}
-
 function StatsTab({ mastery }) {
   const [filter, setFilter] = useState("all");
   const [, forceUpdate] = useState(0);
-  const [emojiLoading, setEmojiLoading] = useState(false);
-  const [emojiProgress, setEmojiProgress] = useState(0);
-  const [emojiDone, setEmojiDone] = useState(Object.keys(EMOJI_MAP).length > 0);
-
-  async function handleGenerateEmojis() {
-    setEmojiLoading(true); setEmojiProgress(0);
-    await generateEmojiMap(p => setEmojiProgress(p));
-    setEmojiDone(true); setEmojiLoading(false);
-    forceUpdate(n=>n+1);
-  }
 
   // Apply decay on render
   const m = useMemo(() => applyDecay(mastery), [mastery]);
@@ -5038,7 +4691,7 @@ function StatsTab({ mastery }) {
 
   return (
     <div>
-      {/* level legend */}}
+      {/* level legend */}
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
         {LEVEL_INFO.map((li,i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:20, background:li.bg, border:`0.5px solid ${li.color}` }}>
@@ -5067,30 +4720,6 @@ function StatsTab({ mastery }) {
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#aaa", marginTop:3 }}>
           <span>Level 0 (unseen)</span><span>{mastPct}% mastered</span><span>Level 5 ★</span>
         </div>
-      </div>
-
-      {/* Unsplash image generator */}
-      <UnsplashGenerator onDone={()=>forceUpdate(n=>n+1)} />
-
-      {/* Emoji generator */}
-      <div style={{ background:"#f7f7ff", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div>
-            <div style={{ fontSize:13, fontWeight:500, color:"#26215C" }}>🎨 Word Emojis</div>
-            <div style={{ fontSize:12, color:"#888", marginTop:2 }}>
-              {emojiDone ? `${Object.keys(EMOJI_MAP).length} emojis loaded` : "Add emoji icons to dictionary and flashcards"}
-            </div>
-          </div>
-          <button onClick={handleGenerateEmojis} disabled={emojiLoading}
-            style={{ padding:"7px 14px", borderRadius:8, border:"none", background: emojiDone?"#f0f0ff":"#534AB7", color: emojiDone?"#534AB7":"white", fontSize:13, cursor:"pointer", fontWeight:500 }}>
-            {emojiLoading ? `${emojiProgress}%…` : emojiDone ? "↺ Refresh" : "Generate"}
-          </button>
-        </div>
-        {emojiLoading && (
-          <div style={{ marginTop:8, height:4, background:"#e0e0e0", borderRadius:2 }}>
-            <div style={{ height:"100%", background:"#534AB7", borderRadius:2, width:`${emojiProgress}%`, transition:"width 0.3s" }}/>
-          </div>
-        )}
       </div>
 
       {/* what's next hint */}
@@ -5189,10 +4818,6 @@ function App() {
 
   // Load from Supabase on mount
   useEffect(() => {
-    loadEmojiMap(); // Load emoji cache
-    loadUnsplashMap(); // Load unsplash cache
-    loadIcons8Map(); // Load icons8 cache
-    loadEmojiMap(); // Load emoji cache
     async function load() {
       try {
         const saved = await supabaseLoad();
@@ -5336,7 +4961,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1317</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1505</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
