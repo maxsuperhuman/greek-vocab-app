@@ -4311,13 +4311,16 @@ function TypeTab({ mastery, rec }) {
 
 
 // ─── Articles Tab (ο/η/το practice) ────────────────────────────────
+// One-time marker so we know the full-database article prescan has completed
+const ARTICLE_PRESCAN_DONE_KEY = "article_prescan_done_v1";
+
 function ArticlesTab({ mastery, rec }) {
   const [topic, setTopic] = useState("All");
   const [subtopic, setSubtopic] = useState("All");
   const [cnt, setCnt]     = useState("20");
-  const [phase, setPhase] = useState("setup"); // setup | loading | game | result
-  const [loadProgress, setLoadProgress] = useState(0);
-  const [loadTotal, setLoadTotal] = useState(0);
+  const [phase, setPhase] = useState("setup"); // prescan | setup | game | result
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanTotal, setScanTotal] = useState(0);
   const [qs, setQs]       = useState([]); // [{w, article}]
   const [qi, setQi]       = useState(0);
   const [score, setScore] = useState(0);
@@ -4325,47 +4328,81 @@ function ArticlesTab({ mastery, rec }) {
   const [locked, setLocked] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [noNouns, setNoNouns] = useState(false);
-
-  React.useEffect(() => { setSubtopic("All"); }, [topic]);
+  // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
+  const [articleMap, setArticleMap] = useState(null);
 
   const ARTICLES = ["ο", "η", "το"];
 
-  async function start() {
-    const pool0 = shuf(filterWords(WORDS, topic, subtopic));
-    const n = cnt==="all" ? pool0.length : +cnt;
-    // Over-sample since some words will turn out not to be nouns
-    const candidates = pool0.slice(0, Math.min(pool0.length, Math.max(n*3, 60)));
-
-    setPhase("loading"); setLoadProgress(0); setLoadTotal(candidates.length);
-
-    // Resolve articles: check cache first, batch-fetch the rest
-    const resolved = [];
-    const toFetch = [];
-    for (const w of candidates) {
-      const cached = await getArticleFromCache(w[0]);
-      if (cached !== null) resolved.push({ w, article: cached });
-      else toFetch.push(w);
-    }
-    setLoadProgress(resolved.length);
-
-    const BATCH = 25;
-    for (let i = 0; i < toFetch.length; i += BATCH) {
-      const batch = toFetch.slice(i, i+BATCH);
-      const result = await fetchArticlesBatch(batch);
-      for (const w of batch) {
-        const article = result[w[0]] || "none";
-        resolved.push({ w, article });
+  // Run the one-time full-database prescan, or top up any new words added since
+  // (e.g. via photo import or manual add) that weren't covered by the original scan.
+  React.useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      const alreadyDone = await getArticleFromCache(ARTICLE_PRESCAN_DONE_KEY);
+      const map = {};
+      const toFetch = [];
+      for (const w of WORDS) {
+        const cached = await getArticleFromCache(w[0]);
+        if (cached !== null) map[w[0]] = cached;
+        else toFetch.push(w);
       }
-      setLoadProgress(p => Math.min(p + batch.length, candidates.length));
-    }
+      if (cancelled) return;
 
-    const nounsOnly = resolved.filter(r => ARTICLES.includes(r.article)).slice(0, n);
-    if (nounsOnly.length === 0) {
-      setNoNouns(true); setPhase("setup");
-      return;
+      if (toFetch.length === 0) {
+        setArticleMap(map);
+        return;
+      }
+
+      // Either first run, or new words were added since the last scan — fetch what's missing.
+      setPhase("prescan"); setScanProgress(WORDS.length - toFetch.length); setScanTotal(WORDS.length);
+      const BATCH = 25;
+      for (let i = 0; i < toFetch.length; i += BATCH) {
+        if (cancelled) return;
+        const batch = toFetch.slice(i, i+BATCH);
+        const result = await fetchArticlesBatch(batch);
+        for (const w of batch) map[w[0]] = result[w[0]] || "none";
+        setScanProgress(p => Math.min(p + batch.length, WORDS.length));
+      }
+      if (cancelled) return;
+      await saveArticleToCache(ARTICLE_PRESCAN_DONE_KEY, true);
+      setArticleMap(map);
+      setPhase("setup");
     }
+    run();
+    return () => { cancelled = true; };
+  }, []);
+
+  React.useEffect(() => { setSubtopic("All"); }, [topic]);
+
+  // Noun counts per topic/subtopic, derived from articleMap once ready
+  const nounCounts = React.useMemo(() => {
+    if (!articleMap) return null;
+    const byTopic = {};
+    const bySubtopic = {};
+    for (const w of WORDS) {
+      if (!ARTICLES.includes(articleMap[w[0]])) continue;
+      byTopic[w[3]] = (byTopic[w[3]] || 0) + 1;
+      if (w[4]) {
+        bySubtopic[w[3]] = bySubtopic[w[3]] || {};
+        bySubtopic[w[3]][w[4]] = (bySubtopic[w[3]][w[4]] || 0) + 1;
+      }
+    }
+    byTopic["All"] = Object.values(byTopic).reduce((a,b)=>a+b,0);
+    return { byTopic, bySubtopic };
+  }, [articleMap]);
+
+  const availableTopics = nounCounts ? TOPICS.filter(t => t==="All" || nounCounts.byTopic[t] > 0) : TOPICS;
+  const availableSubtopics = (nounCounts && SUBTOPICS[topic])
+    ? SUBTOPICS[topic].filter(s => s==="All" || (nounCounts.bySubtopic[topic] && nounCounts.bySubtopic[topic][s] > 0))
+    : SUBTOPICS[topic];
+
+  function start() {
+    const pool = shuf(filterWords(WORDS, topic, subtopic).filter(w => articleMap && ARTICLES.includes(articleMap[w[0]])));
+    const n = cnt==="all" ? pool.length : +cnt;
+    const selected = pool.slice(0, n).map(w => ({ w, article: articleMap[w[0]] }));
+    if (selected.length === 0) { setNoNouns(true); return; }
     setNoNouns(false);
-    setQs(shuf(nounsOnly)); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    setQs(shuf(selected)); setQi(0); setScore(0); setLocked(false); setChosen(null);
     setPhase("game");
   }
 
@@ -4383,7 +4420,19 @@ function ArticlesTab({ mastery, rec }) {
     }, ok ? 600 : 1300);
   }
 
-  if (phase === "setup") return (
+  if (phase === "prescan") return (
+    <div style={{ textAlign:"center", padding:"2.5rem 1rem" }}>
+      <div style={{ fontSize:28, marginBottom:10 }}>📖</div>
+      <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:4 }}>Setting up Articles</div>
+      <div style={{ fontSize:13, color:"#888", marginBottom:12 }}>Scanning all {WORDS.length} words for nouns and their articles — this only happens once.</div>
+      <div style={{ maxWidth:280, margin:"0 auto", height:6, background:"#eee", borderRadius:3, overflow:"hidden" }}>
+        <div style={{ width:`${scanTotal ? Math.round(scanProgress/scanTotal*100) : 0}%`, height:"100%", background:"#534AB7", transition:"width .2s" }}/>
+      </div>
+      <div style={{ fontSize:11, color:"#bbb", marginTop:6 }}>{scanProgress}/{scanTotal}</div>
+    </div>
+  );
+
+  if (phase === "setup" || !articleMap) return (
     <div>
       <div style={{ fontSize:13, color:"#888", marginBottom:"1rem", lineHeight:1.5 }}>
         Practice noun articles — see a Greek noun, pick ο (masculine), η (feminine), or το (neuter).
@@ -4395,11 +4444,13 @@ function ArticlesTab({ mastery, rec }) {
       )}
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
         <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>setTopic(t)}/>)}
-      {SUBTOPICS[topic] && (
+        {availableTopics.map(t=>(
+          <Chip key={t} label={nounCounts && t!=="All" ? `${t} (${nounCounts.byTopic[t]})` : t} on={topic===t} onClick={()=>setTopic(t)}/>
+        ))}
+      {availableSubtopics && (
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.6rem" }}>
-          {SUBTOPICS[topic].map(s => (
-            <Chip key={s} label={s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
+          {availableSubtopics.map(s => (
+            <Chip key={s} label={nounCounts && s!=="All" && nounCounts.bySubtopic[topic] ? `${s} (${nounCounts.bySubtopic[topic][s]})` : s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
           ))}
         </div>
       )}
@@ -4411,17 +4462,6 @@ function ArticlesTab({ mastery, rec }) {
         </select>
       </div>
       <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
-    </div>
-  );
-
-  if (phase === "loading") return (
-    <div style={{ textAlign:"center", padding:"2.5rem 1rem" }}>
-      <div style={{ fontSize:28, marginBottom:10 }}>📖</div>
-      <div style={{ fontSize:13, color:"#888", marginBottom:10 }}>Looking up articles…</div>
-      <div style={{ maxWidth:280, margin:"0 auto", height:6, background:"#eee", borderRadius:3, overflow:"hidden" }}>
-        <div style={{ width:`${loadTotal ? Math.round(loadProgress/loadTotal*100) : 0}%`, height:"100%", background:"#534AB7", transition:"width .2s" }}/>
-      </div>
-      <div style={{ fontSize:11, color:"#bbb", marginTop:6 }}>{loadProgress}/{loadTotal} — only fetched once, cached after</div>
     </div>
   );
 
@@ -5262,7 +5302,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1745</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1850</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
