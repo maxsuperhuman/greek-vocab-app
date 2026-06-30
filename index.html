@@ -3743,6 +3743,7 @@ function QuizTab({ mastery, rec }) {
   const [chosen, setChosen] = useState(null);
   const [opts, setOpts]   = useState([]);
   const [showHint, setShowHint] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   // TTS helper — speak Greek word once
   function speakGreek(text) {
@@ -3913,6 +3914,11 @@ function QuizTab({ mastery, rec }) {
       <div style={{ textAlign:"center" }}>
         <div style={{ position:"relative", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.2rem 1rem 1rem", marginBottom:"1.2rem", background:"white" }}>
           <WordStatsBadge mastery={mastery} greekWord={w[0]} compact style={{ position:"absolute", top:10, right:12 }} />
+          <button
+            onClick={e=>{ e.stopPropagation(); setShowDetail(true); }}
+            style={{ position:"absolute", top:10, left:12, padding:"3px 9px", borderRadius:14, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>
+            📖 More
+          </button>
           <div
             onClick={() => { if (mi === 0 || mi === 2 || mi === 3) { const next = !showHint; setShowHint(next); if(next) speakGreek(w[0]); } }}
             style={{ fontSize:28, fontWeight:600, marginBottom:6, cursor: (mi===0||mi===2||mi===3) ? "pointer" : "default", display:"inline-block", padding:"6px 12px", borderRadius:8, transition:"background .15s" }}
@@ -3942,6 +3948,7 @@ function QuizTab({ mastery, rec }) {
           })}
         </div>
       </div>
+      {showDetail && <CardDetail word={w} onClose={()=>setShowDetail(false)}/>}
     </div>
   );
 }
@@ -3979,6 +3986,7 @@ function TypeTab({ mastery, rec }) {
   const [picked, setPicked]   = useState([]); // [{id, ch}] — slots filled so far
   const [res, setRes]         = useState(null); // null|"ok"|"bad"
   const [hintCount, setHintCount] = useState(0); // letters revealed by hint
+  const [showDetail, setShowDetail] = useState(false);
 
   function getAnswer(w) { return mode==="gr" ? w[0].replace(/\s/g,"") : w[1].replace(/\s/g,""); }
   function getQuestion(w) { return w[2]; } // always show English
@@ -4126,6 +4134,11 @@ function TypeTab({ mastery, rec }) {
       {/* question */}
       <div style={{ position:"relative", textAlign:"center", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.2rem 1rem 1rem", marginBottom:"1.2rem", background:"white" }}>
         <WordStatsBadge mastery={mastery} greekWord={w[0]} compact style={{ position:"absolute", top:10, right:12 }} />
+        <button
+          onClick={e=>{ e.stopPropagation(); setShowDetail(true); }}
+          style={{ position:"absolute", top:10, left:12, padding:"3px 9px", borderRadius:14, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>
+          📖 More
+        </button>
         <div style={{ fontSize:26, fontWeight:600, color:"#222", marginBottom:4 }}>{getQuestion(w)}</div>
         <div style={{ fontSize:12, color:"#aaa" }}>{mode==="gr" ? "Spell in Greek" : "Write transcription"}</div>
       </div>
@@ -4193,6 +4206,7 @@ function TypeTab({ mastery, rec }) {
           </button>
         )}
       </div>
+      {showDetail && <CardDetail word={w} onClose={()=>setShowDetail(false)}/>}
     </div>
   );
 }
@@ -4990,7 +5004,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1605</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1640</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
