@@ -1058,7 +1058,7 @@ const WORDS = [
   ["τελικά","teliká","finally / in the end","Greetings"]];
 
 // ─── Claude API for interactive word cards ────────────────────────
-const CARD_CACHE_PREFIX = "card_v1_";
+const CARD_CACHE_PREFIX = "card_v2_";
 const API_KEY_STORE = "api_key";
 
 async function getApiKey() {
@@ -1306,12 +1306,24 @@ async function fetchWordCard(greek, transcription, english, topic) {
   const apiKey = await getApiKey();
   if (!apiKey) return null;
 
-  const prompt = `You are a Greek language teacher. Give a concise reference card for the Greek word "${greek}" (${transcription}) meaning "${english}" (topic: ${topic}).
-
+  const hasMeta = transcription && english;
+  const prompt = `You are a Greek language teacher. Give a thorough but concise reference card for the Greek word "${greek}"${hasMeta ? ` (${transcription}) meaning "${english}"` : ""}${topic ? ` (topic: ${topic})` : ""}.
+${hasMeta ? "" : `\nThe transliteration and English meaning were not provided — determine them yourself and include them as "headTr" and "headEn" in the JSON.\n`}
 Return ONLY a JSON object with this exact structure:
-{
+{${hasMeta ? "" : `
+  "headTr": "transliteration of \\"${greek}\\"",
+  "headEn": "English meaning of \\"${greek}\\"",`}
   "pos": "part of speech (e.g. noun (neuter), verb, adjective)",
-  "forms": "key grammatical forms (e.g. conjugation or declension, max 2 lines)",
+  "forms": "key grammatical forms as plain text, max 6 lines. If a VERB: conjugate PRESENT tense only, all 6 persons, format 'εγώ μιλάω (miláo)' one per line. If a NOUN: give the article + singular + plural with gender, e.g. 'το σπίτι (to spíti) — singular, neuter' / 'τα σπίτια (ta spítia) — plural'. If an ADJECTIVE: give masculine/feminine/neuter singular forms.",
+  "wordFamily": [
+    {"gr": "related Greek word sharing the same root", "tr": "transliteration", "en": "English meaning", "pos": "short part of speech tag e.g. noun/verb/adj"}
+  ],
+  "synonyms": [
+    {"gr": "Greek synonym", "tr": "transliteration", "en": "English meaning"}
+  ],
+  "antonyms": [
+    {"gr": "Greek antonym", "tr": "transliteration", "en": "English meaning"}
+  ],
   "examples": [
     {"gr": "Greek sentence", "tr": "transliteration", "en": "English translation"},
     {"gr": "Greek sentence", "tr": "transliteration", "en": "English translation"},
@@ -1320,7 +1332,11 @@ Return ONLY a JSON object with this exact structure:
   "notes": "1-2 sentences: cultural context, common mistakes, or usage tips"
 }
 
-Use simple A2-level Greek in examples. Include negation or question form in one example.`;
+Rules:
+- wordFamily: 2-4 words sharing the same root/stem (different part of speech where possible). Empty array if genuinely none exist.
+- synonyms: 0-3 close synonyms. Empty array if none.
+- antonyms: 0-3 opposites. Empty array if none (most nouns/many words won't have one — that's fine, just return []).
+- Use simple A2-level Greek in examples. Include negation or question form in one example.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1347,6 +1363,80 @@ Use simple A2-level Greek in examples. Include negation or question form in one 
     return card;
   } catch(e) {
     console.error("Card fetch error:", e);
+    return null;
+  }
+}
+
+// ─── Extra verb tense lookup (loaded on demand, separate small cache) ──
+const TENSE_CACHE_PREFIX = "tense_v1_";
+const TENSE_LABELS = {
+  past: "Past tense (αόριστος)",
+  future: "Future tense",
+  imperative: "Imperative (προστακτική)"
+};
+
+async function getTenseFromCache(greek, tense) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, "readonly");
+    const req = tx.objectStore(DB_STORE).get(TENSE_CACHE_PREFIX + tense + "_" + greek);
+    return await new Promise(res => { req.onsuccess = () => res(req.result || null); req.onerror = () => res(null); });
+  } catch { return null; }
+}
+async function saveTenseToCache(greek, tense, data) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(data, TENSE_CACHE_PREFIX + tense + "_" + greek);
+  } catch {}
+}
+
+async function fetchVerbTense(greek, transcription, tense) {
+  const cached = await getTenseFromCache(greek, tense);
+  if (cached) return cached;
+
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+
+  const tenseInstructions = {
+    past: `Conjugate the Greek verb "${greek}" (${transcription}) in the PAST tense (αόριστος), all 6 persons.`,
+    future: `Conjugate the Greek verb "${greek}" (${transcription}) in the FUTURE tense, all 6 persons.`,
+    imperative: `Give the IMPERATIVE (προστακτική) forms of the Greek verb "${greek}" (${transcription}) — both informal (εσύ) and formal/plural (εσείς), and both imperfective and perfective aspect if they differ.`
+  };
+
+  const prompt = `You are a Greek language teacher. ${tenseInstructions[tense]}
+
+Return ONLY a JSON object:
+{
+  "lines": ["εγώ μίλησα (mílisa)", "εσύ μίλησες (mílises)", "... one line per form"]
+}
+Keep each line short: person/form + Greek + transliteration in parentheses.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 400,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    if (!res.ok) throw new Error("API error " + res.status);
+    const data = await res.json();
+    const text = data.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON");
+    const result = JSON.parse(jsonMatch[0]);
+    await saveTenseToCache(greek, tense, result);
+    return result;
+  } catch(e) {
+    console.error("Tense fetch error:", e);
     return null;
   }
 }
@@ -3402,9 +3492,27 @@ function CardDetail({ word, onClose }) {
   const [history, setHistory] = React.useState([word]);
   const [histIdx, setHistIdx] = React.useState(0);
   const curWord = history[histIdx];
+  // Collapsible sections — Forms/Word family/Examples open by default, rest collapsed
+  const [openSections, setOpenSections] = React.useState({ forms:true, family:true, synonyms:false, examples:true, notes:false });
+  // Extra verb tenses, loaded on demand: { past: {lines:[...]}, future:..., imperative:... }
+  const [extraTenses, setExtraTenses] = React.useState({});
+  const [tenseLoading, setTenseLoading] = React.useState(null);
+
+  function toggleSection(key) {
+    setOpenSections(s => ({ ...s, [key]: !s[key] }));
+  }
+
+  function loadExtraTense(tense) {
+    if (extraTenses[tense] || tenseLoading) return;
+    setTenseLoading(tense);
+    fetchVerbTense(curWord[0], curWord[1], tense)
+      .then(result => { if (result) setExtraTenses(s => ({ ...s, [tense]: result })); })
+      .finally(() => setTenseLoading(null));
+  }
 
   function loadCard(w) {
     setCard(null); setLoading(true); setError(null); setNoKey(false);
+    setExtraTenses({});
     fetchWordCard(w[0], w[1], w[2], w[3])
       .then(result => {
         if (result) setCard(result);
@@ -3422,9 +3530,9 @@ function CardDetail({ word, onClose }) {
   React.useEffect(() => { loadCard(curWord); }, [curWord[0]]);
 
   function navigateTo(greekWord) {
-    // Find word in WORDS array, or create a stub
+    // Find word in WORDS array, or create a stub for AI-only lookup
     const found = WORDS.find(w => w[0] === greekWord);
-    const target = found || [greekWord, greekWord, "", ""];
+    const target = found || [greekWord, "", "", ""];
     const newHistory = [...history.slice(0, histIdx+1), target];
     setHistory(newHistory);
     setHistIdx(newHistory.length - 1);
@@ -3446,8 +3554,8 @@ function CardDetail({ word, onClose }) {
               <button onClick={goBack} style={{ background:"none", border:"none", color:"#7F77DD", fontSize:13, cursor:"pointer", padding:"0 0 4px 0", fontFamily:"inherit" }}>← Back</button>
             )}
             <div style={{ fontSize:22, fontWeight:700, color:"#26215C" }}>{curWord[0]}</div>
-            <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{curWord[1]}</div>
-            <div style={{ fontSize:13, color:"#534AB7" }}>{curWord[2]}</div>
+            <div style={{ fontSize:13, color:"#7F77DD", fontStyle:"italic" }}>{curWord[1] || (card && card.headTr) || ""}</div>
+            <div style={{ fontSize:13, color:"#534AB7" }}>{curWord[2] || (card && card.headEn) || ""}</div>
           </div>
           <div style={{ display:"flex", gap:6, flexShrink:0 }}>
             <button onClick={()=>setShowKeyModal(true)} style={{ background:"white", border:"0.5px solid #AFA9EC", borderRadius:8, padding:"4px 10px", fontSize:14, cursor:"pointer", color:"#534AB7", fontFamily:"inherit" }} title="Set API Key">🔑</button>
@@ -3491,15 +3599,106 @@ function CardDetail({ word, onClose }) {
             </div>
           ) : card ? (
             <>
-              {/* Part of speech */}
-              <div style={{ marginBottom:"1rem" }}>
+              {/* Part of speech — always visible, not collapsible */}
+              <div style={{ marginBottom:"0.7rem" }}>
                 <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Part of speech</div>
                 <div style={{ fontSize:13, color:"#333", background:"#f8f8f8", borderRadius:8, padding:"8px 12px" }}>{(card.p || card.pos)}</div>
               </div>
 
+              {/* Forms / conjugation */}
+              {(card.forms || card.f) && (
+                <CardSection title="Forms" badge="grammar" isOpen={openSections.forms} onToggle={()=>toggleSection("forms")}>
+                  <div style={{ fontSize:13, color:"#333", lineHeight:1.7, whiteSpace:"pre-line" }}>
+                    <GreekText text={card.forms || card.f} onWordClick={navigateTo} />
+                  </div>
+                  {/^verb/i.test(card.p || card.pos || "") && (
+                    <div style={{ marginTop:10, display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {Object.keys(TENSE_LABELS).map(t => (
+                        extraTenses[t] ? null : (
+                          <span key={t} onClick={()=>loadExtraTense(t)}
+                            style={{ fontSize:11, background:"#f0f0f0", borderRadius:6, padding:"4px 9px", color:"#534AB7", cursor: tenseLoading===t?"default":"pointer", opacity: tenseLoading===t?0.5:1 }}>
+                            {tenseLoading===t ? "Loading…" : "+ " + TENSE_LABELS[t]}
+                          </span>
+                        )
+                      ))}
+                    </div>
+                  )}
+                  {Object.keys(extraTenses).map(t => (
+                    <div key={t} style={{ marginTop:10 }}>
+                      <div style={{ fontSize:11, fontWeight:600, color:"#888", marginBottom:4 }}>{TENSE_LABELS[t]}</div>
+                      <div style={{ fontSize:13, color:"#333", lineHeight:1.7 }}>
+                        {(extraTenses[t].lines || []).map((l,i) => (
+                          <div key={i}><GreekText text={l} onWordClick={navigateTo} /></div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </CardSection>
+              )}
+
+              {/* Word family */}
+              {(card.wordFamily && card.wordFamily.length > 0) && (
+                <CardSection title="Word family" isOpen={openSections.family} onToggle={()=>toggleSection("family")}>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {card.wordFamily.map((wf,i) => (
+                      <div key={i} onClick={()=>navigateTo(wf.gr)}
+                        style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, background:"#f8f8f8", borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:13 }}>
+                            <span style={{ fontWeight:600, color:"#26215C" }}>{wf.gr}</span>
+                            {wf.pos && <span style={{ color:"#999", fontSize:11, marginLeft:6 }}>{wf.pos}</span>}
+                          </div>
+                          {wf.tr && <div style={{ fontSize:11, color:"#999", fontStyle:"italic" }}>{wf.tr}</div>}
+                        </div>
+                        <div style={{ fontSize:12, color:"#666", whiteSpace:"nowrap", flexShrink:0 }}>{wf.en} ›</div>
+                      </div>
+                    ))}
+                  </div>
+                </CardSection>
+              )}
+
+              {/* Synonyms & antonyms */}
+              {((card.synonyms && card.synonyms.length>0) || (card.antonyms && card.antonyms.length>0)) && (
+                <CardSection title="Synonyms & antonyms" isOpen={openSections.synonyms} onToggle={()=>toggleSection("synonyms")}>
+                  {card.synonyms && card.synonyms.length>0 && (
+                    <>
+                      <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", color:"#999", marginBottom:5 }}>Synonyms</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
+                        {card.synonyms.map((s,i) => (
+                          <div key={i} onClick={()=>navigateTo(s.gr)}
+                            style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, background:"#EAF3DE", borderRadius:8, padding:"7px 10px", cursor:"pointer" }}>
+                            <div style={{ minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:600, color:"#27500A" }}>{s.gr}</div>
+                              {s.tr && <div style={{ fontSize:11, color:"#3B6D11", fontStyle:"italic" }}>{s.tr}</div>}
+                            </div>
+                            <div style={{ fontSize:12, color:"#3B6D11", whiteSpace:"nowrap", flexShrink:0 }}>{s.en} ›</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {card.antonyms && card.antonyms.length>0 && (
+                    <>
+                      <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", color:"#999", marginBottom:5 }}>Antonyms</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                        {card.antonyms.map((a,i) => (
+                          <div key={i} onClick={()=>navigateTo(a.gr)}
+                            style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, background:"#FCEBEB", borderRadius:8, padding:"7px 10px", cursor:"pointer" }}>
+                            <div style={{ minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:600, color:"#791F1F" }}>{a.gr}</div>
+                              {a.tr && <div style={{ fontSize:11, color:"#A32D2D", fontStyle:"italic" }}>{a.tr}</div>}
+                            </div>
+                            <div style={{ fontSize:12, color:"#A32D2D", whiteSpace:"nowrap", flexShrink:0 }}>{a.en} ›</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardSection>
+              )}
+
               {/* Examples */}
-              <div style={{ marginBottom:"1rem" }}>
-                <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Examples</div>
+              <CardSection title="Examples" badge={String((card.ex || card.examples || []).length)} isOpen={openSections.examples} onToggle={()=>toggleSection("examples")}>
                 {(card.ex || card.examples || []).map((ex,i) => (
                   <div key={i} style={{ background:"#f7f7ff", borderRadius:8, padding:"10px 12px", marginBottom:6, borderLeft:"3px solid #AFA9EC" }}>
                     <div style={{ fontSize:14, fontWeight:500, marginBottom:2 }}>
@@ -3509,21 +3708,38 @@ function CardDetail({ word, onClose }) {
                     <div style={{ fontSize:12, color:"#444" }}>{ex.en}</div>
                   </div>
                 ))}
-              </div>
+              </CardSection>
+
               {/* Notes */}
-              <div style={{ marginBottom:"1rem" }}>
-                <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", marginBottom:5 }}>Notes</div>
-                <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517", lineHeight:1.6 }}>
-                  <GreekText text={card.n || card.notes} onWordClick={navigateTo} />
-                </div>
-              </div>
-              {/* Examples - also make Greek clickable */}
+              {(card.n || card.notes) && (
+                <CardSection title="Notes" isOpen={openSections.notes} onToggle={()=>toggleSection("notes")}>
+                  <div style={{ fontSize:13, color:"#555", background:"#FFF3CD", borderRadius:8, padding:"8px 12px", borderLeft:"3px solid #BA7517", lineHeight:1.6 }}>
+                    <GreekText text={card.n || card.notes} onWordClick={navigateTo} />
+                  </div>
+                </CardSection>
+              )}
             </>
           ) : null}
         </div>
       </div>
     </div>
     </>
+  );
+}
+
+// ─── Collapsible section wrapper used inside CardDetail ─────────────
+function CardSection({ title, badge, isOpen, onToggle, children }) {
+  return (
+    <div style={{ marginBottom:8, background:"#fff", border:"0.5px solid #e5e5e5", borderRadius:10, overflow:"hidden" }}>
+      <div onClick={onToggle} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 12px", cursor:"pointer" }}>
+        <span style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#534AB7", display:"flex", alignItems:"center", gap:6 }}>
+          {title}
+          {badge && <span style={{ background:"#EEEDFE", color:"#534AB7", fontSize:10, padding:"1px 6px", borderRadius:8, textTransform:"none", letterSpacing:0, fontWeight:600 }}>{badge}</span>}
+        </span>
+        <span style={{ fontSize:12, color:"#999", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .15s" }}>▾</span>
+      </div>
+      {isOpen && <div style={{ padding:"0 12px 12px" }}>{children}</div>}
+    </div>
   );
 }
 
@@ -3909,12 +4125,16 @@ function makeTiles(answer) {
 // ─── Type (Tobo-style tile puzzle) ────────────────────────────────
 function TypeTab({ mastery, rec }) {
   const [topic, setTopic] = useState("All");
+  const [subtopic, setSubtopic] = useState("All");
   const [cnt, setCnt]     = useState("20");
   const [mode, setMode]   = useState("gr"); // "gr"=show EN→type Greek, "tr"=show EN→type Transcription
   const [phase, setPhase] = useState("setup");
   const [qs, setQs]       = useState([]);
   const [qi, setQi]       = useState(0);
   const [score, setScore] = useState(0);
+
+  // Reset subtopic when topic changes
+  React.useEffect(() => { setSubtopic("All"); }, [topic]);
 
   // tile state
   const [tiles, setTiles]     = useState([]); // {id, ch, used}
@@ -4014,6 +4234,13 @@ function TypeTab({ mastery, rec }) {
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
         <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
         {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>setTopic(t)}/>)}
+      {SUBTOPICS[topic] && (
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.6rem" }}>
+          {SUBTOPICS[topic].map(s => (
+            <Chip key={s} label={s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
+          ))}
+        </div>
+      )}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
         <MCard title="English → Greek letters" on={mode==="gr"} onClick={()=>setMode("gr")}/>
@@ -5109,7 +5336,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.24-1425</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1317</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
