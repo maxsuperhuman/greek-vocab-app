@@ -3528,27 +3528,46 @@ function CardSection({ title, badge, isOpen, onToggle, children }) {
 }
 
 // ─── Per-word stats badge — shown faintly on exercise cards ─────────
-// Sums attempts/accuracy across all modes (flash, quiz_gr_en, quiz_en_gr, tile)
-// for a single word. Returns null if the word has never been attempted.
+// Breaks down attempts/accuracy per exercise mode for a single word.
+// Returns null if the word has never been attempted in any mode.
+const MODE_LABELS = { flash:"Flash", quiz_gr_en:"Quiz", quiz_en_gr:"Quiz", tile:"Type" };
+
 function wordStats(mastery, greekWord) {
   const e = mastery && mastery[greekWord];
   if (!e) return null;
-  const totals = Object.values(e.modes).reduce((acc,m) => ({ ok: acc.ok+m.ok, fail: acc.fail+m.fail }), { ok:0, fail:0 });
-  const attempts = totals.ok + totals.fail;
-  if (attempts === 0) return null;
-  const pct = Math.round((totals.ok / attempts) * 100);
-  return { attempts, pct, ok: totals.ok, fail: totals.fail };
+  // Merge quiz_gr_en + quiz_en_gr into a single "Quiz" bucket
+  const buckets = { Flash:{ok:0,fail:0}, Quiz:{ok:0,fail:0}, Type:{ok:0,fail:0} };
+  Object.entries(e.modes).forEach(([mode, m]) => {
+    const label = MODE_LABELS[mode];
+    if (!label) return;
+    buckets[label].ok += m.ok;
+    buckets[label].fail += m.fail;
+  });
+  const perMode = Object.entries(buckets)
+    .map(([label, m]) => {
+      const attempts = m.ok + m.fail;
+      if (attempts === 0) return null;
+      return { label, attempts, pct: Math.round((m.ok/attempts)*100), ok:m.ok, fail:m.fail };
+    })
+    .filter(Boolean);
+  if (perMode.length === 0) return null;
+  const totalOk = perMode.reduce((a,m)=>a+m.ok,0), totalAtt = perMode.reduce((a,m)=>a+m.attempts,0);
+  return { perMode, totalAttempts: totalAtt, totalPct: Math.round((totalOk/totalAtt)*100) };
 }
 
 function WordStatsBadge({ mastery, greekWord, style }) {
   const stats = wordStats(mastery, greekWord);
   if (!stats) return null;
-  const color = stats.pct >= 80 ? "#1D9E75" : stats.pct >= 50 ? "#BA7517" : "#E24B4A";
+  const colorFor = pct => pct >= 80 ? "#1D9E75" : pct >= 50 ? "#BA7517" : "#E24B4A";
   return (
-    <div style={{ fontSize:11, color:"#aaa", display:"flex", alignItems:"center", gap:5, ...style }} title={`${stats.ok} correct, ${stats.fail} wrong across all exercises`}>
-      <span>{stats.attempts} {stats.attempts===1 ? "attempt" : "attempts"}</span>
-      <span style={{ color:"#ddd" }}>·</span>
-      <span style={{ color, fontWeight:500 }}>{stats.pct}%</span>
+    <div style={{ fontSize:11, color:"#aaa", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", justifyContent:"center", ...style }}
+      title={`${stats.totalAttempts} attempts total, ${stats.totalPct}% correct`}>
+      {stats.perMode.map((m,i) => (
+        <React.Fragment key={m.label}>
+          {i>0 && <span style={{ color:"#ddd" }}>·</span>}
+          <span>{m.label} <span style={{ color:colorFor(m.pct), fontWeight:500 }}>{m.pct}%</span></span>
+        </React.Fragment>
+      ))}
     </div>
   );
 }
@@ -4961,7 +4980,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1505</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.30-1530</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
