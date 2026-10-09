@@ -4549,10 +4549,31 @@ function ArticlesTab({ mastery, rec }) {
     return { byTopic, bySubtopic };
   }, [articleMap]);
 
-  const availableTopics = nounCounts ? TOPICS.filter(t => t==="All" || nounCounts.byTopic[t] > 0) : TOPICS;
-  const availableSubtopics = (nounCounts && SUBTOPICS[topic])
-    ? SUBTOPICS[topic].filter(s => s==="All" || (nounCounts.bySubtopic[topic] && nounCounts.bySubtopic[topic][s] > 0))
+  // For Gender: only topics with nouns that have articles
+  const availableTopics = mode === "gender"
+    ? (nounCounts ? TOPICS.filter(t => t==="All" || nounCounts.byTopic[t] > 0) : TOPICS)
+    : TOPICS;
+  const availableSubtopics = mode === "gender"
+    ? ((nounCounts && SUBTOPICS[topic])
+        ? SUBTOPICS[topic].filter(s => s==="All" || (nounCounts.bySubtopic[topic] && nounCounts.bySubtopic[topic][s] > 0))
+        : SUBTOPICS[topic])
     : SUBTOPICS[topic];
+
+  // Word counts for current mode — nouns for Gender, all words for Cases/Tenses
+  const allWordCounts = React.useMemo(() => {
+    const byTopic = {};
+    const bySubtopic = {};
+    WORDS.forEach(w => {
+      byTopic[w[3]] = (byTopic[w[3]] || 0) + 1;
+      if (w[4]) {
+        if (!bySubtopic[w[3]]) bySubtopic[w[3]] = {};
+        bySubtopic[w[3]][w[4]] = (bySubtopic[w[3]][w[4]] || 0) + 1;
+      }
+    });
+    return { byTopic, bySubtopic };
+  }, []);
+
+  const wordCounts = mode === "gender" ? nounCounts : allWordCounts;
 
   function startGender() {
     const pool = shuf(filterWords(WORDS, topic, subtopic).filter(w => articleMap && ARTICLES.includes(articleMap[w[0]])));
@@ -4715,13 +4736,13 @@ function ArticlesTab({ mastery, rec }) {
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"0.6rem" }}>
         <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
         {availableTopics.map(t=>(
-          <Chip key={t} label={nounCounts && t!=="All" ? `${t} (${nounCounts.byTopic[t]})` : t} on={topic===t} onClick={()=>setTopic(t)}/>
+          <Chip key={t} label={wordCounts && t!=="All" ? `${t} (${wordCounts.byTopic[t] || 0})` : t} on={topic===t} onClick={()=>setTopic(t)}/>
         ))}
       </div>
       {availableSubtopics && (
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.8rem" }}>
           {availableSubtopics.map(s => (
-            <Chip key={s} label={nounCounts && s!=="All" && nounCounts.bySubtopic[topic] ? `${s} (${nounCounts.bySubtopic[topic][s]})` : s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
+            <Chip key={s} label={wordCounts && s!=="All" && wordCounts.bySubtopic[topic] ? `${s} (${wordCounts.bySubtopic[topic][s] || 0})` : s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
           ))}
         </div>
       )}
@@ -5940,7 +5961,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.41-1015</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.42-0010</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
