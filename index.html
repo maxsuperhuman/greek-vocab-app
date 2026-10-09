@@ -4421,6 +4421,8 @@ function ArticlesTab({ mastery, rec }) {
   const [casesLoading, setCasesLoading] = useState(false);
   const [blankIdx, setBlankIdx] = useState(0); // which blank within cur sentence
   const [filledBlanks, setFilledBlanks] = useState([]); // answers filled so far in cur sentence
+  const [pendingAdvance, setPendingAdvance] = useState(false); // waiting for user to press Next
+  const [explanation, setExplanation] = useState(null); // null | "loading" | string
   // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
   const [articleMap, setArticleMap] = useState(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -4541,28 +4543,63 @@ function ArticlesTab({ mastery, rec }) {
       setLocked(true); setChosen(answer);
       if (ok) setScore(s=>s+1);
       const newFilled = [...filledBlanks, { answer, ok }];
-      setTimeout(() => {
-        const nextBlank = blankIdx + 1;
-        if (nextBlank < q.blanks.length) {
-          // more blanks in this sentence
+      setFilledBlanks(newFilled);
+      const nextBlank = blankIdx + 1;
+      if (nextBlank < q.blanks.length) {
+        // more blanks in this sentence — short pause then auto-advance to next blank
+        setTimeout(() => {
           setBlankIdx(nextBlank);
-          setFilledBlanks(newFilled);
           setLocked(false); setChosen(null);
-        } else {
-          // sentence done — next question
-          const nextQ = qi + 1;
-          if (nextQ >= qs.length) { setPhase("result"); return; }
-          setQi(nextQ); setBlankIdx(0); setFilledBlanks([]);
-          setLocked(false); setChosen(null);
-        }
-      }, ok ? 600 : 1300);
+        }, ok ? 600 : 1300);
+      } else {
+        // sentence done — wait for user to press Next
+        setPendingAdvance(true);
+      }
     }
+  }
+
+  function advanceNext() {
+    const nextQ = qi + 1;
+    setExplanation(null);
+    if (nextQ >= qs.length) { setPhase("result"); return; }
+    setQi(nextQ); setBlankIdx(0); setFilledBlanks([]);
+    setLocked(false); setChosen(null); setPendingAdvance(false);
+  }
+
+  async function fetchExplanation() {
+    const q = qs[qi];
+    if (!q) return;
+    setExplanation("loading");
+    const apiKey = await getApiKey();
+    if (!apiKey) { setExplanation("No API key set."); return; }
+    const blanksDesc = q.blanks.map((b,i) => `Blank ${i+1}: answer="${b.answer}"`).join(", ");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body: JSON.stringify({
+          model:"claude-haiku-4-5", max_tokens:400,
+          messages:[{ role:"user", content:
+`Explain in simple Russian (2-4 sentences) why these articles are correct in this Greek sentence:
+
+Sentence: "${q.gr}"
+English: "${q.en}"
+${blanksDesc}
+
+Focus on the grammatical rule (case, gender, number). Keep it short and practical.` }]
+        })
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setExplanation(d.content[0].text);
+      } else { setExplanation("Ошибка запроса."); }
+    } catch(e) { setExplanation("Ошибка: " + e.message); }
   }
 
   if (phase === "prescan" || (phase === "setup" && !articleMap && !needsKey)) return (
     <div style={{ textAlign:"center", padding:"2.5rem 1rem" }}>
       <div style={{ fontSize:28, marginBottom:10 }}>📖</div>
-      <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:4 }}>Setting up Articles</div>
+      <div style={{ fontSize:14, fontWeight:500, color:"#333", marginBottom:4 }}>Setting up Grammar</div>
       <div style={{ fontSize:13, color:"#888", marginBottom:12 }}>Scanning all {WORDS.length} words for nouns and their articles — this only happens once.</div>
       <div style={{ maxWidth:280, margin:"0 auto", height:6, background:"#eee", borderRadius:3, overflow:"hidden" }}>
         <div style={{ width:`${scanTotal ? Math.round(scanProgress/scanTotal*100) : 0}%`, height:"100%", background:"#534AB7", transition:"width .2s" }}/>
@@ -4764,19 +4801,44 @@ function ArticlesTab({ mastery, rec }) {
       </div>
 
       {/* Options */}
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(${(curBlank.options||[]).length}, 1fr)`, gap:8 }}>
-        {(curBlank.options||[]).map(a => {
-          const isC = a===casesCorrect, isP = a===chosen;
-          let bg="transparent", border="0.5px solid #ccc", color="#333";
-          if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
-          return (
-            <button key={a} disabled={locked} onClick={()=>pick(a)}
-              style={{ padding:"18px 8px", border, borderRadius:10, background:bg, color, fontSize:22, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
-              {a}
+      {!pendingAdvance && (
+        <div style={{ display:"grid", gridTemplateColumns:`repeat(${(curBlank.options||[]).length}, 1fr)`, gap:8 }}>
+          {(curBlank.options||[]).map(a => {
+            const isC = a===casesCorrect, isP = a===chosen;
+            let bg="transparent", border="0.5px solid #ccc", color="#333";
+            if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
+            return (
+              <button key={a} disabled={locked} onClick={()=>pick(a)}
+                style={{ padding:"18px 8px", border, borderRadius:10, background:bg, color, fontSize:22, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
+                {a}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* After sentence complete: Next button + ? explanation */}
+      {pendingAdvance && (
+        <div>
+          {explanation && (
+            <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12, lineHeight:1.6 }}>
+              {explanation === "loading"
+                ? <span style={{ color:"#888" }}>⏳ Спрашиваю Клода…</span>
+                : explanation}
+            </div>
+          )}
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={fetchExplanation} disabled={explanation === "loading"}
+              style={{ padding:"12px 16px", borderRadius:10, border:"0.5px solid #AFA9EC", background:"#EEEDFE", color:"#3C3489", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              ?
             </button>
-          );
-        })}
-      </div>
+            <button onClick={advanceNext}
+              style={{ flex:1, padding:"12px 24px", borderRadius:10, border:"none", background:"#534AB7", color:"white", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              Далее →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5556,7 +5618,7 @@ function App() {
     { id:"flash",     label:"Flashcards" },
     { id:"quiz",      label:"Quiz" },
     { id:"type",      label:"Type" },
-    { id:"articles",  label:"Articles" },
+    { id:"articles",  label:"Grammar" },
     { id:"sentences", label:"Sentences" },
     { id:"fallee",    label:"Fallee" },
   ];
@@ -5573,7 +5635,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.35-2210</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.36-2230</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
