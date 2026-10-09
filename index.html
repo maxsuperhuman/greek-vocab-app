@@ -4968,6 +4968,102 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
       {/* After sentence complete: Next button + ? explanation */}
       {pendingAdvance && (
         <div>
+          {/* Article cheat-sheet for Cases mode */}
+          {mode === "cases" && (() => {
+            const q = qs[qi];
+            if (!q) return null;
+            // Detect which cases/genders appear in this sentence's blanks
+            // We'll highlight rows that match the answers in this sentence
+            const answers = (q.blanks||[]).map(b=>b.answer);
+            // Greek article declension table
+            const CASE_TABLE = [
+              { case:"Ном.", m:"ο", f:"η",  n:"το",  mp:"οι", fp:"οι", np:"τα" },
+              { case:"Род.", m:"του",f:"της",n:"του", mp:"των",fp:"των",np:"των"},
+              { case:"Вин.", m:"τον",f:"την",n:"το",  mp:"τους",fp:"τις",np:"τα"},
+            ];
+            const highlight = (val) => answers.includes(val);
+            const cols = ["case","m","f","n","mp","fp","np"];
+            const heads = ["","ο (м)","η (ж)","το (ср)","οι (мн.м)","οι (мн.ж)","τα (мн.ср)"];
+            return (
+              <div style={{ marginBottom:12, overflowX:"auto" }}>
+                <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Таблица артиклей</div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead>
+                    <tr>{heads.map((h,i)=><th key={i} style={{ padding:"4px 6px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee", whiteSpace:"nowrap" }}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {CASE_TABLE.map((row,ri)=>(
+                      <tr key={ri} style={{ background: ri%2===0?"#fafafa":"white" }}>
+                        {cols.map((col,ci)=>{
+                          const val = row[col];
+                          const isHit = ci>0 && highlight(val);
+                          return <td key={ci} style={{
+                            padding:"5px 6px", textAlign:"center",
+                            fontWeight: isHit ? 700 : ci===0 ? 500 : 400,
+                            color: isHit ? "#3C3489" : ci===0 ? "#666" : "#333",
+                            background: isHit ? "#E8E6FF" : "transparent",
+                            borderRadius: isHit ? 4 : 0,
+                            fontSize: ci===0 ? 11 : 13,
+                          }}>{val}</td>;
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          {/* Tense cheat-sheet for Tenses mode */}
+          {mode === "tenses" && (() => {
+            const q = qs[qi];
+            if (!q) return null;
+            const answers = (q.blanks||[]).map(b=>b.answer);
+            // Common tense endings cheat-sheet
+            const TENSE_TABLE = [
+              { tense:"Наст.", eg1:"…ω",  eg2:"…εις", eg3:"…ει",  egp:"…ουμε", label:"Ενεστώτας" },
+              { tense:"Прош.", eg1:"…α",  eg2:"…ες",  eg3:"…ε",   egp:"…αμε",  label:"Αόριστος" },
+              { tense:"Имп.",  eg1:"…α",  eg2:"…ες",  eg3:"…ε",   egp:"…αμε",  label:"Παρατατικός" },
+              { tense:"Буд.",  eg1:"θα…ω",eg2:"θα…εις",eg3:"θα…ει",egp:"θα…ουμε",label:"Μέλλοντας" },
+            ];
+            const persons = ["1 ед.","2 ед.","3 ед.","1 мн."];
+            // Detect which tense row matches any answer (rough heuristic)
+            const rowHit = (row) => {
+              if (answers.some(a => a.startsWith("θα"))) return row.tense === "Буд.";
+              if (answers.some(a => /[αε]$/.test(a) && !/θα/.test(a))) return row.tense === "Прош." || row.tense === "Имп.";
+              return false;
+            };
+            return (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Шпаргалка по временам</div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding:"4px 6px", textAlign:"left", color:"#999", fontWeight:500, borderBottom:"1px solid #eee" }}>Время</th>
+                      {persons.map((p,i)=><th key={i} style={{ padding:"4px 6px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee" }}>{p}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TENSE_TABLE.map((row,ri)=>{
+                      const hit = rowHit(row);
+                      const bg = ri%2===0 ? "#fafafa":"white";
+                      return (
+                        <tr key={ri} style={{ background: hit ? "#E8E6FF" : bg }}>
+                          <td style={{ padding:"5px 6px", fontSize:11, fontWeight: hit?700:500, color: hit?"#3C3489":"#666", whiteSpace:"nowrap" }}>
+                            {row.tense}<br/><span style={{ fontSize:10, color:"#aaa", fontWeight:400 }}>{row.label}</span>
+                          </td>
+                          {[row.eg1,row.eg2,row.eg3,row.egp].map((e,i)=>(
+                            <td key={i} style={{ padding:"5px 6px", textAlign:"center", color: hit?"#3C3489":"#555", fontWeight: hit?600:400, fontSize:12 }}>{e}</td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
           {explanation && (
             <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12 }}>
               {explanation === "loading"
@@ -5992,7 +6088,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.44-0010</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.45</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
