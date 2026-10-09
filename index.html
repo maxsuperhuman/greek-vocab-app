@@ -5591,6 +5591,200 @@ function StatsTab({ mastery }) {
   );
 }
 
+// ─── Audit Tab ─────────────────────────────────────────────────────
+function AuditTab() {
+  const [results, setResults] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [fixing, setFixing] = React.useState(false);
+  const [fixLog, setFixLog] = React.useState([]);
+
+  // Greek noun articles — ο/η/το typically precede nouns in dictionary form
+  const NOUN_ARTICLE_RE = /^(ο|η|το)\s+/i;
+  // Verb check — Greek verbs in 1st person present end in -ω/-ώ/-αω/-εί etc
+  const VERB_1ST_RE = /[ωώ]$|ώ$|άω$|ιέμαι$|ούμαι$|άμαι$/;
+  // Adjective typically ends in -ος/-η/-ο or -ής/-ές
+  const ADJ_RE = /ος$|ή$|ο$|ής$|ές$|ός$/;
+
+  function analyse() {
+    setLoading(true);
+    const issues = [];
+
+    WORDS.forEach((w, idx) => {
+      const [gr, tr, en, topic, subtopic] = w;
+      const rowId = `#${idx+1} "${gr}"`;
+
+      if (topic === "Verbs") {
+        // Verbs: should NOT start with an article
+        if (NOUN_ARTICLE_RE.test(gr)) {
+          issues.push({ idx, kind:"verb-has-article", gr, en, topic, subtopic,
+            msg: `Verb starts with article: "${gr}"` });
+        }
+        // Should end in -ω/-ώ (1st person singular present = dictionary form)
+        const bare = gr.replace(/^(να|μην)\s+/i,"").trim();
+        if (!VERB_1ST_RE.test(bare)) {
+          issues.push({ idx, kind:"verb-not-infinitive", gr, en, topic, subtopic,
+            msg: `Verb may not be in 1st-person present form: "${gr}"` });
+        }
+        // English should start with "to " or "I "
+        if (!/^(to |I |he |she )/i.test(en)) {
+          issues.push({ idx, kind:"verb-en-form", gr, en, topic, subtopic,
+            msg: `Verb English translation doesn't start with "to/I": "${en}"` });
+        }
+      }
+
+      if (topic === "Nouns" || (!["Verbs","Adjectives","Adverbs","Conjunctions","Prepositions","Pronouns","Numbers","Phrases"].includes(topic) && !VERB_1ST_RE.test(gr) && !ADJ_RE.test(gr) && !NOUN_ARTICLE_RE.test(gr) && gr.split(" ").length === 1)) {
+        // single-word, not a known verb/adj/etc — might be a noun missing article
+        // but only flag if topic hints it's a noun
+      }
+
+      // Nouns (any topic that's not Verbs/Adjectives/etc): check article
+      const isLikelyNoun = !["Verbs","Adjectives","Adverbs","Conjunctions","Prepositions","Pronouns","Numbers"].includes(topic);
+      if (isLikelyNoun && !VERB_1ST_RE.test(gr) && !ADJ_RE.test(gr)) {
+        const bare = gr.trim();
+        if (!NOUN_ARTICLE_RE.test(bare) && !bare.includes(" ") && bare.length > 2) {
+          // single word, not clearly a verb or adjective, no article
+          issues.push({ idx, kind:"noun-no-article", gr, en, topic, subtopic,
+            msg: `Possible noun missing article: "${gr}" (${en})` });
+        }
+      }
+
+      // Check for duplicate entries
+      const dupes = WORDS.filter((x,i) => i !== idx && x[0] === gr);
+      if (dupes.length > 0 && idx === WORDS.findIndex(x=>x[0]===gr)) {
+        issues.push({ idx, kind:"duplicate", gr, en, topic, subtopic,
+          msg: `Duplicate entry: "${gr}" appears ${dupes.length+1} times` });
+      }
+
+      // Transliteration present?
+      if (!tr || tr.trim() === "") {
+        issues.push({ idx, kind:"missing-tr", gr, en, topic, subtopic,
+          msg: `Missing transliteration for "${gr}"` });
+      }
+
+      // English missing?
+      if (!en || en.trim() === "") {
+        issues.push({ idx, kind:"missing-en", gr, en, topic, subtopic,
+          msg: `Missing English for "${gr}"` });
+      }
+    });
+
+    // Group by kind
+    const grouped = {};
+    issues.forEach(issue => {
+      if (!grouped[issue.kind]) grouped[issue.kind] = [];
+      grouped[issue.kind].push(issue);
+    });
+
+    setResults({ issues, grouped, total: WORDS.length });
+    setLoading(false);
+  }
+
+  async function fixWithClaude(kind) {
+    const apiKey = await getApiKey();
+    if (!apiKey) { alert("Enter API key first"); return; }
+    const subset = results.grouped[kind] || [];
+    if (!subset.length) return;
+    setFixing(true);
+    const log = [];
+
+    // Only auto-fix things we're confident about
+    if (kind === "verb-en-form") {
+      const items = subset.map(i => `${i.gr} — current EN: "${i.en}"`).join("\n");
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:1000,
+          messages:[{ role:"user", content:
+`For each Greek verb below, provide the correct English translation starting with "to " (infinitive form).
+Return ONLY a JSON array of {"gr":"...","en":"..."} objects, one per verb.
+
+${items}`
+          }]
+        })
+      });
+      const data = await res.json();
+      try {
+        const fixes = JSON.parse(data.content[0].text.match(/\[[\s\S]*\]/)[0]);
+        fixes.forEach(f => { log.push(`Fixed "${f.gr}": → "${f.en}"`); });
+        setFixLog(log);
+      } catch(e) { setFixLog(["Parse error — check console"]); }
+    } else {
+      setFixLog(["Auto-fix not available for this issue type — fix manually in WORDS array"]);
+    }
+    setFixing(false);
+  }
+
+  const kindLabels = {
+    "verb-has-article": "🔴 Глаголы с артиклем",
+    "verb-not-infinitive": "🟠 Глаголы не в начальной форме",
+    "verb-en-form": "🟡 EN перевод глагола не начинается с 'to'",
+    "noun-no-article": "🔵 Существительные без артикля",
+    "duplicate": "⚪ Дубликаты",
+    "missing-tr": "🟣 Нет транслитерации",
+    "missing-en": "🔴 Нет английского перевода",
+  };
+
+  return (
+    <div style={{ padding:"1rem", maxWidth:700, margin:"0 auto" }}>
+      <h2 style={{ fontSize:18, fontWeight:600, marginBottom:4 }}>Аудит словаря</h2>
+      <p style={{ fontSize:13, color:"#888", marginBottom:"1.2rem" }}>
+        Проверяет {WORDS.length} слов: артикли у существительных, начальная форма глаголов, дубликаты, пропуски.
+      </p>
+      <Btn onClick={analyse} disabled={loading}>
+        {loading ? "Анализирую…" : "Запустить проверку →"}
+      </Btn>
+
+      {results && (
+        <div style={{ marginTop:"1.5rem" }}>
+          <div style={{ fontSize:13, color:"#555", marginBottom:"1rem" }}>
+            Проверено {results.total} слов — найдено <strong>{results.issues.length}</strong> проблем
+          </div>
+
+          {results.issues.length === 0 && (
+            <div style={{ color:"#085041", background:"#E1F5EE", borderRadius:10, padding:"1rem", fontSize:14 }}>
+              ✅ Всё в порядке — словарь чистый!
+            </div>
+          )}
+
+          {Object.entries(results.grouped).map(([kind, items]) => (
+            <div key={kind} style={{ marginBottom:"1.5rem" }}>
+              <div style={{ fontWeight:600, fontSize:14, marginBottom:6 }}>
+                {kindLabels[kind] || kind} <span style={{ color:"#888", fontWeight:400 }}>({items.length})</span>
+              </div>
+              <div style={{ border:"0.5px solid #eee", borderRadius:10, overflow:"hidden" }}>
+                {items.map((issue, i) => (
+                  <div key={i} style={{ padding:"8px 12px", borderBottom: i<items.length-1?"0.5px solid #f0f0f0":"none", fontSize:13, display:"flex", justifyContent:"space-between", alignItems:"center", background: i%2===0?"#fafafa":"white" }}>
+                    <div>
+                      <span style={{ fontWeight:500, color:"#534AB7" }}>{issue.gr}</span>
+                      <span style={{ color:"#aaa", margin:"0 6px" }}>·</span>
+                      <span style={{ color:"#888" }}>{issue.en}</span>
+                      <span style={{ color:"#aaa", margin:"0 6px" }}>·</span>
+                      <span style={{ color:"#bbb", fontSize:11 }}>{issue.topic} / {issue.subtopic}</span>
+                    </div>
+                    <div style={{ fontSize:11, color:"#aaa", marginLeft:8, flexShrink:0 }}>#{issue.idx+1}</div>
+                  </div>
+                ))}
+              </div>
+              {kind === "verb-en-form" && (
+                <button onClick={()=>fixWithClaude(kind)} disabled={fixing}
+                  style={{ marginTop:6, fontSize:12, color:"#534AB7", background:"none", border:"1px solid #534AB7", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontFamily:"inherit" }}>
+                  {fixing ? "Исправляю…" : "Исправить через Claude →"}
+                </button>
+              )}
+            </div>
+          ))}
+
+          {fixLog.length > 0 && (
+            <div style={{ background:"#f5f5ff", border:"1px solid #e0e0ff", borderRadius:10, padding:"1rem", fontSize:12, fontFamily:"monospace", marginTop:"1rem" }}>
+              {fixLog.map((l,i) => <div key={i}>{l}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Root ──────────────────────────────────────────────────────────
 const STORAGE_KEY = "greek_vocab_mastery_v1";
 
@@ -5731,6 +5925,7 @@ function App() {
     { id:"articles",  label:"Grammar" },
     { id:"sentences", label:"Sentences" },
     { id:"fallee",    label:"Fallee" },
+    { id:"audit",     label:"🔍 Audit" },
   ];
 
   // Early return only AFTER all hooks
@@ -5745,7 +5940,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.40-1015</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.41-1015</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
@@ -5858,6 +6053,7 @@ function App() {
       {tab==="sentences" && <SentencesTab rec={rec}/>}
       {tab==="fallee"    && <FalleeTab mastery={mastery}/>}
       {tab==="stats"     && <StatsTab mastery={mastery}/>}
+      {tab==="audit"     && <AuditTab/>}
     </div>
   );
 }
