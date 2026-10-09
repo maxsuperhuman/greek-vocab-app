@@ -4488,6 +4488,7 @@ function ArticlesTab({ mastery, rec }) {
   const [filledBlanks, setFilledBlanks] = useState([]); // answers filled so far in cur sentence
   const [pendingAdvance, setPendingAdvance] = useState(false); // waiting for user to press Next
   const [explanation, setExplanation] = useState(null); // null | "loading" | string
+  const [caseTab, setCaseTab] = useState(0); // active blank tab in Cases cheat-sheet
   // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
   const [articleMap, setArticleMap] = useState(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -4664,7 +4665,7 @@ function ArticlesTab({ mastery, rec }) {
     setExplanation(null);
     if (nextQ >= qs.length) { setPhase("result"); return; }
     setQi(nextQ); setBlankIdx(0); setFilledBlanks([]);
-    setLocked(false); setChosen(null); setPendingAdvance(false);
+    setLocked(false); setChosen(null); setPendingAdvance(false); setCaseTab(0);
   }
 
   async function fetchExplanation() {
@@ -5028,69 +5029,93 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
       {/* After sentence complete: Next button + ? explanation */}
       {pendingAdvance && (
         <div>
-          {/* Article cheat-sheet for Cases mode */}
+          {/* Per-blank tabbed cheat-sheet for Cases mode */}
           {mode === "cases" && (() => {
             const q = qs[qi];
             if (!q) return null;
-            // Detect which cases/genders appear in this sentence's blanks
-            // We'll highlight rows that match the answers in this sentence
-            const answers = (q.blanks||[]).map(b=>b.answer);
-            // Greek article declension table
+            const blanks = q.blanks || [];
+            if (!blanks.length) return null;
             const CASE_TABLE = [
-              { case:"Ном.", m:"ο", f:"η",  n:"το",  mp:"οι", fp:"οι", np:"τα" },
-              { case:"Род.", m:"του",f:"της",n:"του", mp:"των",fp:"των",np:"των"},
-              { case:"Вин.", m:"τον",f:"την",n:"το",  mp:"τους",fp:"τις",np:"τα"},
+              { caseRu:"Ном.", m:"ο",   f:"η",   n:"το",  mp:"οι",  fp:"οι",  np:"τα"  },
+              { caseRu:"Род.", m:"του", f:"της", n:"του", mp:"των", fp:"των", np:"των" },
+              { caseRu:"Вин.", m:"τον", f:"την", n:"το",  mp:"τους",fp:"τις", np:"τα"  },
             ];
-            const highlight = (val) => answers.includes(val);
-            const cols = ["case","m","f","n","mp","fp","np"];
+            const cols = ["caseRu","m","f","n","mp","fp","np"];
             const heads = ["","ο (м)","η (ж)","το (ср)","οι (мн.м)","οι (мн.ж)","τα (мн.ср)"];
+            const activeTab = Math.min(caseTab, blanks.length - 1);
+            const curBlankAns = blanks[activeTab]?.answer;
+            const curFilled = filledBlanks[activeTab];
+            const isOk = curFilled ? curFilled.ok : true;
+            // morphology entries relevant to this blank (same answer article or nearby noun)
+            // we show ALL morphology but highlight those linked to this blank's answer
+            const morphItems = (q.morphology || []);
             return (
-              <div style={{ marginBottom:12, overflowX:"auto" }}>
-                <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Таблица артиклей</div>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                  <thead>
-                    <tr>{heads.map((h,i)=><th key={i} style={{ padding:"4px 6px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee", whiteSpace:"nowrap" }}>{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {CASE_TABLE.map((row,ri)=>(
-                      <tr key={ri} style={{ background: ri%2===0?"#fafafa":"white" }}>
-                        {cols.map((col,ci)=>{
-                          const val = row[col];
-                          const isHit = ci>0 && highlight(val);
-                          return <td key={ci} style={{
-                            padding:"5px 6px", textAlign:"center",
-                            fontWeight: isHit ? 700 : ci===0 ? 500 : 400,
-                            color: isHit ? "#3C3489" : ci===0 ? "#666" : "#333",
-                            background: isHit ? "#E8E6FF" : "transparent",
-                            borderRadius: isHit ? 4 : 0,
-                            fontSize: ci===0 ? 11 : 13,
-                          }}>{val}</td>;
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
-
-          {/* Morphology transformation block for Cases mode */}
-          {mode === "cases" && qs[qi] && (qs[qi].morphology||[]).length > 0 && (() => {
-            const morphItems = qs[qi].morphology || [];
-            return (
-              <div style={{ marginBottom:12, background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:8, padding:"8px 12px" }}>
-                <div style={{ fontSize:11, color:"#888", marginBottom:6, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Изменения в падеже</div>
-                {morphItems.map((m, i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:13, borderBottom: i < morphItems.length-1 ? "0.5px solid #EDEAFF" : "none" }}>
-                    <span style={{ color:"#888", minWidth:28, fontSize:11 }}>{m.case}</span>
-                    <span style={{ color:"#555" }}>{m.base}</span>
-                    <span style={{ color:"#bbb", fontSize:11 }}>→</span>
-                    <span>
-                      <span style={{ color:"#444" }}>{m.stem}</span><span style={{ color:"#534AB7", fontWeight:700, borderBottom:"2px solid #534AB7" }}>{m.ending}</span>
-                    </span>
-                    <span style={{ color:"#aaa", fontSize:11, marginLeft:"auto" }}>{m.gender}р.</span>
+              <div style={{ marginBottom:12 }}>
+                {/* Tabs — one per blank */}
+                {blanks.length > 1 && (
+                  <div style={{ display:"flex", gap:4, marginBottom:8 }}>
+                    {blanks.map((b, i) => {
+                      const fb = filledBlanks[i];
+                      const ok = fb ? fb.ok : true;
+                      const active = i === activeTab;
+                      return (
+                        <button key={i} onClick={()=>setCaseTab(i)} style={{
+                          flex:1, padding:"6px 4px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit",
+                          fontSize:13, fontWeight: active ? 700 : 400,
+                          background: active ? "#534AB7" : "#F0EFFD",
+                          color: active ? "white" : "#534AB7",
+                          transition:"all .15s"
+                        }}>
+                          {fb ? (ok ? "✓ " : "✗ ") : ""}{b.answer}
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
+                )}
+                {/* Article table — highlight only this blank's answer */}
+                <div style={{ overflowX:"auto", marginBottom:8 }}>
+                  <div style={{ fontSize:11, color:"#888", marginBottom:4, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Артикли</div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                    <thead>
+                      <tr>{heads.map((h,i)=><th key={i} style={{ padding:"4px 5px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee", whiteSpace:"nowrap", fontSize:11 }}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {CASE_TABLE.map((row,ri)=>(
+                        <tr key={ri} style={{ background: ri%2===0?"#fafafa":"white" }}>
+                          {cols.map((col,ci)=>{
+                            const val = row[col];
+                            const isHit = ci>0 && val===curBlankAns;
+                            return <td key={ci} style={{
+                              padding:"5px 5px", textAlign:"center",
+                              fontWeight: isHit ? 700 : ci===0 ? 500 : 400,
+                              color: isHit ? "#3C3489" : ci===0 ? "#666" : "#333",
+                              background: isHit ? "#E8E6FF" : "transparent",
+                              borderRadius: isHit ? 4 : 0,
+                              fontSize: ci===0 ? 11 : 13,
+                            }}>{val}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Morphology for this tab — show all, but only if any exist */}
+                {morphItems.length > 0 && (
+                  <div style={{ background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:8, padding:"7px 10px" }}>
+                    <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Изменения слов</div>
+                    {morphItems.map((m, i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:13, borderBottom: i < morphItems.length-1 ? "0.5px solid #EDEAFF" : "none" }}>
+                        <span style={{ color:"#888", minWidth:28, fontSize:11 }}>{m.case}</span>
+                        <span style={{ color:"#666" }}>{m.base}</span>
+                        <span style={{ color:"#ccc", fontSize:11 }}>→</span>
+                        <span>
+                          <span style={{ color:"#333" }}>{m.stem}</span><span style={{ color:"#534AB7", fontWeight:700, borderBottom:"2px solid #534AB7" }}>{m.ending}</span>
+                        </span>
+                        <span style={{ color:"#bbb", fontSize:11, marginLeft:"auto" }}>{m.gender}р.</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -6169,7 +6194,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.46</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.47</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
