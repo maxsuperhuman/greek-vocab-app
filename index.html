@@ -4431,7 +4431,6 @@ function ArticlesTab({ mastery, rec }) {
   React.useEffect(() => {
     let cancelled = false;
     async function run() {
-      const alreadyDone = await getArticleFromCache(ARTICLE_PRESCAN_DONE_KEY);
       const map = {};
       const toFetch = [];
       for (const w of WORDS) {
@@ -4443,6 +4442,14 @@ function ArticlesTab({ mastery, rec }) {
 
       if (toFetch.length === 0) {
         setArticleMap(map);
+        return;
+      }
+
+      // Need API key to scan — if missing, show setup without articleMap (will show key prompt)
+      const apiKey = await getApiKey();
+      if (!apiKey) {
+        setArticleMap(null);
+        setPhase("setup");
         return;
       }
 
@@ -4563,8 +4570,15 @@ function ArticlesTab({ mastery, rec }) {
 
   if (phase === "setup") return (
     <div>
+      {/* API key required banner */}
+      {!articleMap && (
+        <div style={{ background:"#FFF3CD", border:"0.5px solid #BA7517", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#7A4F00", marginBottom:"1rem", textAlign:"center" }}>
+          <div style={{ fontWeight:600, marginBottom:4 }}>🔑 API key required</div>
+          <div>Go to <strong>Dictionary → ⚙️ Settings</strong> and enter your Anthropic API key to enable article scanning.</div>
+        </div>
+      )}
       {/* Mode picker */}
-      <div style={{ display:"flex", gap:10, marginBottom:"1.2rem" }}>
+      <div style={{ display:"flex", gap:10, marginBottom:"1.2rem", opacity: articleMap ? 1 : 0.4, pointerEvents: articleMap ? "auto" : "none" }}>
         {[
           { id:"gender", emoji:"🏷️", title:"Gender", desc:"See a noun — pick ο / η / το" },
           { id:"cases",  emoji:"📐", title:"Cases",  desc:"Fill in the article in a sentence (nom / gen / acc)" },
@@ -5552,7 +5566,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.35-2145</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.35-2155</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
