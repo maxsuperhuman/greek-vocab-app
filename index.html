@@ -4604,7 +4604,8 @@ function ArticlesTab({ mastery, rec }) {
       const ok = answer === correct;
       setLocked(true); setChosen(answer);
       if (ok) setScore(s=>s+1);
-      const newFilled = [...filledBlanks, { answer, ok }];
+      // store correct answer + user's wrong pick (if any) for strikethrough display
+      const newFilled = [...filledBlanks, { answer: correct, wrong: ok ? null : answer, ok }];
       setFilledBlanks(newFilled);
       const nextBlank = blankIdx + 1;
       if (nextBlank < q.blanks.length) {
@@ -4829,10 +4830,20 @@ function ArticlesTab({ mastery, rec }) {
         spanStyle.color = "#bbb";
         spanStyle.borderBottom = "1.5px dashed #ccc";
       }
-      const displayText = isFilled ? (fillInfo ? fillInfo.answer : "?")
-        : isCurrent ? (locked ? casesCorrect : (chosen || "___"))
-        : "___";
-      sentenceNodes.push(<span key={`b${i}`} style={spanStyle}>{displayText}</span>);
+      if (isFilled && fillInfo && !fillInfo.ok) {
+        // Wrong answer: show stacked — strikethrough wrong on bottom, correct on top
+        sentenceNodes.push(
+          <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
+            <span style={{ fontSize:14, fontWeight:700, color:"#085041", background:"#E1F5EE", borderRadius:4, padding:"0 5px", lineHeight:1.5 }}>{fillInfo.answer}</span>
+            <span style={{ fontSize:16, fontWeight:700, color:"#E24B4A", background:"#FCEBEB", borderRadius:4, padding:"0 5px", lineHeight:1.5, textDecoration:"line-through" }}>{fillInfo.wrong}</span>
+          </span>
+        );
+      } else {
+        const displayText = isFilled ? (fillInfo ? fillInfo.answer : "?")
+          : isCurrent ? (locked ? casesCorrect : (chosen || "___"))
+          : "___";
+        sentenceNodes.push(<span key={`b${i}`} style={spanStyle}>{displayText}</span>);
+      }
     }
   });
 
@@ -4852,11 +4863,6 @@ function ArticlesTab({ mastery, rec }) {
           {sentenceNodes}
         </div>
         <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{cur.en}</div>
-        {locked && chosen !== casesCorrect && (
-          <div style={{ fontSize:13, color:"#E24B4A", marginTop:8 }}>
-            Correct: <strong>{casesCorrect}</strong>
-          </div>
-        )}
         {blanks.length > 1 && (
           <div style={{ fontSize:11, color:"#bbb", marginTop:6 }}>
             Blank {blankIdx+1} of {blanks.length}
@@ -5699,7 +5705,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.37-1015</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.38-1015</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
