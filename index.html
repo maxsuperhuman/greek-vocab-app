@@ -4389,8 +4389,20 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
   "blanks": [
     {"answer":"τον","options":["τον","την","του","τα"]},
     {"answer":"του","options":["του","της","τους","τον"]}
+  ],
+  "morphology": [
+    {"word":"αδερφό","base":"αδερφός","stem":"αδερφ","ending":"ό","case":"Вин.","gender":"м"},
+    {"word":"φίλου","base":"φίλος","stem":"φίλ","ending":"ου","case":"Род.","gender":"м"}
   ]
-}]`
+}]
+
+morphology: list ONLY nouns and adjectives that appear in declined form (NOT in nominative). For each:
+- word: the form as it appears in the sentence
+- base: nominative singular (dictionary form)
+- stem: the unchanged part
+- ending: the changed suffix (what was added/changed)
+- case: Ном./Род./Вин.
+- gender: м/ж/ср`
         }]
       })
     });
@@ -4938,7 +4950,55 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
       {/* Sentence with blanks */}
       <div style={{ border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.4rem 1rem", marginBottom:"1.2rem", background:"white", textAlign:"center" }}>
         <div style={{ fontSize:20, fontWeight:500, color:"#222", lineHeight:1.8, marginBottom:10 }}>
-          {sentenceNodes}
+          {pendingAdvance && mode === "cases" && cur.morphology
+            ? (() => {
+                // Re-render sentence text with morphology highlights on stems/endings
+                const morphMap = {};
+                (cur.morphology||[]).forEach(m => { morphMap[m.word] = m; });
+                // Split sentence text (without blanks — all filled) into tokens
+                // We need to highlight words that appear in morphMap
+                const fullText = cur.gr.replace(/___/g, (_, idx) => {
+                  const bi = (() => { let c=0; for(let i=0;i<cur.gr.length;i++) { if(cur.gr.slice(i,i+3)==='___') { if(c===idx) return c; c++; } } return 0; })();
+                  return (filledBlanks[0]||{}).answer || '___';
+                });
+                // Build tokens from sentence, replacing blanks with answers, highlighting morphology
+                const rawText = cur.gr;
+                const blankParts = rawText.split("___");
+                const nodes = [];
+                blankParts.forEach((part, pi) => {
+                  // highlight any morphology word in this part
+                  let remaining = part;
+                  while (remaining.length > 0) {
+                    let found = false;
+                    for (const [word, m] of Object.entries(morphMap)) {
+                      const idx = remaining.indexOf(word);
+                      if (idx !== -1) {
+                        if (idx > 0) nodes.push(<span key={`t${pi}-${nodes.length}`}>{remaining.slice(0, idx)}</span>);
+                        nodes.push(
+                          <span key={`m${pi}-${word}`} style={{ display:"inline" }}>
+                            <span style={{ color:"#555" }}>{m.stem}</span><span style={{ color:"#534AB7", fontWeight:700, borderBottom:"2px solid #534AB7" }}>{m.ending}</span>
+                          </span>
+                        );
+                        remaining = remaining.slice(idx + word.length);
+                        found = true;
+                        break;
+                      }
+                    }
+                    if (!found) { nodes.push(<span key={`r${pi}-${nodes.length}`}>{remaining}</span>); break; }
+                  }
+                  // Insert blank answer
+                  if (pi < blankParts.length - 1) {
+                    const fb = filledBlanks[pi];
+                    const ans = fb ? fb.answer : (cur.blanks[pi]||{}).answer || "___";
+                    const ok = fb ? fb.ok : true;
+                    nodes.push(
+                      <span key={`bl${pi}`} style={{ fontWeight:700, color: ok?"#085041":"#E24B4A", background: ok?"#E1F5EE":"#FCEBEB", borderRadius:4, padding:"0 5px" }}>{ans}</span>
+                    );
+                  }
+                });
+                return nodes;
+              })()
+            : sentenceNodes}
         </div>
         <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{cur.en}</div>
         {blanks.length > 1 && (
@@ -5010,6 +5070,27 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
                     ))}
                   </tbody>
                 </table>
+              </div>
+            );
+          })()}
+
+          {/* Morphology transformation block for Cases mode */}
+          {mode === "cases" && qs[qi] && (qs[qi].morphology||[]).length > 0 && (() => {
+            const morphItems = qs[qi].morphology || [];
+            return (
+              <div style={{ marginBottom:12, background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:8, padding:"8px 12px" }}>
+                <div style={{ fontSize:11, color:"#888", marginBottom:6, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Изменения в падеже</div>
+                {morphItems.map((m, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:13, borderBottom: i < morphItems.length-1 ? "0.5px solid #EDEAFF" : "none" }}>
+                    <span style={{ color:"#888", minWidth:28, fontSize:11 }}>{m.case}</span>
+                    <span style={{ color:"#555" }}>{m.base}</span>
+                    <span style={{ color:"#bbb", fontSize:11 }}>→</span>
+                    <span>
+                      <span style={{ color:"#444" }}>{m.stem}</span><span style={{ color:"#534AB7", fontWeight:700, borderBottom:"2px solid #534AB7" }}>{m.ending}</span>
+                    </span>
+                    <span style={{ color:"#aaa", fontSize:11, marginLeft:"auto" }}>{m.gender}р.</span>
+                  </div>
+                ))}
               </div>
             );
           })()}
@@ -6088,7 +6169,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.45</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.46</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
