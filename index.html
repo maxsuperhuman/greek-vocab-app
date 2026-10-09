@@ -4802,7 +4802,12 @@ function ArticlesTab({ mastery, rec }) {
             style={{ position:"absolute", top:10, left:12, padding:"3px 9px", borderRadius:14, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>
             📖 More
           </button>
-          <div style={{ fontSize:30, fontWeight:600, color:"#222", marginBottom:6 }}>{w[0]}</div>
+          <div style={{ fontSize:30, fontWeight:600, color:"#222", marginBottom:6 }}>
+            {locked
+              ? <span><span style={{ color: chosen===correct ? "#1D9E75" : "#E24B4A" }}>{correct}</span> {w[0].replace(/^(ο|η|το)\s+/i,"")}</span>
+              : w[0].replace(/^(ο|η|το)\s+/i,"")
+            }
+          </div>
           <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{w[2]}</div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
@@ -5961,7 +5966,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.42-0010</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.43-0010</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
