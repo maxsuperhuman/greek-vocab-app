@@ -328,9 +328,11 @@ Exactly 3 sentences:
 
 // ─── Dictionary ────────────────────────────────────────────────────
 function DictTab({ mastery }) {
-  const [q, setQ]           = useState("");
-  const [topic, setTopic]   = useState("All");
-  const [selected, setSel]  = useState(null);
+  const [q, setQ]             = useState("");
+  const [topic, setTopic]     = useState("All");
+  const [subtopic, setSubtopic] = useState("All");
+  const [selected, setSel]    = useState(null);
+
   function wStats(w) {
     const e = mastery[w[0]];
     if (!e) return { ok:0, fail:0, level:0 };
@@ -339,46 +341,66 @@ function DictTab({ mastery }) {
     return { ok, fail, level:e.level, frozen:e.frozen };
   }
 
+  // Get subtopics for current topic
+  const subtopics = useMemo(() => {
+    if (topic === "All") return [];
+    const subs = [...new Set(WORDS.filter(w=>w[3]===topic && w[4]).map(w=>w[4]))].sort();
+    return subs.length > 1 ? subs : [];
+  }, [topic]);
+
+  // Reset subtopic when topic changes
+  useEffect(() => { setSubtopic("All"); }, [topic]);
+
   const rows = useMemo(() =>
-    WORDS.filter(w => (topic==="All"||w[3]===topic) && (!q||(w[0]+w[1]+w[2]).toLowerCase().includes(q.toLowerCase()))),
-    [q, topic]
+    WORDS.filter(w =>
+      (topic==="All" || w[3]===topic) &&
+      (subtopic==="All" || w[4]===subtopic) &&
+      (!q || (w[0]+w[1]+w[2]).toLowerCase().includes(q.toLowerCase()))
+    ),
+    [q, topic, subtopic]
   );
 
-  // Per-topic stats for the progress bar
+  // Per-selection stats
   const topicStats = useMemo(() => {
-    const wordsInTopic = topic==="All" ? WORDS : WORDS.filter(w=>w[3]===topic);
-    const total = wordsInTopic.length;
-    const mastered = wordsInTopic.filter(w=>{
-      const e = mastery[w[0]]; return e && (e.level>=5||e.frozen);
-    }).length;
-    const learning = wordsInTopic.filter(w=>{
-      const e = mastery[w[0]]; return e && e.level>0 && e.level<5 && !e.frozen;
-    }).length;
+    const pool = rows;
+    const total = pool.length;
+    const mastered = pool.filter(w=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); }).length;
+    const learning = pool.filter(w=>{ const e=mastery[w[0]]; return e&&e.level>0&&e.level<5&&!e.frozen; }).length;
     const pct = total ? Math.round(mastered/total*100) : 0;
     return { total, mastered, learning, pct };
-  }, [topic, mastery]);
+  }, [rows, mastery]);
+
+  const topicChipStyle = (t) => ({
+    padding:"4px 10px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit",
+    border: topic===t ? "0.5px solid #7F77DD" : "0.5px solid #ccc",
+    background: topic===t ? "#EEEDFE" : "transparent",
+    color: topic===t ? "#3C3489" : "#888",
+    display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap",
+  });
+
+  const subChipStyle = (s) => ({
+    padding:"3px 9px", borderRadius:20, fontSize:11, cursor:"pointer", fontFamily:"inherit",
+    border: subtopic===s ? "0.5px solid #534AB7" : "0.5px solid #ddd",
+    background: subtopic===s ? "#534AB7" : "transparent",
+    color: subtopic===s ? "white" : "#666",
+    whiteSpace:"nowrap",
+  });
 
   return (
     <div style={{ position:"relative" }}>
       <CardDetail word={selected} onClose={()=>setSel(null)} />
-      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" style={{ width:"100%", padding:"7px 11px", border:"0.5px solid #ccc", borderRadius:8, fontSize:13, marginBottom:".8rem", background:"transparent", fontFamily:"inherit" }} />
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…"
+        style={{ width:"100%", padding:"7px 11px", border:"0.5px solid #ccc", borderRadius:8, fontSize:13, marginBottom:".8rem", background:"transparent", fontFamily:"inherit" }} />
 
-      {/* Topic chips with word counts */}
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
+      {/* Level 1: Topic chips */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom: subtopics.length ? "6px" : "1rem" }}>
         <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {TOPICS.map(t => {
+        {["All", ...new Set(WORDS.map(w=>w[3]))].map(t => {
           const cnt = t==="All" ? WORDS.length : WORDS.filter(w=>w[3]===t).length;
-          const mst = t==="All"
-            ? WORDS.filter(w=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); }).length
-            : WORDS.filter(w=>w[3]===t&&(()=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); })()).length;
+          const mst = (t==="All" ? WORDS : WORDS.filter(w=>w[3]===t))
+            .filter(w=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); }).length;
           return (
-            <button key={t} onClick={()=>setTopic(t)} style={{
-              padding:"4px 10px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit",
-              border: topic===t ? "0.5px solid #7F77DD" : "0.5px solid #ccc",
-              background: topic===t ? "#EEEDFE" : "transparent",
-              color: topic===t ? "#3C3489" : "#888",
-              display:"flex", alignItems:"center", gap:5,
-            }}>
+            <button key={t} onClick={()=>setTopic(t)} style={topicChipStyle(t)}>
               <span>{t}</span>
               <span style={{ fontSize:10, opacity:0.7 }}>{mst}/{cnt}</span>
             </button>
@@ -386,11 +408,26 @@ function DictTab({ mastery }) {
         })}
       </div>
 
-      {/* Topic progress bar */}
+      {/* Level 2: Subtopic chips — shown only when topic selected and has subtopics */}
+      {subtopics.length > 0 && (
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem", paddingLeft:8, borderLeft:"2px solid #EEEDFE" }}>
+          <button onClick={()=>setSubtopic("All")} style={subChipStyle("All")}>All</button>
+          {subtopics.map(s => {
+            const cnt = WORDS.filter(w=>w[3]===topic && w[4]===s).length;
+            return (
+              <button key={s} onClick={()=>setSubtopic(s)} style={subChipStyle(s)}>
+                {s} <span style={{ opacity:0.7 }}>{cnt}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Progress bar */}
       <div style={{ background:"#f8f8f8", borderRadius:10, padding:"10px 14px", marginBottom:"1rem", border:"0.5px solid #eee" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
           <span style={{ fontSize:12, fontWeight:500, color:"#333" }}>
-            {topic==="All" ? "All topics" : topic}
+            {topic==="All" ? "All topics" : subtopic!=="All" ? `${topic} › ${subtopic}` : topic}
           </span>
           <div style={{ display:"flex", gap:12, fontSize:11, color:"#888" }}>
             <span>📚 {topicStats.total} words</span>
@@ -399,12 +436,9 @@ function DictTab({ mastery }) {
           </div>
         </div>
         <div style={{ height:8, background:"#e5e5e5", borderRadius:4, overflow:"hidden" }}>
-          <div style={{
-            height:8,
-            width:`${topicStats.pct}%`,
+          <div style={{ height:8, width:`${topicStats.pct}%`,
             background: topicStats.pct>=80?"#1D9E75":topicStats.pct>=40?"#BA7517":"#7F77DD",
-            borderRadius:4, transition:"width .4s",
-          }}/>
+            borderRadius:4, transition:"width .4s" }}/>
         </div>
         <div style={{ fontSize:10, color:"#aaa", marginTop:4, textAlign:"right" }}>{topicStats.pct}% mastered</div>
       </div>
