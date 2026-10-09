@@ -4664,8 +4664,20 @@ function ArticlesTab({ mastery, rec }) {
     const blanksDesc = q.blanks.map((b,i) => `Blank ${i+1}: answer="${b.answer}"`).join(", ");
     const isTenses = mode === "tenses";
     const prompt = isTenses
-      ? `Объясни по-русски (2-4 предложения) почему эти глагольные формы правильны в данном греческом предложении:\n\nПредложение: "${q.gr}"\nПеревод: "${q.en}"\n${blanksDesc}\n\nФокус на: время (настоящее/прошедшее/будущее), лицо (я/ты/он...), вид. Коротко и практично.`
-      : `Объясни по-русски (2-4 предложения) почему эти артикли правильны в данном греческом предложении:\n\nПредложение: "${q.gr}"\nПеревод: "${q.en}"\n${blanksDesc}\n\nФокус на: падеж, род, число. Коротко и практично.`;
+      ? `Объясни по-русски КРАТКО (макс 60 слов) глагольные формы в предложении.
+Предложение: "${q.gr}" — ${q.en}
+${blanksDesc}
+
+Формат ответа — строго так, без лишнего текста:
+${q.blanks.map((b,i)=>`**${b.answer}** — [время/лицо одним словом]: [1 фраза почему]`).join("\n")}
+💡 [одна практическая подсказка как запомнить]`
+      : `Объясни по-русски КРАТКО (макс 60 слов) артикли в предложении.
+Предложение: "${q.gr}" — ${q.en}
+${blanksDesc}
+
+Формат ответа — строго так, без лишнего текста:
+${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза почему]`).join("\n")}
+💡 [одна практическая подсказка как запомнить]`;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
@@ -4957,10 +4969,24 @@ function ArticlesTab({ mastery, rec }) {
       {pendingAdvance && (
         <div>
           {explanation && (
-            <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12, lineHeight:1.6 }}>
+            <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12 }}>
               {explanation === "loading"
                 ? <span style={{ color:"#888" }}>⏳ Спрашиваю Клода…</span>
-                : explanation}
+                : explanation.split("\n").filter(l=>l.trim()).map((line, i) => {
+                    const isTip = line.startsWith("💡");
+                    // render **word** as bold greek-colored span
+                    const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) => {
+                      if (p.startsWith("**") && p.endsWith("**")) {
+                        return <strong key={j} style={{ color:"#534AB7", fontSize:14 }}>{p.slice(2,-2)}</strong>;
+                      }
+                      return p;
+                    });
+                    if (isTip) return (
+                      <div key={i} style={{ marginTop:8, paddingTop:8, borderTop:"0.5px solid #D0CDEF", color:"#555", fontStyle:"italic", lineHeight:1.5 }}>{parts}</div>
+                    );
+                    return <div key={i} style={{ lineHeight:1.6, padding:"2px 0" }}>{parts}</div>;
+                  })
+              }
             </div>
           )}
           <div style={{ display:"flex", gap:8 }}>
@@ -5966,7 +5992,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.43-0010</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.44-0010</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
