@@ -4403,8 +4403,58 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
   return null;
 }
 
+async function fetchTensesSentences(words) {
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+  // pick verbs preferentially, fill with nouns/other
+  const verbs = shuf(words.filter(w => /^(να |αγαπ|έχ|είμ|πηγ|τρω|πίν|θέλ|μπορ|κάν|λέ|βλέπ|ακού|διαβάζ|γράφ|παίζ|δουλεύ|μαθαίν|ξέρ|φεύγ|έρχ|βρίσκ|αρέσ|πρέπ|ξεκιν|τελειών|περιμέν|φτάν)/i.test(w[0]) || w[2].match(/\b(to |love|have|be |go |eat|drink|want|can |do |say|see|hear|read|write|play|work|learn|know|leave|come|find|like|must|start|finish|wait|arrive)/i))).slice(0, 8);
+  const others = shuf(words.filter(w => !verbs.includes(w))).slice(0, 4);
+  const pool = [...verbs, ...others];
+  if (!pool.length) return null;
+  const list = pool.map(w => `${w[0]} (${w[2]})`).join(", ");
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body: JSON.stringify({
+        model:"claude-haiku-4-5", max_tokens:2500,
+        messages:[{ role:"user", content:
+`Create 7 Greek sentences (A2-B1 level) that practice verb tenses and conjugations. Use words from this list where possible: ${list}
+
+RULES:
+- Each sentence has 1-2 verb blanks marked with ___
+- In parentheses after ___, show the infinitive/dictionary form of the verb: ___ (αγαπώ)
+- Mix tenses: present (ενεστώτας), past simple (αόριστος), imperfect (παρατατικός), future (μέλλοντας with θα)
+- Mix persons: 1st/2nd/3rd singular and plural
+- For EACH blank provide EXACTLY 6 options: the correct answer + 5 distractors
+- Distractors must be VERY similar: same verb different tense/person, OR different verb same pattern
+- Example distractors for "πηγαίνω": πηγαίνεις, πήγα, πήγαινε, θα πάω, πήγαν
+- Do NOT label the tense — student figures it out from context
+- Include English translation
+
+Return ONLY a JSON array:
+[{
+  "gr": "Χθες ___ (πηγαίνω) στην αγορά και ___ (αγοράζω) φρούτα.",
+  "en": "Yesterday I went to the market and bought fruit.",
+  "blanks": [
+    {"answer":"πήγα","options":["πήγα","πηγαίνω","πήγαινα","θα πάω","πήγες","πηγαίνουμε"]},
+    {"answer":"αγόρασα","options":["αγόρασα","αγοράζω","αγόραζα","θα αγοράσω","αγόρασες","αγοράσαμε"]}
+  ]
+}]`
+        }]
+      })
+    });
+    if (res.ok) {
+      const d = await res.json();
+      const match = d.content[0].text.match(/\[[\s\S]*\]/);
+      if (match) return JSON.parse(match[0]);
+    }
+  } catch(e) {}
+  return null;
+}
+
 function ArticlesTab({ mastery, rec }) {
-  const [mode, setMode]   = useState(null); // null | "gender" | "cases"
+  const [mode, setMode]   = useState(null); // null | "gender" | "cases" | "tenses"
   const [topic, setTopic] = useState("All");
   const [subtopic, setSubtopic] = useState("All");
   const [cnt, setCnt]     = useState("20");
@@ -4419,6 +4469,7 @@ function ArticlesTab({ mastery, rec }) {
   const [showDetail, setShowDetail] = useState(false);
   const [noNouns, setNoNouns] = useState(false);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [tensesLoading, setTensesLoading] = useState(false);
   const [blankIdx, setBlankIdx] = useState(0); // which blank within cur sentence
   const [filledBlanks, setFilledBlanks] = useState([]); // answers filled so far in cur sentence
   const [pendingAdvance, setPendingAdvance] = useState(false); // waiting for user to press Next
@@ -4518,7 +4569,18 @@ function ArticlesTab({ mastery, rec }) {
     setCasesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
     setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
-    setBlankIdx(0); setFilledBlanks([]);
+    setBlankIdx(0); setFilledBlanks([]); setPendingAdvance(false); setExplanation(null);
+    setPhase("game");
+  }
+
+  async function startTenses() {
+    const pool = filterWords(WORDS, topic, subtopic);
+    setTensesLoading(true); setNoNouns(false);
+    const fetched = await fetchTensesSentences(pool);
+    setTensesLoading(false);
+    if (!fetched || !fetched.length) { setNoNouns(true); return; }
+    setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    setBlankIdx(0); setFilledBlanks([]); setPendingAdvance(false); setExplanation(null);
     setPhase("game");
   }
 
@@ -4537,7 +4599,7 @@ function ArticlesTab({ mastery, rec }) {
         setQi(next); setLocked(false); setChosen(null);
       }, ok ? 600 : 1300);
     } else {
-      // cases mode — multi-blank
+      // cases / tenses mode — multi-blank
       const correct = q.blanks[blankIdx].answer;
       const ok = answer === correct;
       setLocked(true); setChosen(answer);
@@ -4573,20 +4635,17 @@ function ArticlesTab({ mastery, rec }) {
     const apiKey = await getApiKey();
     if (!apiKey) { setExplanation("No API key set."); return; }
     const blanksDesc = q.blanks.map((b,i) => `Blank ${i+1}: answer="${b.answer}"`).join(", ");
+    const isTenses = mode === "tenses";
+    const prompt = isTenses
+      ? `Объясни по-русски (2-4 предложения) почему эти глагольные формы правильны в данном греческом предложении:\n\nПредложение: "${q.gr}"\nПеревод: "${q.en}"\n${blanksDesc}\n\nФокус на: время (настоящее/прошедшее/будущее), лицо (я/ты/он...), вид. Коротко и практично.`
+      : `Объясни по-русски (2-4 предложения) почему эти артикли правильны в данном греческом предложении:\n\nПредложение: "${q.gr}"\nПеревод: "${q.en}"\n${blanksDesc}\n\nФокус на: падеж, род, число. Коротко и практично.`;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({
           model:"claude-haiku-4-5", max_tokens:400,
-          messages:[{ role:"user", content:
-`Explain in simple Russian (2-4 sentences) why these articles are correct in this Greek sentence:
-
-Sentence: "${q.gr}"
-English: "${q.en}"
-${blanksDesc}
-
-Focus on the grammatical rule (case, gender, number). Keep it short and practical.` }]
+          messages:[{ role:"user", content: prompt }]
         })
       });
       if (res.ok) {
@@ -4624,8 +4683,9 @@ Focus on the grammatical rule (case, gender, number). Keep it short and practica
       {/* Mode picker */}
       <div style={{ display:"flex", gap:10, marginBottom:"1.2rem", opacity: (articleMap || !needsKey) ? 1 : 0.4, pointerEvents: (articleMap || !needsKey) ? "auto" : "none" }}>
         {[
-          { id:"gender", emoji:"🏷️", title:"Gender", desc:"See a noun — pick ο / η / το" },
-          { id:"cases",  emoji:"📐", title:"Cases",  desc:"Fill in the article in a sentence (nom / gen / acc)" },
+          { id:"gender",  emoji:"🏷️", title:"Gender",  desc:"See a noun — pick ο / η / το" },
+          { id:"cases",   emoji:"📐", title:"Cases",   desc:"Fill in the article in a sentence (nom / gen / acc)" },
+          { id:"tenses",  emoji:"⏱️", title:"Tenses",  desc:"Fill in the verb — right tense & person" },
         ].map(m => (
           <div key={m.id} onClick={()=>setMode(m.id)} style={{
             flex:1, border: mode===m.id ? "1.5px solid #534AB7" : "0.5px solid #ddd",
@@ -4674,9 +4734,13 @@ Focus on the grammatical rule (case, gender, number). Keep it short and practica
           <div style={{ fontSize:13, color:"#aaa" }}>Choose an exercise above</div>
         ) : mode === "gender" ? (
           <Btn onClick={startGender}>Start →</Btn>
-        ) : (
+        ) : mode === "cases" ? (
           <Btn onClick={startCases} disabled={casesLoading}>
             {casesLoading ? "Generating sentences…" : "Start →"}
+          </Btn>
+        ) : (
+          <Btn onClick={startTenses} disabled={tensesLoading}>
+            {tensesLoading ? "Generating sentences…" : "Start →"}
           </Btn>
         )}
       </div>
@@ -5635,7 +5699,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.36-2230</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.37-1015</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
