@@ -4353,7 +4353,7 @@ function TypeTab({ mastery, rec }) {
 const ARTICLE_PRESCAN_DONE_KEY = "article_prescan_done_v1";
 
 // All Greek article forms + null (no article)
-const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅"];
+const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅","στον","στην","στο","στους","στις","στα"];
 
 async function fetchCasesSentences(words, articleMap) {
   const apiKey = await getApiKey();
@@ -4376,10 +4376,15 @@ async function fetchCasesSentences(words, articleMap) {
 RULES for blanks:
 - Replace EVERY article in the sentence with "___" (there may be 1-3 blanks per sentence)
 - Some sentences should use verbs/adjectives where NO article appears — use "∅" as the answer for those blanks
-- Available article forms: ο η το τον την τους τις τα του της των ∅
+- IMPORTANT: σε merges with articles: σε + τον = στον, σε + την = στην, σε + το = στο, σε + τους = στους, σε + τις = στις, σε + τα = στα
+  When using σε + article, write "στ___" in the sentence and the answer is the merged form (στον/στην/στο/στους/στις/στα)
+  Example: "Πάω στ___ σχολείο" → answer: "στο", options: ["στο","στον","στην","στα"]
+- Available article forms (standalone): ο η το τον την τους τις τα του της των ∅
+- Available merged forms (after σε): στον στην στο στους στις στα
 - Mix all cases: nominative, genitive, accusative, plural forms, possessive
+- Include some sentences with merged στ___ forms (aim for 2-3 out of 7)
 - Do NOT show the case name anywhere — student must figure it out from context
-- Make distractors plausible (e.g. τον/την/τα/της — similar-looking forms)
+- Make distractors plausible (e.g. στο/στον/στην/στα for merged; τον/την/τα/της for standalone)
 - Include English translation
 
 Return ONLY a JSON array. Each item = one sentence with potentially multiple blanks:
@@ -4394,6 +4399,13 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
     {"word":"αδερφό","base":"αδερφός","stem":"αδερφ","ending":"ό","case":"Вин.","gender":"м"},
     {"word":"φίλου","base":"φίλος","stem":"φίλ","ending":"ου","case":"Род.","gender":"м"}
   ]
+},{
+  "gr": "Πάω στ___ αγορά κάθε Σάββατο.",
+  "en": "I go to the market every Saturday.",
+  "blanks": [
+    {"answer":"στην","options":["στην","στον","στο","στις"]}
+  ],
+  "morphology": []
 }]
 
 morphology: list ONLY nouns and adjectives that appear in declined form (NOT in nominative). For each:
@@ -4861,6 +4873,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
 
   // Build sentence display: filled blanks show answer, current blank is active, future = "___"
   // For tenses mode: parts after a blank may start with "(infinitive) " — extract as hint above blank
+  // For cases mode: parts ending in "στ" mean the blank is a merged σε+article (στον/στην/στο etc.)
   const sentenceNodes = [];
   parts.forEach((part, i) => {
     // Strip leading (word) hint that belongs to the preceding blank slot
@@ -4872,6 +4885,12 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
         hintForPrev = hintMatch[1]; // e.g. "δουλεύω"
         cleanPart = part.slice(hintMatch[0].length);
       }
+    }
+    // For merged στ___ forms: strip trailing "στ" from the part — it's part of the blank display
+    let mergedPrefix = "";
+    if (i < blanks.length && mode === "cases" && cleanPart.match(/στ$/)) {
+      mergedPrefix = "στ";
+      cleanPart = cleanPart.slice(0, -2);
     }
 
     if (i < blanks.length) {
@@ -4905,7 +4924,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
         spanStyle.borderBottom = "1.5px dashed #ccc";
       }
 
-      // Render the part text BEFORE the blank (stripped of trailing hint if tenses)
+      // Render the part text BEFORE the blank (stripped of trailing "στ" prefix if merged)
       sentenceNodes.push(<span key={`p${i}`}>{cleanPart}</span>);
 
       if (isFilled && fillInfo && !fillInfo.ok) {
@@ -4914,22 +4933,26 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
           <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
             {hint && <span style={{ fontSize:11, color:"#888", fontStyle:"italic", lineHeight:1.2 }}>({hint})</span>}
             <span style={{ fontSize:14, fontWeight:700, color:"#085041", background:"#E1F5EE", borderRadius:4, padding:"0 5px", lineHeight:1.5 }}>{fillInfo.answer}</span>
-            <span style={{ fontSize:16, fontWeight:700, color:"#E24B4A", background:"#FCEBEB", borderRadius:4, padding:"0 5px", lineHeight:1.5, textDecoration:"line-through" }}>{fillInfo.wrong}</span>
+            <span style={{ fontSize:16, fontWeight:700, color:"#E24B4A", background:"#FCEBEB", borderRadius:4, padding:"0 5px", lineHeight:1.5, textDecoration:"line-through" }}>{mergedPrefix}{fillInfo.wrong}</span>
           </span>
         );
       } else {
         const displayText = isFilled ? (fillInfo ? fillInfo.answer : "?")
-          : isCurrent ? (locked ? casesCorrect : (chosen || "___"))
-          : "___";
+          : isCurrent ? (locked ? casesCorrect : (chosen || (mergedPrefix ? "…" : "___")))
+          : (mergedPrefix ? "…" : "___");
         if (hint) {
           sentenceNodes.push(
             <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
               <span style={{ fontSize:11, color:"#888", fontStyle:"italic", lineHeight:1.2 }}>({hint})</span>
-              <span style={spanStyle}>{displayText}</span>
+              <span style={spanStyle}>{mergedPrefix && <span style={{ color:"#aaa", fontWeight:400 }}>στ</span>}{displayText}</span>
             </span>
           );
         } else {
-          sentenceNodes.push(<span key={`b${i}`} style={spanStyle}>{displayText}</span>);
+          sentenceNodes.push(
+            <span key={`b${i}`} style={spanStyle}>
+              {mergedPrefix && <span style={{ color: spanStyle.color === "#534AB7" ? "#9D96D8" : spanStyle.color === "#bbb" ? "#ddd" : "inherit", fontWeight:400 }}>στ</span>}{displayText}
+            </span>
+          );
         }
       }
     } else {
@@ -5036,9 +5059,10 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
             const blanks = q.blanks || [];
             if (!blanks.length) return null;
             const CASE_TABLE = [
-              { caseRu:"Ном.", m:"ο",   f:"η",   n:"το",  mp:"οι",  fp:"οι",  np:"τα"  },
-              { caseRu:"Род.", m:"του", f:"της", n:"του", mp:"των", fp:"των", np:"των" },
-              { caseRu:"Вин.", m:"τον", f:"την", n:"το",  mp:"τους",fp:"τις", np:"τα"  },
+              { caseRu:"Ном.", m:"ο",    f:"η",    n:"το",  mp:"οι",   fp:"οι",   np:"τα"  },
+              { caseRu:"Род.", m:"του",  f:"της",  n:"του", mp:"των",  fp:"των",  np:"των" },
+              { caseRu:"Вин.", m:"τον",  f:"την",  n:"το",  mp:"τους", fp:"τις",  np:"τα"  },
+              { caseRu:"σε+",  m:"στον", f:"στην", n:"στο", mp:"στους",fp:"στις", np:"στα" },
             ];
             const cols = ["caseRu","m","f","n","mp","fp","np"];
             const heads = ["","ο (м)","η (ж)","το (ср)","οι (мн.м)","οι (мн.ж)","τα (мн.ср)"];
@@ -6194,7 +6218,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.47</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.48</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
