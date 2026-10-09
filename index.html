@@ -4352,20 +4352,70 @@ function TypeTab({ mastery, rec }) {
 // One-time marker so we know the full-database article prescan has completed
 const ARTICLE_PRESCAN_DONE_KEY = "article_prescan_done_v1";
 
+// Cases data: nominative → genitive/accusative forms of the article
+const CASE_FORMS = {
+  "ο":  { nom:"ο",  gen:"του", acc:"τον" },
+  "η":  { nom:"η",  gen:"της", acc:"την" },
+  "το": { nom:"το", gen:"του", acc:"το"  },
+};
+const CASE_LABELS = { nom:"Nominative (Υποκείμενο)", gen:"Genitive (Γενική)", acc:"Accusative (Αιτιατική)" };
+
+async function fetchCasesSentences(words, articleMap) {
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+  // pick up to 10 random nouns
+  const nouns = shuf(words.filter(w => ["ο","η","το"].includes(articleMap[w[0]]))).slice(0, 10);
+  if (!nouns.length) return null;
+  const list = nouns.map(w => `${w[0]} (${w[2]})`).join(", ");
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5", max_tokens: 1200,
+        messages: [{ role:"user", content:
+`Create 8 short Greek sentences using these nouns: ${list}
+Each sentence must use the noun in ONE of: nominative, genitive, or accusative case.
+Replace the article in the sentence with "___".
+
+Rules:
+- Keep sentences very simple (A1-B1 level)
+- Mix cases (at least 2 of each case)
+- Include English translation
+- The article blank must be the ONLY blank
+
+Return ONLY JSON array:
+[{"gr":"Βλέπω ___ μητέρα μου.","en":"I see my mother.","noun":"η μητέρα","case":"acc","answer":"την","options":["η","την","της"]}]
+
+For options: always include the correct answer + 2 wrong article forms from the same gender paradigm.`
+        }]
+      })
+    });
+    if (res.ok) {
+      const d = await res.json();
+      const match = d.content[0].text.match(/\[[\s\S]*\]/);
+      if (match) return JSON.parse(match[0]);
+    }
+  } catch(e) {}
+  return null;
+}
+
 function ArticlesTab({ mastery, rec }) {
+  const [mode, setMode]   = useState(null); // null | "gender" | "cases"
   const [topic, setTopic] = useState("All");
   const [subtopic, setSubtopic] = useState("All");
   const [cnt, setCnt]     = useState("20");
   const [phase, setPhase] = useState("setup"); // prescan | setup | game | result
   const [scanProgress, setScanProgress] = useState(0);
   const [scanTotal, setScanTotal] = useState(0);
-  const [qs, setQs]       = useState([]); // [{w, article}]
+  const [qs, setQs]       = useState([]); // [{w, article}] or [{gr,en,noun,case,answer,options}]
   const [qi, setQi]       = useState(0);
   const [score, setScore] = useState(0);
   const [chosen, setChosen] = useState(null);
   const [locked, setLocked] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [noNouns, setNoNouns] = useState(false);
+  const [casesLoading, setCasesLoading] = useState(false);
   // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
   const [articleMap, setArticleMap] = useState(null);
 
@@ -4434,7 +4484,7 @@ function ArticlesTab({ mastery, rec }) {
     ? SUBTOPICS[topic].filter(s => s==="All" || (nounCounts.bySubtopic[topic] && nounCounts.bySubtopic[topic][s] > 0))
     : SUBTOPICS[topic];
 
-  function start() {
+  function startGender() {
     const pool = shuf(filterWords(WORDS, topic, subtopic).filter(w => articleMap && ARTICLES.includes(articleMap[w[0]])));
     const n = cnt==="all" ? pool.length : +cnt;
     const selected = pool.slice(0, n).map(w => ({ w, article: articleMap[w[0]] }));
@@ -4444,13 +4494,24 @@ function ArticlesTab({ mastery, rec }) {
     setPhase("game");
   }
 
-  function pick(article) {
+  async function startCases() {
+    const pool = filterWords(WORDS, topic, subtopic);
+    setCasesLoading(true); setNoNouns(false);
+    const qs = await fetchCasesSentences(pool, articleMap);
+    setCasesLoading(false);
+    if (!qs || !qs.length) { setNoNouns(true); return; }
+    setQs(qs); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    setPhase("game");
+  }
+
+  function pick(answer) {
     if (locked) return;
-    const correct = qs[qi].article;
-    const ok = article === correct;
-    setLocked(true); setChosen(article);
+    const q = qs[qi];
+    const correct = mode === "gender" ? q.article : q.answer;
+    const ok = answer === correct;
+    setLocked(true); setChosen(answer);
     if (ok) setScore(s=>s+1);
-    rec(qs[qi].w[0], 'article', ok);
+    if (mode === "gender") rec(q.w[0], 'article', ok);
     setTimeout(() => {
       const next = qi + 1;
       if (next >= qs.length) { setPhase("result"); return; }
@@ -4472,34 +4533,65 @@ function ArticlesTab({ mastery, rec }) {
 
   if (phase === "setup" || !articleMap) return (
     <div>
-      <div style={{ fontSize:13, color:"#888", marginBottom:"1rem", lineHeight:1.5 }}>
-        Practice noun articles — see a Greek noun, pick ο (masculine), η (feminine), or το (neuter).
+      {/* Mode picker */}
+      <div style={{ display:"flex", gap:10, marginBottom:"1.2rem" }}>
+        {[
+          { id:"gender", emoji:"🏷️", title:"Gender", desc:"See a noun — pick ο / η / το" },
+          { id:"cases",  emoji:"📐", title:"Cases",  desc:"Fill in the article in a sentence (nom / gen / acc)" },
+        ].map(m => (
+          <div key={m.id} onClick={()=>setMode(m.id)} style={{
+            flex:1, border: mode===m.id ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+            borderRadius:12, padding:"12px 10px", cursor:"pointer", textAlign:"center",
+            background: mode===m.id ? "#EEEDFE" : "white", transition:"all .15s"
+          }}>
+            <div style={{ fontSize:22, marginBottom:4 }}>{m.emoji}</div>
+            <div style={{ fontSize:13, fontWeight:600, color: mode===m.id?"#3C3489":"#333" }}>{m.title}</div>
+            <div style={{ fontSize:11, color:"#888", marginTop:3 }}>{m.desc}</div>
+          </div>
+        ))}
       </div>
+
       {noNouns && (
         <div style={{ background:"#FFF3CD", border:"0.5px solid #BA7517", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#7A4F00", marginBottom:"1rem" }}>
           No nouns found in this selection — try a different topic.
         </div>
       )}
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
+
+      {/* Topic filter */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"0.6rem" }}>
         <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
         {availableTopics.map(t=>(
           <Chip key={t} label={nounCounts && t!=="All" ? `${t} (${nounCounts.byTopic[t]})` : t} on={topic===t} onClick={()=>setTopic(t)}/>
         ))}
+      </div>
       {availableSubtopics && (
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.6rem" }}>
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.8rem" }}>
           {availableSubtopics.map(s => (
             <Chip key={s} label={nounCounts && s!=="All" && nounCounts.bySubtopic[topic] ? `${s} (${nounCounts.bySubtopic[topic][s]})` : s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
           ))}
         </div>
       )}
+
+      {mode === "gender" && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
+          <span style={{ fontSize:13, color:"#888" }}>Words:</span>
+          <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
+            {["10","20","30","50","all"].map(v=><option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div style={{ textAlign:"center" }}>
+        {!mode ? (
+          <div style={{ fontSize:13, color:"#aaa" }}>Choose an exercise above</div>
+        ) : mode === "gender" ? (
+          <Btn onClick={startGender}>Start →</Btn>
+        ) : (
+          <Btn onClick={startCases} disabled={casesLoading}>
+            {casesLoading ? "Generating sentences…" : "Start →"}
+          </Btn>
+        )}
       </div>
-      <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:"1rem" }}>
-        <span style={{ fontSize:13, color:"#888" }}>Words:</span>
-        <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
-          {["10","20","30","50","all"].map(v=><option key={v} value={v}>{v}</option>)}
-        </select>
-      </div>
-      <div style={{ textAlign:"center" }}><Btn onClick={start}>Start →</Btn></div>
     </div>
   );
 
@@ -4509,7 +4601,50 @@ function ArticlesTab({ mastery, rec }) {
     setPhase("game");
   }}/>;
 
-  const cur = qs[qi], w = cur.w, correct = cur.article;
+  const cur = qs[qi];
+
+  // ── Gender game ──────────────────────────────────────────────────
+  if (mode === "gender") {
+    const w = cur.w, correct = cur.article;
+    return (
+      <div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+          <button onClick={()=>setPhase("setup")} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>← Back</button>
+          <span style={{ fontSize:13, color:"#888" }}>{qi+1}/{qs.length}</span>
+          <Pill>{score} correct</Pill>
+        </div>
+        <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
+        <div style={{ marginBottom:"1.4rem" }}/>
+        <div style={{ position:"relative", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.6rem 1rem 1.4rem", marginBottom:"1.2rem", background:"white", textAlign:"center" }}>
+          <WordStatsBadge mastery={mastery} greekWord={w[0]} compact style={{ position:"absolute", top:10, right:12 }} />
+          <button onClick={e=>{ e.stopPropagation(); setShowDetail(true); }}
+            style={{ position:"absolute", top:10, left:12, padding:"3px 9px", borderRadius:14, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>
+            📖 More
+          </button>
+          <div style={{ fontSize:30, fontWeight:600, color:"#222", marginBottom:6 }}>{w[0]}</div>
+          <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{w[2]}</div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          {ARTICLES.map(a => {
+            const isC = a===correct, isP = a===chosen;
+            let bg="transparent", border="0.5px solid #ccc", color="#333";
+            if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
+            return (
+              <button key={a} disabled={locked} onClick={()=>pick(a)}
+                style={{ padding:"20px 8px", border, borderRadius:10, background:bg, color, fontSize:24, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
+                {a}
+              </button>
+            );
+          })}
+        </div>
+        {showDetail && <CardDetail word={w} onClose={()=>setShowDetail(false)}/>}
+      </div>
+    );
+  }
+
+  // ── Cases game ───────────────────────────────────────────────────
+  const correct = cur.answer;
+  const parts = cur.gr.split("___");
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
@@ -4518,31 +4653,45 @@ function ArticlesTab({ mastery, rec }) {
         <Pill>{score} correct</Pill>
       </div>
       <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
-      <div style={{ marginBottom:"1.4rem" }}/>
-      <div style={{ position:"relative", border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.6rem 1rem 1.4rem", marginBottom:"1.2rem", background:"white", textAlign:"center" }}>
-        <WordStatsBadge mastery={mastery} greekWord={w[0]} compact style={{ position:"absolute", top:10, right:12 }} />
-        <button
-          onClick={e=>{ e.stopPropagation(); setShowDetail(true); }}
-          style={{ position:"absolute", top:10, left:12, padding:"3px 9px", borderRadius:14, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>
-          📖 More
-        </button>
-        <div style={{ fontSize:30, fontWeight:600, color:"#222", marginBottom:6 }}>{w[0]}</div>
-        <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{w[2]}</div>
+      <div style={{ marginBottom:"1.2rem" }}/>
+
+      {/* Case label */}
+      <div style={{ textAlign:"center", fontSize:11, color:"#888", marginBottom:8, textTransform:"uppercase", letterSpacing:".06em" }}>
+        {CASE_LABELS[cur.case] || cur.case}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-        {ARTICLES.map(a => {
+
+      {/* Sentence with blank */}
+      <div style={{ border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.4rem 1rem", marginBottom:"1.2rem", background:"white", textAlign:"center" }}>
+        <div style={{ fontSize:20, fontWeight:500, color:"#222", lineHeight:1.6, marginBottom:10 }}>
+          {parts[0]}<span style={{
+            display:"inline-block", minWidth:48, borderBottom: locked ? "none" : "2px solid #534AB7",
+            background: locked ? (chosen===correct?"#E1F5EE":"#FCEBEB") : "transparent",
+            borderRadius:4, padding:"0 6px", color: locked ? (chosen===correct?"#085041":"#E24B4A") : "#534AB7",
+            fontWeight:700, fontSize:22, transition:"all .2s"
+          }}>{locked ? correct : (chosen || "___")}</span>{parts[1]}
+        </div>
+        <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{cur.en}</div>
+        {locked && chosen !== correct && (
+          <div style={{ fontSize:13, color:"#E24B4A", marginTop:8 }}>
+            Correct: <strong>{correct}</strong> — {cur.noun}
+          </div>
+        )}
+      </div>
+
+      {/* Options */}
+      <div style={{ display:"grid", gridTemplateColumns:`repeat(${cur.options.length}, 1fr)`, gap:8 }}>
+        {cur.options.map(a => {
           const isC = a===correct, isP = a===chosen;
           let bg="transparent", border="0.5px solid #ccc", color="#333";
           if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
           return (
             <button key={a} disabled={locked} onClick={()=>pick(a)}
-              style={{ padding:"20px 8px", border, borderRadius:10, background:bg, color, fontSize:24, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
+              style={{ padding:"18px 8px", border, borderRadius:10, background:bg, color, fontSize:22, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
               {a}
             </button>
           );
         })}
       </div>
-      {showDetail && <CardDetail word={w} onClose={()=>setShowDetail(false)}/>}
     </div>
   );
 }
@@ -5339,7 +5488,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.33-1850</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.34-1850</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
