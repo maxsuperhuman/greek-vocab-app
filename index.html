@@ -5325,7 +5325,6 @@ function App() {
     { id:"articles",  label:"Articles" },
     { id:"sentences", label:"Sentences" },
     { id:"fallee",    label:"Fallee" },
-    { id:"stats",     label:`Progress (${level5}/${WORDS.length})` },
   ];
 
   // Early return only AFTER all hooks
@@ -5340,13 +5339,13 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.32-1850</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.33-1850</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
           {!isOnline && <span style={{ fontSize:11, color:"#888", background:"#f0f0f0", border:"0.5px solid #ccc", borderRadius:10, padding:"2px 8px" }}>📵</span>}
           {saveStatus && <span style={{ fontSize:11, color:saveStatus==="saved"?"#1D9E75":"#aaa" }}>{saveStatus==="saving"?"💾":"✓"}</span>}
-          <span style={{ fontSize:12, color:"#0F6E56", background:"#E1F5EE", border:"0.5px solid #5DCAA5", borderRadius:10, padding:"2px 8px" }}>★ {level5} mastered</span>
+          <button onClick={()=>setTab("stats")} style={{ fontSize:12, color:"#0F6E56", background:"#E1F5EE", border:"0.5px solid #5DCAA5", borderRadius:10, padding:"2px 8px", cursor:"pointer", fontFamily:"inherit" }}>★ {level5}/{WORDS.length} mastered</button>
           <button onClick={exportBackup}
             style={{ fontSize:12, padding:"3px 9px", borderRadius:10, border:"0.5px solid #7F77DD", background:"#EEEDFE", color:"#3C3489", cursor:"pointer", fontFamily:"inherit" }}>
             📋 Backup
