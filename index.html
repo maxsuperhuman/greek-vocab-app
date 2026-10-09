@@ -4352,42 +4352,45 @@ function TypeTab({ mastery, rec }) {
 // One-time marker so we know the full-database article prescan has completed
 const ARTICLE_PRESCAN_DONE_KEY = "article_prescan_done_v1";
 
-// Cases data: nominative → genitive/accusative forms of the article
-const CASE_FORMS = {
-  "ο":  { nom:"ο",  gen:"του", acc:"τον" },
-  "η":  { nom:"η",  gen:"της", acc:"την" },
-  "το": { nom:"το", gen:"του", acc:"το"  },
-};
-const CASE_LABELS = { nom:"Nominative (Υποκείμενο)", gen:"Genitive (Γενική)", acc:"Accusative (Αιτιατική)" };
+// All Greek article forms + null (no article)
+const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅"];
 
 async function fetchCasesSentences(words, articleMap) {
   const apiKey = await getApiKey();
   if (!apiKey) return null;
-  // pick up to 10 random nouns
-  const nouns = shuf(words.filter(w => ["ο","η","το"].includes(articleMap[w[0]]))).slice(0, 10);
-  if (!nouns.length) return null;
-  const list = nouns.map(w => `${w[0]} (${w[2]})`).join(", ");
+  // mix nouns and verbs/other for ∅ cases
+  const nouns = shuf(words.filter(w => ["ο","η","το"].includes(articleMap[w[0]]))).slice(0, 8);
+  const others = shuf(words.filter(w => !["ο","η","το"].includes(articleMap[w[0]]))).slice(0, 4);
+  const pool = [...nouns, ...others];
+  if (!pool.length) return null;
+  const list = pool.map(w => `${w[0]} (${w[2]}, ${["ο","η","το"].includes(articleMap[w[0]]) ? articleMap[w[0]] : "verb/adj"})`).join(", ");
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5", max_tokens: 1200,
+        model: "claude-haiku-4-5", max_tokens: 2000,
         messages: [{ role:"user", content:
-`Create 8 short Greek sentences using these nouns: ${list}
-Each sentence must use the noun in ONE of: nominative, genitive, or accusative case.
-Replace the article in the sentence with "___".
+`Create 7 Greek sentences (A2-B1 level) using words from this list: ${list}
 
-Rules:
-- Keep sentences very simple (A1-B1 level)
-- Mix cases (at least 2 of each case)
+RULES for blanks:
+- Replace EVERY article in the sentence with "___" (there may be 1-3 blanks per sentence)
+- Some sentences should use verbs/adjectives where NO article appears — use "∅" as the answer for those blanks
+- Available article forms: ο η το τον την τους τις τα του της των ∅
+- Mix all cases: nominative, genitive, accusative, plural forms, possessive
+- Do NOT show the case name anywhere — student must figure it out from context
+- Make distractors plausible (e.g. τον/την/τα/της — similar-looking forms)
 - Include English translation
-- The article blank must be the ONLY blank
 
-Return ONLY JSON array:
-[{"gr":"Βλέπω ___ μητέρα μου.","en":"I see my mother.","noun":"η μητέρα","case":"acc","answer":"την","options":["η","την","της"]}]
-
-For options: always include the correct answer + 2 wrong article forms from the same gender paradigm.`
+Return ONLY a JSON array. Each item = one sentence with potentially multiple blanks:
+[{
+  "gr": "Βλέπω ___ αδερφό ___ φίλου μου.",
+  "en": "I see my friend's brother.",
+  "blanks": [
+    {"answer":"τον","options":["τον","την","του","τα"]},
+    {"answer":"του","options":["του","της","τους","τον"]}
+  ]
+}]`
         }]
       })
     });
@@ -4416,6 +4419,8 @@ function ArticlesTab({ mastery, rec }) {
   const [showDetail, setShowDetail] = useState(false);
   const [noNouns, setNoNouns] = useState(false);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [blankIdx, setBlankIdx] = useState(0); // which blank within cur sentence
+  const [filledBlanks, setFilledBlanks] = useState([]); // answers filled so far in cur sentence
   // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
   const [articleMap, setArticleMap] = useState(null);
 
@@ -4497,26 +4502,51 @@ function ArticlesTab({ mastery, rec }) {
   async function startCases() {
     const pool = filterWords(WORDS, topic, subtopic);
     setCasesLoading(true); setNoNouns(false);
-    const qs = await fetchCasesSentences(pool, articleMap);
+    const fetched = await fetchCasesSentences(pool, articleMap);
     setCasesLoading(false);
-    if (!qs || !qs.length) { setNoNouns(true); return; }
-    setQs(qs); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    if (!fetched || !fetched.length) { setNoNouns(true); return; }
+    setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    setBlankIdx(0); setFilledBlanks([]);
     setPhase("game");
   }
 
   function pick(answer) {
     if (locked) return;
     const q = qs[qi];
-    const correct = mode === "gender" ? q.article : q.answer;
-    const ok = answer === correct;
-    setLocked(true); setChosen(answer);
-    if (ok) setScore(s=>s+1);
-    if (mode === "gender") rec(q.w[0], 'article', ok);
-    setTimeout(() => {
-      const next = qi + 1;
-      if (next >= qs.length) { setPhase("result"); return; }
-      setQi(next); setLocked(false); setChosen(null);
-    }, ok ? 600 : 1300);
+    if (mode === "gender") {
+      const correct = q.article;
+      const ok = answer === correct;
+      setLocked(true); setChosen(answer);
+      if (ok) setScore(s=>s+1);
+      rec(q.w[0], 'article', ok);
+      setTimeout(() => {
+        const next = qi + 1;
+        if (next >= qs.length) { setPhase("result"); return; }
+        setQi(next); setLocked(false); setChosen(null);
+      }, ok ? 600 : 1300);
+    } else {
+      // cases mode — multi-blank
+      const correct = q.blanks[blankIdx].answer;
+      const ok = answer === correct;
+      setLocked(true); setChosen(answer);
+      if (ok) setScore(s=>s+1);
+      const newFilled = [...filledBlanks, { answer, ok }];
+      setTimeout(() => {
+        const nextBlank = blankIdx + 1;
+        if (nextBlank < q.blanks.length) {
+          // more blanks in this sentence
+          setBlankIdx(nextBlank);
+          setFilledBlanks(newFilled);
+          setLocked(false); setChosen(null);
+        } else {
+          // sentence done — next question
+          const nextQ = qi + 1;
+          if (nextQ >= qs.length) { setPhase("result"); return; }
+          setQi(nextQ); setBlankIdx(0); setFilledBlanks([]);
+          setLocked(false); setChosen(null);
+        }
+      }, ok ? 600 : 1300);
+    }
   }
 
   if (phase === "prescan") return (
@@ -4595,9 +4625,11 @@ function ArticlesTab({ mastery, rec }) {
     </div>
   );
 
-  if (phase === "result") return <ResBox score={score} total={qs.length} onRetry={()=>{
-    const reshuffled = shuf([...qs]);
+  const totalBlanks = mode === "cases" ? qs.reduce((sum, q) => sum + (q.blanks ? q.blanks.length : 1), 0) : qs.length;
+  if (phase === "result") return <ResBox score={score} total={totalBlanks} onRetry={()=>{
+    const reshuffled = mode === "cases" ? [...qs] : shuf([...qs]);
     setQs(reshuffled); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    setBlankIdx(0); setFilledBlanks([]);
     setPhase("game");
   }}/>;
 
@@ -4643,8 +4675,45 @@ function ArticlesTab({ mastery, rec }) {
   }
 
   // ── Cases game ───────────────────────────────────────────────────
-  const correct = cur.answer;
-  const parts = cur.gr.split("___");
+  const blanks = cur.blanks || [];
+  const curBlank = blanks[blankIdx] || {};
+  const casesCorrect = curBlank.answer;
+  const parts = cur.gr ? cur.gr.split("___") : [];
+
+  // Build sentence display: filled blanks show answer, current blank is active, future = "___"
+  const sentenceNodes = [];
+  parts.forEach((part, i) => {
+    sentenceNodes.push(<span key={`p${i}`}>{part}</span>);
+    if (i < blanks.length) {
+      const isFilled = i < blankIdx;
+      const isCurrent = i === blankIdx;
+      const fillInfo = filledBlanks[i];
+      let spanStyle = {
+        display:"inline-block", minWidth:40, borderRadius:4, padding:"0 6px",
+        fontWeight:700, fontSize:22, transition:"all .2s"
+      };
+      if (isFilled) {
+        spanStyle.background = fillInfo && fillInfo.ok ? "#E1F5EE" : "#FCEBEB";
+        spanStyle.color = fillInfo && fillInfo.ok ? "#085041" : "#E24B4A";
+      } else if (isCurrent) {
+        if (locked) {
+          spanStyle.background = chosen === casesCorrect ? "#E1F5EE" : "#FCEBEB";
+          spanStyle.color = chosen === casesCorrect ? "#085041" : "#E24B4A";
+        } else {
+          spanStyle.borderBottom = "2px solid #534AB7";
+          spanStyle.color = "#534AB7";
+        }
+      } else {
+        spanStyle.color = "#bbb";
+        spanStyle.borderBottom = "1.5px dashed #ccc";
+      }
+      const displayText = isFilled ? (fillInfo ? fillInfo.answer : "?")
+        : isCurrent ? (locked ? casesCorrect : (chosen || "___"))
+        : "___";
+      sentenceNodes.push(<span key={`b${i}`} style={spanStyle}>{displayText}</span>);
+    }
+  });
+
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
@@ -4655,33 +4724,28 @@ function ArticlesTab({ mastery, rec }) {
       <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
       <div style={{ marginBottom:"1.2rem" }}/>
 
-      {/* Case label */}
-      <div style={{ textAlign:"center", fontSize:11, color:"#888", marginBottom:8, textTransform:"uppercase", letterSpacing:".06em" }}>
-        {CASE_LABELS[cur.case] || cur.case}
-      </div>
-
-      {/* Sentence with blank */}
+      {/* Sentence with blanks */}
       <div style={{ border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.4rem 1rem", marginBottom:"1.2rem", background:"white", textAlign:"center" }}>
-        <div style={{ fontSize:20, fontWeight:500, color:"#222", lineHeight:1.6, marginBottom:10 }}>
-          {parts[0]}<span style={{
-            display:"inline-block", minWidth:48, borderBottom: locked ? "none" : "2px solid #534AB7",
-            background: locked ? (chosen===correct?"#E1F5EE":"#FCEBEB") : "transparent",
-            borderRadius:4, padding:"0 6px", color: locked ? (chosen===correct?"#085041":"#E24B4A") : "#534AB7",
-            fontWeight:700, fontSize:22, transition:"all .2s"
-          }}>{locked ? correct : (chosen || "___")}</span>{parts[1]}
+        <div style={{ fontSize:20, fontWeight:500, color:"#222", lineHeight:1.8, marginBottom:10 }}>
+          {sentenceNodes}
         </div>
         <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic" }}>{cur.en}</div>
-        {locked && chosen !== correct && (
+        {locked && chosen !== casesCorrect && (
           <div style={{ fontSize:13, color:"#E24B4A", marginTop:8 }}>
-            Correct: <strong>{correct}</strong> — {cur.noun}
+            Correct: <strong>{casesCorrect}</strong>
+          </div>
+        )}
+        {blanks.length > 1 && (
+          <div style={{ fontSize:11, color:"#bbb", marginTop:6 }}>
+            Blank {blankIdx+1} of {blanks.length}
           </div>
         )}
       </div>
 
       {/* Options */}
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(${cur.options.length}, 1fr)`, gap:8 }}>
-        {cur.options.map(a => {
-          const isC = a===correct, isP = a===chosen;
+      <div style={{ display:"grid", gridTemplateColumns:`repeat(${(curBlank.options||[]).length}, 1fr)`, gap:8 }}>
+        {(curBlank.options||[]).map(a => {
+          const isC = a===casesCorrect, isP = a===chosen;
           let bg="transparent", border="0.5px solid #ccc", color="#333";
           if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
           return (
@@ -5488,7 +5552,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.34-1850</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.35-2010</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
