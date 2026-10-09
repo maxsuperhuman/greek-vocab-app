@@ -4406,9 +4406,9 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
 async function fetchTensesSentences(words) {
   const apiKey = await getApiKey();
   if (!apiKey) return null;
-  // pick verbs preferentially, fill with nouns/other
-  const verbs = shuf(words.filter(w => /^(να |αγαπ|έχ|είμ|πηγ|τρω|πίν|θέλ|μπορ|κάν|λέ|βλέπ|ακού|διαβάζ|γράφ|παίζ|δουλεύ|μαθαίν|ξέρ|φεύγ|έρχ|βρίσκ|αρέσ|πρέπ|ξεκιν|τελειών|περιμέν|φτάν)/i.test(w[0]) || w[2].match(/\b(to |love|have|be |go |eat|drink|want|can |do |say|see|hear|read|write|play|work|learn|know|leave|come|find|like|must|start|finish|wait|arrive)/i))).slice(0, 8);
-  const others = shuf(words.filter(w => !verbs.includes(w))).slice(0, 4);
+  // words array always has verbs first (passed from startTenses); nouns/others are context
+  const verbs = shuf(words.filter(w => w[3] === "Verbs")).slice(0, 10);
+  const others = shuf(words.filter(w => w[3] !== "Verbs")).slice(0, 5);
   const pool = [...verbs, ...others];
   if (!pool.length) return null;
   const list = pool.map(w => `${w[0]} (${w[2]})`).join(", ");
@@ -4419,7 +4419,9 @@ async function fetchTensesSentences(words) {
       body: JSON.stringify({
         model:"claude-haiku-4-5", max_tokens:2500,
         messages:[{ role:"user", content:
-`Create 7 Greek sentences (A2-B1 level) that practice verb tenses and conjugations. Use words from this list where possible: ${list}
+`Create 7 Greek sentences (A2-B1 level) that practice verb tenses and conjugations.
+Verbs to use as blanks: ${pool.filter(w=>w[3]==="Verbs").slice(0,10).map(w=>`${w[0]} (${w[2]})`).join(", ")}
+Context vocabulary (use in sentence but NOT as blanks): ${pool.filter(w=>w[3]!=="Verbs").slice(0,5).map(w=>`${w[0]} (${w[2]})`).join(", ") || "general vocabulary"}
 
 RULES:
 - Each sentence has 1-2 verb blanks marked with ___
@@ -4574,7 +4576,10 @@ function ArticlesTab({ mastery, rec }) {
   }
 
   async function startTenses() {
-    const pool = filterWords(WORDS, topic, subtopic);
+    // Always use all verbs as the core pool for tenses; add topic words for sentence context
+    const allVerbs = WORDS.filter(w => w[3] === "Verbs");
+    const topicWords = topic === "All" ? [] : filterWords(WORDS, topic, subtopic).filter(w => w[3] !== "Verbs");
+    const pool = [...allVerbs, ...topicWords];
     setTensesLoading(true); setNoNouns(false);
     const fetched = await fetchTensesSentences(pool);
     setTensesLoading(false);
@@ -5740,7 +5745,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.39-1015</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.40-1015</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
