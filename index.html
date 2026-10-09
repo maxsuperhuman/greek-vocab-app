@@ -4804,13 +4804,31 @@ function ArticlesTab({ mastery, rec }) {
   const parts = cur.gr ? cur.gr.split("___") : [];
 
   // Build sentence display: filled blanks show answer, current blank is active, future = "___"
+  // For tenses mode: parts after a blank may start with "(infinitive) " — extract as hint above blank
   const sentenceNodes = [];
   parts.forEach((part, i) => {
-    sentenceNodes.push(<span key={`p${i}`}>{part}</span>);
+    // Strip leading (word) hint that belongs to the preceding blank slot
+    let cleanPart = part;
+    let hintForPrev = null;
+    if (i > 0 && mode === "tenses") {
+      const hintMatch = part.match(/^\s*\(([^)]+)\)\s*/);
+      if (hintMatch) {
+        hintForPrev = hintMatch[1]; // e.g. "δουλεύω"
+        cleanPart = part.slice(hintMatch[0].length);
+      }
+    }
+
     if (i < blanks.length) {
       const isFilled = i < blankIdx;
       const isCurrent = i === blankIdx;
       const fillInfo = filledBlanks[i];
+      // hint for THIS blank comes from the NEXT part
+      const nextPart = parts[i + 1] || "";
+      let hint = null;
+      if (mode === "tenses") {
+        const hm = nextPart.match(/^\s*\(([^)]+)\)\s*/);
+        if (hm) hint = hm[1];
+      }
       let spanStyle = {
         display:"inline-block", minWidth:40, borderRadius:4, padding:"0 6px",
         fontWeight:700, fontSize:22, transition:"all .2s"
@@ -4830,10 +4848,15 @@ function ArticlesTab({ mastery, rec }) {
         spanStyle.color = "#bbb";
         spanStyle.borderBottom = "1.5px dashed #ccc";
       }
+
+      // Render the part text BEFORE the blank (stripped of trailing hint if tenses)
+      sentenceNodes.push(<span key={`p${i}`}>{cleanPart}</span>);
+
       if (isFilled && fillInfo && !fillInfo.ok) {
-        // Wrong answer: show stacked — strikethrough wrong on bottom, correct on top
+        // Wrong: stacked correct (green) above, wrong strikethrough (red) below
         sentenceNodes.push(
           <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
+            {hint && <span style={{ fontSize:11, color:"#888", fontStyle:"italic", lineHeight:1.2 }}>({hint})</span>}
             <span style={{ fontSize:14, fontWeight:700, color:"#085041", background:"#E1F5EE", borderRadius:4, padding:"0 5px", lineHeight:1.5 }}>{fillInfo.answer}</span>
             <span style={{ fontSize:16, fontWeight:700, color:"#E24B4A", background:"#FCEBEB", borderRadius:4, padding:"0 5px", lineHeight:1.5, textDecoration:"line-through" }}>{fillInfo.wrong}</span>
           </span>
@@ -4842,8 +4865,20 @@ function ArticlesTab({ mastery, rec }) {
         const displayText = isFilled ? (fillInfo ? fillInfo.answer : "?")
           : isCurrent ? (locked ? casesCorrect : (chosen || "___"))
           : "___";
-        sentenceNodes.push(<span key={`b${i}`} style={spanStyle}>{displayText}</span>);
+        if (hint) {
+          sentenceNodes.push(
+            <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
+              <span style={{ fontSize:11, color:"#888", fontStyle:"italic", lineHeight:1.2 }}>({hint})</span>
+              <span style={spanStyle}>{displayText}</span>
+            </span>
+          );
+        } else {
+          sentenceNodes.push(<span key={`b${i}`} style={spanStyle}>{displayText}</span>);
+        }
       }
+    } else {
+      // last part (after all blanks) — strip leading hint if tenses (already consumed above)
+      sentenceNodes.push(<span key={`p${i}`}>{cleanPart}</span>);
     }
   });
 
@@ -5705,7 +5740,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.38-1015</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.39-1015</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
