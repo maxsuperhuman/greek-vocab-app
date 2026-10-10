@@ -4355,7 +4355,7 @@ const ARTICLE_PRESCAN_DONE_KEY = "article_prescan_done_v1";
 // All Greek article forms + null (no article)
 const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅","στον","στην","στο","στους","στις","στα"];
 
-async function fetchCasesSentences(words, articleMap) {
+async function fetchCasesSentences(words, articleMap, level="A2") {
   const apiKey = await getApiKey();
   if (!apiKey) return null;
   // mix nouns and verbs/other for ∅ cases
@@ -4364,6 +4364,11 @@ async function fetchCasesSentences(words, articleMap) {
   const pool = [...nouns, ...others];
   if (!pool.length) return null;
   const list = pool.map(w => `${w[0]} (${w[2]}, ${["ο","η","το"].includes(articleMap[w[0]]) ? articleMap[w[0]] : "verb/adj"})`).join(", ");
+  const levelGuide = level === "A1"
+    ? "A1 level: very short sentences (4-6 words), only nominative and accusative cases, present tense only, the most common everyday nouns (food, family, places), no genitive, no plural articles"
+    : level === "B1"
+    ? "B1 level: longer natural sentences (8-12 words), mix all cases including genitive and plurals freely, varied tenses, more complex structures"
+    : "A2 level: moderate sentences (6-9 words), mix nominative/accusative/genitive, some plural articles, everyday topics";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -4371,7 +4376,8 @@ async function fetchCasesSentences(words, articleMap) {
       body: JSON.stringify({
         model: "claude-haiku-4-5", max_tokens: 2000,
         messages: [{ role:"user", content:
-`Create 7 Greek sentences (A2-B1 level) using words from this list: ${list}
+`Create 7 Greek sentences (${level} level) using words from this list: ${list}
+LANGUAGE LEVEL GUIDANCE: ${levelGuide}
 
 RULES for blanks:
 - Replace EVERY article in the sentence with "___" (there may be 1-3 blanks per sentence)
@@ -4430,7 +4436,7 @@ morphology: list ONLY nouns and adjectives that appear in declined form (NOT in 
   return null;
 }
 
-async function fetchTensesSentences(words) {
+async function fetchTensesSentences(words, level="A2") {
   const apiKey = await getApiKey();
   if (!apiKey) return null;
   // words array always has verbs first (passed from startTenses); nouns/others are context
@@ -4439,6 +4445,11 @@ async function fetchTensesSentences(words) {
   const pool = [...verbs, ...others];
   if (!pool.length) return null;
   const list = pool.map(w => `${w[0]} (${w[2]})`).join(", ");
+  const levelGuide = level === "A1"
+    ? "A1 level: very short sentences (4-6 words), ONLY present tense (ενεστώτας), 1st and 2nd person singular only (εγώ/εσύ), the simplest most common verbs, no past or future"
+    : level === "B1"
+    ? "B1 level: longer natural sentences (8-12 words), freely mix all tenses (present, past simple, imperfect, future), all persons including plural, more complex contexts"
+    : "A2 level: moderate sentences (6-9 words), mainly present and past simple (αόριστος), 1st/2nd/3rd person singular, introduce future occasionally";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
@@ -4446,7 +4457,8 @@ async function fetchTensesSentences(words) {
       body: JSON.stringify({
         model:"claude-haiku-4-5", max_tokens:2500,
         messages:[{ role:"user", content:
-`Create 7 Greek sentences (A2-B1 level) that practice verb tenses and conjugations.
+`Create 7 Greek sentences (${level} level) that practice verb tenses and conjugations.
+LANGUAGE LEVEL GUIDANCE: ${levelGuide}
 Verbs to use as blanks: ${pool.filter(w=>w[3]==="Verbs").slice(0,10).map(w=>`${w[0]} (${w[2]})`).join(", ")}
 Context vocabulary (use in sentence but NOT as blanks): ${pool.filter(w=>w[3]!=="Verbs").slice(0,5).map(w=>`${w[0]} (${w[2]})`).join(", ") || "general vocabulary"}
 
@@ -4504,6 +4516,7 @@ function ArticlesTab({ mastery, rec }) {
   const [pendingAdvance, setPendingAdvance] = useState(false); // waiting for user to press Next
   const [explanation, setExplanation] = useState(null); // null | "loading" | string
   const [caseTab, setCaseTab] = useState(0); // active blank tab in Cases cheat-sheet
+  const [langLevel, setLangLevel] = useState("A2"); // A1 | A2 | B1
   // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
   const [articleMap, setArticleMap] = useState(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -4616,7 +4629,7 @@ function ArticlesTab({ mastery, rec }) {
   async function startCases() {
     const pool = filterWords(WORDS, topic, subtopic);
     setCasesLoading(true); setNoNouns(false);
-    const fetched = await fetchCasesSentences(pool, articleMap);
+    const fetched = await fetchCasesSentences(pool, articleMap, langLevel);
     setCasesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
     setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
@@ -4630,7 +4643,7 @@ function ArticlesTab({ mastery, rec }) {
     const topicWords = topic === "All" ? [] : filterWords(WORDS, topic, subtopic).filter(w => w[3] !== "Verbs");
     const pool = [...allVerbs, ...topicWords];
     setTensesLoading(true); setNoNouns(false);
-    const fetched = await fetchTensesSentences(pool);
+    const fetched = await fetchTensesSentences(pool, langLevel);
     setTensesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
     // Shuffle each blank's options so the correct answer isn't always first
@@ -4770,6 +4783,31 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
           </div>
         ))}
       </div>
+
+      {/* Language level picker — only for cases / tenses */}
+      {(mode === "cases" || mode === "tenses") && (
+        <div style={{ marginBottom:"1rem" }}>
+          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Уровень:</div>
+          <div style={{ display:"flex", gap:6 }}>
+            {[
+              { id:"A1", desc:"Совсем базовый" },
+              { id:"A2", desc:"Элементарный" },
+              { id:"B1", desc:"Средний" },
+            ].map(l => (
+              <button key={l.id} onClick={()=>setLangLevel(l.id)} style={{
+                flex:1, padding:"8px 6px", borderRadius:10, cursor:"pointer", fontFamily:"inherit",
+                border: langLevel===l.id ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                background: langLevel===l.id ? "#EEEDFE" : "white",
+                color: langLevel===l.id ? "#3C3489" : "#555",
+                transition:"all .15s"
+              }}>
+                <div style={{ fontSize:15, fontWeight:700 }}>{l.id}</div>
+                <div style={{ fontSize:10, color: langLevel===l.id ? "#7F79C8" : "#aaa", marginTop:2 }}>{l.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {noNouns && (
         <div style={{ background:"#FFF3CD", border:"0.5px solid #BA7517", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#7A4F00", marginBottom:"1rem" }}>
@@ -5155,6 +5193,13 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
                     </div>
                   );
                 })()}
+                {/* Cheat-sheet link */}
+                <div style={{ marginTop:8, textAlign:"right" }}>
+                  <a href="https://www.greek-language.gr/greekLang/modern_greek/tools/lexica/glossary/show_form.html?start=0&id=24" target="_blank" rel="noopener"
+                    style={{ fontSize:11, color:"#7F79C8", textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>
+                    📄 Полная таблица падежей →
+                  </a>
+                </div>
               </div>
             );
           })()}
@@ -5205,6 +5250,13 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
                     })}
                   </tbody>
                 </table>
+                {/* Cheat-sheet link */}
+                <div style={{ marginTop:8, textAlign:"right" }}>
+                  <a href="https://www.greekgrammar.eu/pdffiles/presenttense.pdf" target="_blank" rel="noopener"
+                    style={{ fontSize:11, color:"#7F79C8", textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>
+                    📄 Таблица спряжений →
+                  </a>
+                </div>
               </div>
             );
           })()}
@@ -6233,7 +6285,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.50</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.51</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
