@@ -4633,7 +4633,12 @@ function ArticlesTab({ mastery, rec }) {
     const fetched = await fetchTensesSentences(pool);
     setTensesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
-    setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    // Shuffle each blank's options so the correct answer isn't always first
+    const shuffled = fetched.map(q => ({
+      ...q,
+      blanks: (q.blanks || []).map(b => ({ ...b, options: shuf([...(b.options || [])]) }))
+    }));
+    setQs(shuffled); setQi(0); setScore(0); setLocked(false); setChosen(null);
     setBlankIdx(0); setFilledBlanks([]); setPendingAdvance(false); setExplanation(null);
     setPhase("game");
   }
@@ -5037,14 +5042,14 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
 
       {/* Options */}
       {!pendingAdvance && (
-        <div style={{ display:"grid", gridTemplateColumns:`repeat(${(curBlank.options||[]).length}, 1fr)`, gap:8 }}>
+        <div style={{ display:"grid", gridTemplateColumns: mode==="tenses" ? "1fr 1fr" : `repeat(${(curBlank.options||[]).length}, 1fr)`, gap:8 }}>
           {(curBlank.options||[]).map(a => {
             const isC = a===casesCorrect, isP = a===chosen;
             let bg="transparent", border="0.5px solid #ccc", color="#333";
             if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
             return (
               <button key={a} disabled={locked} onClick={()=>pick(a)}
-                style={{ padding:"18px 8px", border, borderRadius:10, background:bg, color, fontSize:22, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
+                style={{ padding: mode==="tenses" ? "14px 8px" : "18px 8px", border, borderRadius:10, background:bg, color, fontSize: mode==="tenses" ? 16 : 22, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
                 {a}
               </button>
             );
@@ -6228,7 +6233,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.49</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.50</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
