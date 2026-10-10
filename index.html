@@ -4387,17 +4387,19 @@ RULES for blanks:
 - WRONG (do NOT do this): "Η παραλία του νησιού έχει ___ καλό κλίμα" — leaving του as text
 - Some sentences should use predicates/adjectives where NO article appears before a word — use "∅" as answer for those blanks
 - IMPORTANT: σε merges with articles: σε + τον = στον, σε + την = στην, σε + το = στο, σε + τους = στους, σε + τις = στις, σε + τα = στα
-  When using σε + article, write "στ___" in the sentence and the answer is the merged form (στον/στην/στο/στους/στις/στα)
-  Example: "Πάω στ___ σχολείο" → answer: "στο", options: ["στο","στον","στην","στα"]
-- Available article forms (standalone): ο η το τον την τους τις τα του της των ∅
-- Available merged forms (after σε): στον στην στο στους στις στα
+  When using σε + article construction, write "σε ___" in the sentence (keep σε visible, blank is just the article)
+  The answer is the standalone article form (τον/την/το/τους/τις/τα), NOT the merged form
+  Example: "Πάω σε ___ σχολείο" → answer: "το", options: ["το","τον","την","τα"]
+  Example: "Μένω σε ___ σπίτι κοντά στην παραλία" → answer: "το", options: ["το","τον","την","τα"]
+- Available article forms for blanks (standalone only): ο η το τον την τους τις τα του της των ∅
 - Mix all cases: nominative, genitive (του/της/των), accusative, plural forms — genitive is especially important to practice
-- Include some sentences with merged στ___ forms (aim for 2-3 out of 7)
+- Include some sentences with σε ___ construction (aim for 2-3 out of 7)
 - Do NOT show the case name anywhere — student must figure it out from context
-- Make distractors plausible (e.g. στο/στον/στην/στα for merged; τον/την/τα/της for standalone)
+- Make distractors plausible (e.g. τον/την/το/τα for accusative; τον/την/τα/της for mixed)
 - Include English translation
 
 Return ONLY a JSON array. Each item = one sentence with potentially multiple blanks:
+- For blanks that follow "σε" in the sentence, add "se_merge":true to that blank object
 [{
   "gr": "Βλέπω ___ αδερφό ___ φίλου μου.",
   "en": "I see my friend's brother.",
@@ -4410,10 +4412,10 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
     {"blank_index":1,"word":"φίλου","base":"φίλος","stem":"φίλ","ending":"ου","case":"Род.","gender":"м"}
   ]
 },{
-  "gr": "Πάω στ___ αγορά κάθε Σάββατο.",
+  "gr": "Πάω σε ___ αγορά κάθε Σάββατο.",
   "en": "I go to the market every Saturday.",
   "blanks": [
-    {"answer":"στην","options":["στην","στον","στο","στις"]}
+    {"answer":"την","options":["την","τον","το","τις"],"se_merge":true}
   ],
   "morphology": [
     {"blank_index":0,"word":"αγορά","base":"αγορά","stem":"αγορ","ending":"ά","case":"Вин.","gender":"ж"}
@@ -4936,12 +4938,8 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
         cleanPart = part.slice(hintMatch[0].length);
       }
     }
-    // For merged στ___ forms: strip trailing "στ" from the part — it's part of the blank display
-    let mergedPrefix = "";
-    if (i < blanks.length && mode === "cases" && cleanPart.match(/στ$/)) {
-      mergedPrefix = "στ";
-      cleanPart = cleanPart.slice(0, -2);
-    }
+    // se_merge: blank has "σε ___" — σε is already in the sentence text, no prefix needed
+    const mergedPrefix = "";
 
     if (i < blanks.length) {
       const isFilled = i < blankIdx;
@@ -4983,24 +4981,29 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
           <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
             {hint && <span style={{ fontSize:11, color:"#888", fontStyle:"italic", lineHeight:1.2 }}>({hint})</span>}
             <span style={{ fontSize:14, fontWeight:700, color:"#085041", background:"#E1F5EE", borderRadius:4, padding:"0 5px", lineHeight:1.5 }}>{fillInfo.answer}</span>
-            <span style={{ fontSize:16, fontWeight:700, color:"#E24B4A", background:"#FCEBEB", borderRadius:4, padding:"0 5px", lineHeight:1.5, textDecoration:"line-through" }}>{mergedPrefix}{fillInfo.wrong}</span>
+            <span style={{ fontSize:16, fontWeight:700, color:"#E24B4A", background:"#FCEBEB", borderRadius:4, padding:"0 5px", lineHeight:1.5, textDecoration:"line-through" }}>{fillInfo.wrong}</span>
           </span>
         );
       } else {
         const displayText = isFilled ? (fillInfo ? fillInfo.answer : "?")
-          : isCurrent ? (locked ? casesCorrect : (chosen || (mergedPrefix ? "…" : "___")))
-          : (mergedPrefix ? "…" : "___");
+          : isCurrent ? (locked ? casesCorrect : (chosen || "___"))
+          : "___";
         if (hint) {
           sentenceNodes.push(
             <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
               <span style={{ fontSize:11, color:"#888", fontStyle:"italic", lineHeight:1.2 }}>({hint})</span>
-              <span style={spanStyle}>{mergedPrefix && <span style={{ color:"#aaa", fontWeight:400 }}>στ</span>}{displayText}</span>
+              <span style={spanStyle}>{displayText}</span>
             </span>
           );
         } else {
+          const seMerge = (blanks[i]||{}).se_merge;
+          const mergedForm = seMerge ? ({"τον":"στον","την":"στην","το":"στο","τους":"στους","τις":"στις","τα":"στα"}[displayText] || ("σε "+displayText)) : null;
           sentenceNodes.push(
-            <span key={`b${i}`} style={spanStyle}>
-              {mergedPrefix && <span style={{ color: spanStyle.color === "#534AB7" ? "#9D96D8" : spanStyle.color === "#bbb" ? "#ddd" : "inherit", fontWeight:400 }}>στ</span>}{displayText}
+            <span key={`b${i}`} style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", verticalAlign:"middle", margin:"0 2px" }}>
+              {seMerge && isFilled && mergedForm && (
+                <span style={{ fontSize:10, color:"#9D96D8", fontStyle:"italic", lineHeight:1.2 }}>= {mergedForm}</span>
+              )}
+              <span style={spanStyle}>{displayText}</span>
             </span>
           );
         }
@@ -6289,7 +6292,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.52</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.53</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
