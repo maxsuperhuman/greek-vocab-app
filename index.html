@@ -4396,6 +4396,9 @@ RULES for blanks:
 - Include some sentences with σε ___ construction (aim for 2-3 out of 7)
 - Do NOT show the case name anywhere — student must figure it out from context
 - Make distractors plausible (e.g. τον/την/το/τα for accusative; τον/την/τα/της for mixed)
+- IMPORTANT: The blank must NEVER be the last word of the sentence — there must always be a noun or other word after it
+- Write only natural, real-world Greek sentences that a native speaker would actually say
+- Do NOT generate absurd or grammatically impossible sentences like "Γεννιέμαι νέος" (I am born young)
 - Include English translation
 
 Return ONLY a JSON array. Each item = one sentence with potentially multiple blanks:
@@ -4436,10 +4439,35 @@ morphology: list ONLY nouns and adjectives that appear in declined form (NOT in 
     if (res.ok) {
       const d = await res.json();
       const match = d.content[0].text.match(/\[[\s\S]*\]/);
-      if (match) return JSON.parse(match[0]);
+      if (match) {
+        const raw = JSON.parse(match[0]);
+        return validateCasesSentences(raw);
+      }
     }
   } catch(e) {}
   return null;
+}
+
+function validateCasesSentences(sentences) {
+  return sentences.filter(q => {
+    if (!q || !q.gr || !q.blanks || !q.blanks.length) return false;
+    const parts = q.gr.split("___");
+    // Must have exactly blanks.length + 1 parts
+    if (parts.length !== q.blanks.length + 1) return false;
+    // Last blank must not be at the very end of the sentence (after final punctuation)
+    const lastPart = parts[parts.length - 1].trim();
+    if (lastPart === "" || lastPart === "." || lastPart === ";" || lastPart === "!") return false;
+    // Each blank answer must be a valid Greek article or ∅
+    const validArticles = new Set(["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅",
+      "στον","στην","στο","στους","στις","στα"]);
+    if (!q.blanks.every(b => b.answer && validArticles.has(b.answer))) return false;
+    // Options must include the correct answer
+    if (!q.blanks.every(b => (b.options||[]).includes(b.answer))) return false;
+    // Sentence must have a real noun/verb — at least 4 Greek words
+    const words = q.gr.replace(/___/g,"").trim().split(/\s+/).filter(w => w.length > 1);
+    if (words.length < 3) return false;
+    return true;
+  });
 }
 
 async function fetchTensesSentences(words, level="A2") {
@@ -4494,10 +4522,30 @@ Return ONLY a JSON array:
     if (res.ok) {
       const d = await res.json();
       const match = d.content[0].text.match(/\[[\s\S]*\]/);
-      if (match) return JSON.parse(match[0]);
+      if (match) {
+        const raw = JSON.parse(match[0]);
+        return validateTensesSentences(raw);
+      }
     }
   } catch(e) {}
   return null;
+}
+
+function validateTensesSentences(sentences) {
+  return sentences.filter(q => {
+    if (!q || !q.gr || !q.blanks || !q.blanks.length) return false;
+    const parts = q.gr.split("___");
+    if (parts.length !== q.blanks.length + 1) return false;
+    // Last blank must not be at sentence end
+    const lastPart = parts[parts.length - 1].replace(/^\s*\([^)]+\)\s*/, "").trim();
+    if (lastPart === "" || lastPart === "." || lastPart === ";" || lastPart === "!") return false;
+    // Each blank must have 6 options including correct answer
+    if (!q.blanks.every(b => b.answer && (b.options||[]).includes(b.answer) && (b.options||[]).length >= 4)) return false;
+    // Must have real content
+    const words = q.gr.replace(/___/g,"").replace(/\([^)]+\)/g,"").trim().split(/\s+/).filter(w=>w.length>1);
+    if (words.length < 3) return false;
+    return true;
+  });
 }
 
 function ArticlesTab({ mastery, rec }) {
@@ -4635,7 +4683,12 @@ function ArticlesTab({ mastery, rec }) {
   async function startCases() {
     const pool = filterWords(WORDS, topic, subtopic);
     setCasesLoading(true); setNoNouns(false);
-    const fetched = await fetchCasesSentences(pool, articleMap, langLevel);
+    let fetched = await fetchCasesSentences(pool, articleMap, langLevel);
+    // Retry once if too few valid sentences came back
+    if (fetched && fetched.length < 4) {
+      const extra = await fetchCasesSentences(pool, articleMap, langLevel);
+      if (extra) fetched = [...fetched, ...extra].slice(0, 9);
+    }
     setCasesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
     setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
@@ -4644,15 +4697,18 @@ function ArticlesTab({ mastery, rec }) {
   }
 
   async function startTenses() {
-    // Always use all verbs as the core pool for tenses; add topic words for sentence context
     const allVerbs = WORDS.filter(w => w[3] === "Verbs");
     const topicWords = topic === "All" ? [] : filterWords(WORDS, topic, subtopic).filter(w => w[3] !== "Verbs");
     const pool = [...allVerbs, ...topicWords];
     setTensesLoading(true); setNoNouns(false);
-    const fetched = await fetchTensesSentences(pool, langLevel);
+    let fetched = await fetchTensesSentences(pool, langLevel);
+    // Retry once if too few valid sentences came back
+    if (fetched && fetched.length < 4) {
+      const extra = await fetchTensesSentences(pool, langLevel);
+      if (extra) fetched = [...fetched, ...extra].slice(0, 9);
+    }
     setTensesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
-    // Shuffle each blank's options so the correct answer isn't always first
     const shuffled = fetched.map(q => ({
       ...q,
       blanks: (q.blanks || []).map(b => ({ ...b, options: shuf([...(b.options || [])]) }))
@@ -6303,7 +6359,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.54</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.55</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
