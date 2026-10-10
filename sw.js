@@ -1,4 +1,4 @@
-const CACHE = 'greek-vocab-v21';
+const CACHE = 'greek-vocab-v22';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

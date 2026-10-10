@@ -4396,8 +4396,8 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
     {"answer":"του","options":["του","της","τους","τον"]}
   ],
   "morphology": [
-    {"word":"αδερφό","base":"αδερφός","stem":"αδερφ","ending":"ό","case":"Вин.","gender":"м"},
-    {"word":"φίλου","base":"φίλος","stem":"φίλ","ending":"ου","case":"Род.","gender":"м"}
+    {"blank_index":0,"word":"αδερφό","base":"αδερφός","stem":"αδερφ","ending":"ό","case":"Вин.","gender":"м"},
+    {"blank_index":1,"word":"φίλου","base":"φίλος","stem":"φίλ","ending":"ου","case":"Род.","gender":"м"}
   ]
 },{
   "gr": "Πάω στ___ αγορά κάθε Σάββατο.",
@@ -4405,10 +4405,13 @@ Return ONLY a JSON array. Each item = one sentence with potentially multiple bla
   "blanks": [
     {"answer":"στην","options":["στην","στον","στο","στις"]}
   ],
-  "morphology": []
+  "morphology": [
+    {"blank_index":0,"word":"αγορά","base":"αγορά","stem":"αγορ","ending":"ά","case":"Вин.","gender":"ж"}
+  ]
 }]
 
 morphology: list ONLY nouns and adjectives that appear in declined form (NOT in nominative). For each:
+- blank_index: which blank (0-based) this noun/adjective belongs to — i.e. it follows that blank's article
 - word: the form as it appears in the sentence
 - base: nominative singular (dictionary form)
 - stem: the unchanged part
@@ -5123,23 +5126,30 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза п
                     </tbody>
                   </table>
                 </div>
-                {/* Morphology for this tab — show all, but only if any exist */}
-                {morphItems.length > 0 && (
-                  <div style={{ background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:8, padding:"7px 10px" }}>
-                    <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Изменения слов</div>
-                    {morphItems.map((m, i) => (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:13, borderBottom: i < morphItems.length-1 ? "0.5px solid #EDEAFF" : "none" }}>
-                        <span style={{ color:"#888", minWidth:28, fontSize:11 }}>{m.case}</span>
-                        <span style={{ color:"#666" }}>{m.base}</span>
-                        <span style={{ color:"#ccc", fontSize:11 }}>→</span>
-                        <span>
-                          <span style={{ color:"#333" }}>{m.stem}</span><span style={{ color:"#534AB7", fontWeight:700, borderBottom:"2px solid #534AB7" }}>{m.ending}</span>
-                        </span>
-                        <span style={{ color:"#bbb", fontSize:11, marginLeft:"auto" }}>{m.gender}р.</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Morphology filtered to active tab's blank_index */}
+                {(() => {
+                  // support both old (no blank_index) and new (with blank_index) format
+                  const tabMorph = morphItems.filter(m =>
+                    m.blank_index === undefined ? true : m.blank_index === activeTab
+                  );
+                  if (!tabMorph.length) return null;
+                  return (
+                    <div style={{ background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:8, padding:"7px 10px" }}>
+                      <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Изменения слов</div>
+                      {tabMorph.map((m, i) => (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:13, borderBottom: i < tabMorph.length-1 ? "0.5px solid #EDEAFF" : "none" }}>
+                          <span style={{ color:"#888", minWidth:28, fontSize:11 }}>{m.case}</span>
+                          <span style={{ color:"#666" }}>{m.base}</span>
+                          <span style={{ color:"#ccc", fontSize:11 }}>→</span>
+                          <span>
+                            <span style={{ color:"#333" }}>{m.stem}</span><span style={{ color:"#534AB7", fontWeight:700, borderBottom:"2px solid #534AB7" }}>{m.ending}</span>
+                          </span>
+                          <span style={{ color:"#bbb", fontSize:11, marginLeft:"auto" }}>{m.gender}р.</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -6218,7 +6228,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.48</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.49</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
