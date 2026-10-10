@@ -4716,26 +4716,37 @@ function ArticlesTab({ mastery, rec }) {
     const blanksDesc = q.blanks.map((b,i) => `Blank ${i+1}: answer="${b.answer}"`).join(", ");
     const isTenses = mode === "tenses";
     const prompt = isTenses
-      ? `Объясни по-русски КРАТКО (макс 60 слов) глагольные формы в предложении.
+      ? `Объясни по-русски глагольные формы в греческом предложении. Пиши понятно для начинающего.
 Предложение: "${q.gr}" — ${q.en}
 ${blanksDesc}
 
-Формат ответа — строго так, без лишнего текста:
-${q.blanks.map((b,i)=>`**${b.answer}** — [время/лицо одним словом]: [1 фраза почему]`).join("\n")}
-💡 [одна практическая подсказка как запомнить]`
-      : `Объясни по-русски КРАТКО (макс 60 слов) артикли в предложении.
+Для каждого пропуска объясни:
+1. Какое это время (настоящее/прошедшее простое/прошедшее длительное/будущее) и почему именно оно здесь
+2. Какое лицо и число (я/ты/он/мы и т.д.) и как это видно из окончания
+3. Что значит этот глагол в данном контексте
+
+Формат — строго так:
+${q.blanks.map((b,i)=>`**${b.answer}** — [время, лицо+число]: [2-3 фразы с объяснением]`).join("\n")}
+💡 [практическая подсказка: как отличить это время от похожего, или как запомнить окончание]`
+      : `Объясни по-русски артикли в греческом предложении. Пиши понятно для начинающего.
 Предложение: "${q.gr}" — ${q.en}
 ${blanksDesc}
 
-Формат ответа — строго так, без лишнего текста:
-${q.blanks.map((b,i)=>`**${b.answer}** — [род+падеж]: [1 фраза почему]`).join("\n")}
-💡 [одна практическая подсказка как запомнить]`;
+Для каждого пропуска объясни:
+1. Какой это падеж и почему (что за роль у существительного в предложении — подлежащее, объект, принадлежность, направление)
+2. Какой род и число существительного рядом
+3. Если артикль ∅ — почему он здесь не нужен (общее значение, предикатив, имена собственные и т.д.)
+4. Если артикль после σε — как σε + артикль сливаются в одно слово
+
+Формат — строго так:
+${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-3 фразы с объяснением]`).join("\n")}
+💡 [практическая подсказка как запомнить этот тип артикля или этот падеж]`;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({
-          model:"claude-haiku-4-5", max_tokens:400,
+          model:"claude-haiku-4-5", max_tokens:800,
           messages:[{ role:"user", content: prompt }]
         })
       });
@@ -6292,7 +6303,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.53</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.54</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
