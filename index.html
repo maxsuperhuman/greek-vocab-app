@@ -6055,10 +6055,9 @@ const DRILL_PERSONS = [
 ];
 
 const TENSES_LIST = [
-  { id:"present",    label:"Present",    grLabel:"Ενεστώτας"   },
-  { id:"past",       label:"Past",       grLabel:"Αόριστος"    },
-  { id:"future",     label:"Future",     grLabel:"Μέλλοντας"   },
-  { id:"imperative", label:"Imperative", grLabel:"Προστακτική" },
+  { id:"present", label:"Present", grLabel:"Ενεστώτας" },
+  { id:"past",    label:"Past",    grLabel:"Αόριστος"   },
+  { id:"future",  label:"Future",  grLabel:"Μέλλοντας"  },
 ];
 
 const VDRILL_CACHE_PREFIX = "vdrill_v1_";
@@ -6206,8 +6205,9 @@ function VerbDrillTab() {
   const [loading, setLoading]     = useState(false);
   const [loadErr, setLoadErr]     = useState("");
   // Study drill state
-  const [drillRows, setDrillRows] = useState([]);  // [{person,form,tr}] shuffled
-  const [drillIdx, setDrillIdx]   = useState(0);
+  const [drillRows, setDrillRows]   = useState([]);  // [{person,form,tr,tenseLabel,tenseGr}] shuffled
+  const [drillIdx, setDrillIdx]     = useState(0);
+  const [drillAllTenses, setDrillAllTenses] = useState(false);
   const [drillInput, setDrillInput] = useState("");
   const [drillResult, setDrillResult] = useState(null); // null | "ok" | "bad"
   const [drillScore, setDrillScore] = useState({ok:0,total:0});
@@ -6309,45 +6309,27 @@ function VerbDrillTab() {
         )
       )}
 
-      {drillMode === "study" && selVerb && (
-        <div style={{marginBottom:"1rem"}}>
-          <div style={{fontSize:12,color:"#888",fontWeight:500,marginBottom:8}}>Choose tense:</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {TENSES_LIST.map(t => (
-              <button key={t.id} onClick={()=>setSelTense(t.id)}
-                style={{padding:"7px 14px",borderRadius:20,
-                  border:`1.5px solid ${selTense===t.id?"#534AB7":"#ddd"}`,
-                  background:selTense===t.id?"#534AB7":"white",
-                  color:selTense===t.id?"white":"#555",
-                  fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
-                {t.label} <span style={{fontSize:11,opacity:.6}}>· {t.grLabel}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {loadErr && <div style={{color:"#E24B4A",fontSize:13,marginBottom:10,textAlign:"center"}}>{loadErr}</div>}
 
       {selVerb && (
-        <div style={{textAlign:"center",marginTop:"0.5rem"}}>
+        <div style={{textAlign:"center",marginTop:"1rem"}}>
           {loading ? (
-            <div style={{color:"#888",fontSize:13}}>⏳ Loading conjugation table…</div>
+            <div style={{color:"#888",fontSize:13}}>⏳ Loading…</div>
           ) : (
             <button onClick={async ()=>{
               if (!selVerb) return;
               setLoading(true); setLoadErr("");
               if (drillMode === "study") {
-                const table = await fetchConjTable(selVerb[0], selVerb[1], selTense);
+                const firstTense = "present";
+                const table = await fetchConjTable(selVerb[0], selVerb[1], firstTense);
                 if (!table || !table.rows || !table.rows.length) {
                   setLoadErr("Could not load conjugation. Check API key in Settings.");
                   setLoading(false); return;
                 }
                 setConjTable(table);
-                setSelTense(selTense);
+                setSelTense(firstTense);
                 setScreen("study_tense");
               } else {
-                // Test mode
                 setTestVerb(selVerb);
                 const exs = await fetchFillExercises(selVerb[0], selVerb[1], selVerb[2]);
                 if (!exs || !exs.length) {
@@ -6362,7 +6344,7 @@ function VerbDrillTab() {
               setLoading(false);
             }}
               style={{padding:"12px 36px",borderRadius:12,border:"none",background:"#534AB7",color:"white",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              Start →
+              {drillMode==="study" ? "Study →" : "Start test →"}
             </button>
           )}
         </div>
@@ -6371,45 +6353,128 @@ function VerbDrillTab() {
     </div>
   );
 
-  // ── STUDY: show full conjugation table, then offer to drill ──
+  // ── STUDY: show full conjugation table, tense nav + drill ──
   if (screen === "study_tense") {
-    const tenseInfo = TENSES_LIST.find(t=>t.id===selTense) || TENSES_LIST[0];
+    const tenseIdx = TENSES_LIST.findIndex(t=>t.id===selTense);
+    const tenseInfo = TENSES_LIST[tenseIdx] || TENSES_LIST[0];
+    const prevTense = TENSES_LIST[tenseIdx-1];
+    const nextTense = TENSES_LIST[tenseIdx+1];
+
+    async function switchTense(newTenseId) {
+      setLoading(true); setLoadErr("");
+      const table = await fetchConjTable(selVerb[0], selVerb[1], newTenseId);
+      setLoading(false);
+      if (!table || !table.rows || !table.rows.length) {
+        setLoadErr("Could not load conjugation. Check API key.");
+        return;
+      }
+      setConjTable(table);
+      setSelTense(newTenseId);
+    }
+
+    async function startDrillAllTenses() {
+      setLoading(true); setLoadErr("");
+      // Fetch all 3 tenses, combine rows tagged with tense label
+      const results = await Promise.all(
+        TENSES_LIST.map(t => fetchConjTable(selVerb[0], selVerb[1], t.id).then(tbl => ({t, tbl})))
+      );
+      setLoading(false);
+      const allRows = [];
+      for (const {t, tbl} of results) {
+        if (tbl && tbl.rows) {
+          tbl.rows.forEach(r => allRows.push({...r, tenseLabel: t.label, tenseGr: t.grLabel}));
+        }
+      }
+      if (!allRows.length) { setLoadErr("Could not load conjugations. Check API key."); return; }
+      setDrillRows(shuf(allRows));
+      setDrillIdx(0); setDrillInput(""); setDrillResult(null);
+      setDrillScore({ok:0,total:0});
+      setDrillAllTenses(true);
+      setScreen("study_drill");
+    }
+
     return (
       <div style={{padding:"0.5rem 0"}}>
         <button onClick={()=>setScreen("menu")} style={{fontSize:13,color:"#888",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:12}}>← Back</button>
+
+        {/* Verb header + tense navigation */}
         <div style={{textAlign:"center",marginBottom:"1.2rem"}}>
           <div style={{fontSize:22,fontWeight:700,color:"#26215C"}}>{selVerb[0]}</div>
-          <div style={{fontSize:13,color:"#888"}}>{selVerb[1]} · {selVerb[2]}</div>
-          <div style={{marginTop:4,fontSize:12,color:"#534AB7",fontWeight:500}}>{tenseInfo.label} — {tenseInfo.grLabel}</div>
+          <div style={{fontSize:13,color:"#888",marginBottom:8}}>{selVerb[1]} · {selVerb[2]}</div>
+
+          {/* Tense arrow switcher */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+            <button onClick={()=>prevTense&&switchTense(prevTense.id)}
+              disabled={!prevTense||loading}
+              style={{width:34,height:34,borderRadius:"50%",border:"1.5px solid #ddd",background:prevTense?"white":"#f5f5f5",
+                color:prevTense?"#534AB7":"#ccc",fontSize:18,cursor:prevTense?"pointer":"default",fontFamily:"inherit",
+                display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>‹</button>
+
+            <div style={{minWidth:140,textAlign:"center"}}>
+              {loading ? (
+                <div style={{fontSize:13,color:"#888"}}>⏳ Loading…</div>
+              ) : (
+                <>
+                  <div style={{fontSize:15,fontWeight:700,color:"#534AB7"}}>{tenseInfo.label}</div>
+                  <div style={{fontSize:12,color:"#9D96D8"}}>{tenseInfo.grLabel}</div>
+                </>
+              )}
+            </div>
+
+            <button onClick={()=>nextTense&&switchTense(nextTense.id)}
+              disabled={!nextTense||loading}
+              style={{width:34,height:34,borderRadius:"50%",border:"1.5px solid #ddd",background:nextTense?"white":"#f5f5f5",
+                color:nextTense?"#534AB7":"#ccc",fontSize:18,cursor:nextTense?"pointer":"default",fontFamily:"inherit",
+                display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>›</button>
+          </div>
+
+          {/* Tense dots */}
+          <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:8}}>
+            {TENSES_LIST.map((t,i) => (
+              <button key={t.id} onClick={()=>switchTense(t.id)}
+                style={{width:8,height:8,borderRadius:"50%",border:"none",padding:0,cursor:"pointer",
+                  background:t.id===selTense?"#534AB7":"#ddd",transition:"background .2s"}}/>
+            ))}
+          </div>
         </div>
 
-        <div style={{background:"#EEEDFE",borderRadius:14,padding:"14px 16px",marginBottom:"1.2rem"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:15}}>
-            <tbody>
-              {conjTable.rows.map((r,i) => (
-                <tr key={i} style={{borderBottom:i<conjTable.rows.length-1?"1px solid rgba(83,74,183,0.15)":undefined}}>
-                  <td style={{padding:"9px 6px 9px 0",color:"#888",fontSize:13,width:"36%"}}>{r.person}</td>
-                  <td style={{padding:"9px 6px",fontWeight:600,color:"#26215C"}}>{r.form}</td>
-                  <td style={{padding:"9px 0 9px 4px",color:"#9D96D8",fontSize:13,fontStyle:"italic"}}>{r.tr}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loadErr && <div style={{color:"#E24B4A",fontSize:13,marginBottom:10,textAlign:"center"}}>{loadErr}</div>}
 
-        <div style={{fontSize:13,color:"#666",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>
-          Study the table, then practice each form by typing it.
-        </div>
-        <div style={{textAlign:"center"}}>
+        {!loading && conjTable && (
+          <div style={{background:"#EEEDFE",borderRadius:14,padding:"14px 16px",marginBottom:"1.2rem"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:15}}>
+              <tbody>
+                {conjTable.rows.map((r,i) => (
+                  <tr key={i} style={{borderBottom:i<conjTable.rows.length-1?"1px solid rgba(83,74,183,0.15)":undefined}}>
+                    <td style={{padding:"9px 6px 9px 0",color:"#888",fontSize:13,width:"36%"}}>{r.person}</td>
+                    <td style={{padding:"9px 6px",fontWeight:600,color:"#26215C"}}>{r.form}</td>
+                    <td style={{padding:"9px 0 9px 4px",color:"#9D96D8",fontSize:13,fontStyle:"italic"}}>{r.tr}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10,marginTop:"0.5rem"}}>
           <button onClick={()=>{
-            const rows = selTense==="imperative" ? conjTable.rows : shuf([...conjTable.rows]);
-            setDrillRows(rows);
+            const rows = shuf([...conjTable.rows]);
+            setDrillRows(rows.map(r=>({...r,tenseLabel:tenseInfo.label,tenseGr:tenseInfo.grLabel})));
             setDrillIdx(0); setDrillInput(""); setDrillResult(null);
             setDrillScore({ok:0,total:0});
+            setDrillAllTenses(false);
             setScreen("study_drill");
           }}
-            style={{padding:"12px 32px",borderRadius:12,border:"none",background:"#534AB7",color:"white",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-            Drill it! →
+            disabled={loading||!conjTable}
+            style={{flex:1,padding:"12px 10px",borderRadius:12,border:"1.5px solid #534AB7",background:"white",
+              color:"#534AB7",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            Drill this tense
+          </button>
+          <button onClick={startDrillAllTenses}
+            disabled={loading}
+            style={{flex:1,padding:"12px 10px",borderRadius:12,border:"none",background:"#534AB7",
+              color:"white",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            Drill all 3 →
           </button>
         </div>
       </div>
@@ -6419,7 +6484,7 @@ function VerbDrillTab() {
   // ── STUDY DRILL: type each person's form ──
   if (screen === "study_drill") {
     if (drillIdx >= drillRows.length) {
-      // finished all persons
+      // finished
       return (
         <div style={{padding:"2rem 0",textAlign:"center"}}>
           <div style={{fontSize:32,marginBottom:8}}>🎉</div>
@@ -6427,16 +6492,15 @@ function VerbDrillTab() {
             {drillScore.ok}/{drillRows.length} correct
           </div>
           <div style={{fontSize:13,color:"#888",marginBottom:"1.5rem"}}>
-            {selVerb[0]} · {TENSES_LIST.find(t=>t.id===selTense)?.label}
+            {selVerb[0]} · {drillAllTenses ? "All 3 tenses" : (TENSES_LIST.find(t=>t.id===selTense)?.label)}
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
             <button onClick={()=>{
-              const rows = selTense==="imperative" ? conjTable.rows : shuf([...conjTable.rows]);
-              setDrillRows(rows); setDrillIdx(0); setDrillInput(""); setDrillResult(null);
+              setDrillRows(shuf([...drillRows])); setDrillIdx(0); setDrillInput(""); setDrillResult(null);
               setDrillScore({ok:0,total:0});
             }}
               style={{padding:"11px 22px",borderRadius:12,border:"2px solid #534AB7",background:"white",color:"#534AB7",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              🔁 Retry tense
+              🔁 Retry
             </button>
             <button onClick={()=>setScreen("study_tense")}
               style={{padding:"11px 22px",borderRadius:12,border:"none",background:"#534AB7",color:"white",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
@@ -6452,7 +6516,6 @@ function VerbDrillTab() {
     }
 
     const row = drillRows[drillIdx];
-    const tenseInfo = TENSES_LIST.find(t=>t.id===selTense) || TENSES_LIST[0];
     const bgMain = drillResult==="ok" ? "#E8F8F2" : drillResult==="bad" ? "#FFF0F0" : "white";
 
     function submitDrill() {
@@ -6473,7 +6536,9 @@ function VerbDrillTab() {
         <div style={{marginBottom:"1.4rem"}}/>
 
         <div style={{textAlign:"center",marginBottom:"1.6rem"}}>
-          <div style={{fontSize:11,color:"#aaa",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{tenseInfo.label} · {tenseInfo.grLabel}</div>
+          <div style={{fontSize:11,color:"#aaa",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>
+            {row.tenseLabel || TENSES_LIST.find(t=>t.id===selTense)?.label} · {row.tenseGr || TENSES_LIST.find(t=>t.id===selTense)?.grLabel}
+          </div>
           <div style={{fontSize:14,color:"#888",marginBottom:4}}>{selVerb[0]} = {selVerb[2]}</div>
           <div style={{fontSize:28,fontWeight:700,color:"#26215C"}}>{row.person}</div>
           <div style={{fontSize:13,color:"#9D96D8",marginTop:2}}>{
@@ -7132,7 +7197,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.57</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.58</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
