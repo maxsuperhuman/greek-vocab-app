@@ -4365,10 +4365,13 @@ async function fetchCasesSentences(words, articleMap, level="A2") {
   if (!pool.length) return null;
   const list = pool.map(w => `${w[0]} (${w[2]}, ${["ο","η","το"].includes(articleMap[w[0]]) ? articleMap[w[0]] : "verb/adj"})`).join(", ");
   const levelGuide = level === "A1"
-    ? "A1 level: very short sentences (4-6 words), only nominative and accusative cases, present tense only, the most common everyday nouns (food, family, places), no genitive, no plural articles"
+    ? `A1 level: very short sentences (4-6 words), only nominative and accusative cases, present tense only, no genitive, no plural articles.
+VOCABULARY RESTRICTION — use ONLY these types of words in the sentence (not just the blank): body parts, family members (mother/father/brother/sister/child), food and drink (bread/water/coffee/milk), colors, numbers, basic places (house/school/market/beach/street), basic verbs (be/have/go/see/eat/drink/want/speak/work/live). Do NOT use abstract, literary or low-frequency words. Every content word in the sentence must be something a total beginner would know.`
     : level === "B1"
-    ? "B1 level: longer natural sentences (8-12 words), mix all cases including genitive and plurals freely, varied tenses, more complex structures"
-    : "A2 level: moderate sentences (6-9 words), mix nominative/accusative/genitive, some plural articles, everyday topics";
+    ? `B1 level: longer natural sentences (8-12 words), mix all cases including genitive and plurals freely, varied tenses, more complex structures.
+VOCABULARY: freely use any words including abstract nouns, verbs with prefixes, formal register, idiomatic expressions.`
+    : `A2 level: moderate sentences (6-9 words), mix nominative/accusative/genitive, some plural articles, everyday topics.
+VOCABULARY RESTRICTION — use only common everyday words a beginner-intermediate student knows: home/daily routine/shopping/transport/weather/food/simple emotions/common places. Avoid rare, literary, technical or abstract words. No verbs like λύνω (solve), εξηγώ (explain), αναλύω (analyze) — stick to high-frequency vocabulary.`;
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -4480,10 +4483,13 @@ async function fetchTensesSentences(words, level="A2") {
   if (!pool.length) return null;
   const list = pool.map(w => `${w[0]} (${w[2]})`).join(", ");
   const levelGuide = level === "A1"
-    ? "A1 level: very short sentences (4-6 words), ONLY present tense (ενεστώτας), 1st and 2nd person singular only (εγώ/εσύ), the simplest most common verbs, no past or future"
+    ? `A1 level: very short sentences (4-6 words), ONLY present tense (ενεστώτας), 1st and 2nd person singular only (εγώ/εσύ), no past or future.
+VOCABULARY RESTRICTION — use ONLY the most basic high-frequency verbs: είμαι/έχω/πάω/βλέπω/τρώω/πίνω/μιλώ/δουλεύω/θέλω/ξέρω/αγαπώ/μένω/έρχομαι/φεύγω. Context words (not blank) must also be simple: family/food/places/basic objects. A total beginner must know every word in the sentence.`
     : level === "B1"
-    ? "B1 level: longer natural sentences (8-12 words), freely mix all tenses (present, past simple, imperfect, future), all persons including plural, more complex contexts"
-    : "A2 level: moderate sentences (6-9 words), mainly present and past simple (αόριστος), 1st/2nd/3rd person singular, introduce future occasionally";
+    ? `B1 level: longer natural sentences (8-12 words), freely mix all tenses (present, past simple, imperfect, future), all persons including plural, more complex contexts.
+VOCABULARY: use any verbs freely, including less common ones, phrasal verbs, formal register.`
+    : `A2 level: moderate sentences (6-9 words), mainly present and past simple (αόριστος), 1st/2nd/3rd person singular, future occasionally.
+VOCABULARY RESTRICTION — use common everyday verbs a beginner-intermediate knows: go/come/buy/eat/drink/speak/work/live/see/know/want/give/take/help/open/close/read/write/listen/watch/travel/call/meet. Avoid rare or literary verbs like λύνω (solve), αναλύω (analyze), εκτιμώ (appreciate formally). Every verb must be something a student with 3-6 months of Greek would recognize.`;
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
@@ -6359,7 +6365,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.55</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.56</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
