@@ -5872,39 +5872,170 @@ Return ONLY a JSON array:
 }
 
 // ─── Verb Drill Tab ────────────────────────────────────────────────
-// VERBS_CORE: [greek, transcription, english, group A|B]
+// VERBS_CORE: [greek, transcription, english, group A|B, theme block]
 // Present tense paradigm built inline; past/future fetched via API
 const VERBS_CORE = [
-  ["μιλάω","miláo","I speak","B"],
-  ["κάνω","káno","I do","A"],
-  ["πάω","páo","I go","A"],
-  ["τρώω","tróo","I eat","A"],
-  ["πίνω","píno","I drink","A"],
-  ["λέω","léo","I say","A"],
-  ["θέλω","thélo","I want","A"],
-  ["ξέρω","xéro","I know","A"],
-  ["βλέπω","vlépo","I see","A"],
-  ["ακούω","akúo","I hear","A"],
-  ["γράφω","gráfo","I write","A"],
-  ["διαβάζω","diavázo","I read","A"],
-  ["δουλεύω","dulévo","I work","A"],
-  ["μένω","méno","I stay","A"],
-  ["παίρνω","pérno","I take","A"],
-  ["δίνω","díno","I give","A"],
-  ["φεύγω","févgo","I leave","A"],
-  ["έρχομαι","érchomai","I come","A"],
-  ["αγαπάω","agapáo","I love","B"],
-  ["βοηθάω","voitháo","I help","B"],
-  ["ρωτάω","rotáo","I ask","B"],
-  ["μαθαίνω","mathéno","I learn","A"],
-  ["πληρώνω","pliróno","I pay","A"],
-  ["αγοράζω","agorázo","I buy","A"],
-  ["μαγειρεύω","mayirévo","I cook","A"],
-  ["καθαρίζω","katharízo","I clean","A"],
-  ["οδηγώ","odigó","I drive","B"],
-  ["τηλεφωνώ","tilefonó","I phone","B"],
-  ["χρειάζομαι","chriázome","I need","A"],
-  ["σκέφτομαι","skéftome","I think","A"],
+  // ── Block 1: Super-irregular (must memorize pairs) ───────────────
+  ["κάνω","káno","I do / make","irr","Super-irregular"],
+  ["πάω","páo","I go","irr","Super-irregular"],
+  ["τρώω","tróo","I eat","irr","Super-irregular"],
+  ["πίνω","píno","I drink","irr","Super-irregular"],
+  ["λέω","léo","I say","irr","Super-irregular"],
+  ["βλέπω","vlépo","I see / watch","irr","Super-irregular"],
+  ["έχω","écho","I have","irr","Super-irregular"],
+  ["είμαι","íme","I am","irr","Super-irregular"],
+
+  // ── Block 2: Irregular past (group A present, tricky past) ───────
+  ["έρχομαι","érchomai","I come","A","Irregular past"],
+  ["βρίσκω","vrísko","I find","A","Irregular past"],
+  ["μένω","méno","I stay / live","A","Irregular past"],
+  ["φέρνω","férno","I bring","A","Irregular past"],
+  ["μαθαίνω","mathéno","I learn","A","Irregular past"],
+  ["καταλαβαίνω","katalavéno","I understand","A","Irregular past"],
+  ["παίρνω","pérno","I take / get","A","Irregular past"],
+  ["δίνω","díno","I give","A","Irregular past"],
+  ["βάζω","vázo","I put / place","A","Irregular past"],
+  ["βγάζω","vgázo","I take out / remove","A","Irregular past"],
+  ["πέφτω","péfto","I fall","A","Irregular past"],
+  ["πλένω","pléno","I wash","A","Irregular past"],
+  ["στέλνω","stélno","I send","A","Irregular past"],
+  ["ανεβαίνω","anevéno","I go up / climb","A","Irregular past"],
+  ["κατεβαίνω","katevéno","I go down","A","Irregular past"],
+  ["μπαίνω","béno","I enter / go in","A","Irregular past"],
+  ["βγαίνω","vgéno","I go out / exit","A","Irregular past"],
+  ["παραγγέλνω","paranélno","I order (food)","A","Irregular past"],
+  ["ξέρω","xéro","I know","A","Irregular past"],
+
+  // ── Block 3: Reflexive / Passive verbs ──────────────────────────
+  ["γεννιέμαι","geniéme","I am born","B","Reflexive & Passive"],
+  ["παντρεύομαι","pandrévomai","I get married","B","Reflexive & Passive"],
+  ["γίνομαι","gínome","I become","B","Reflexive & Passive"],
+  ["θυμάμαι","thimáme","I remember","B","Reflexive & Passive"],
+  ["λυπάμαι","lipáme","I feel sorry","B","Reflexive & Passive"],
+  ["φοβάμαι","fováme","I am afraid","B","Reflexive & Passive"],
+  ["κοιμάμαι","kimáme","I sleep","B","Reflexive & Passive"],
+  ["επισκέπτομαι","episképtome","I visit","B","Reflexive & Passive"],
+  ["σκέφτομαι","skéftome","I think / consider","B","Reflexive & Passive"],
+  ["χρειάζομαι","chriázome","I need","B","Reflexive & Passive"],
+
+  // ── Block 4: Daily life & home ───────────────────────────────────
+  ["κάνω ντους","káno dous","I shower","irr","Daily life & home"],
+  ["καθαρίζω","katharízo","I clean","A","Daily life & home"],
+  ["μαγειρεύω","mayirévo","I cook","A","Daily life & home"],
+  ["ανοίγω","anígo","I open","A","Daily life & home"],
+  ["κλείνω","klíno","I close / book","A","Daily life & home"],
+  ["ανάβω","anávo","I turn on / light","A","Daily life & home"],
+  ["φτιάχνω","ftiáchno","I make / fix","A","Daily life & home"],
+  ["αλλάζω","allázo","I change","A","Daily life & home"],
+  ["πλένω","pléno","I wash","A","Daily life & home"],
+  ["ψάχνω","psáchno","I look for / search","A","Daily life & home"],
+
+  // ── Block 5: Communication & cognition ──────────────────────────
+  ["μιλάω","miláo","I speak","B","Communication"],
+  ["λέω","léo","I say / tell","irr","Communication"],
+  ["γράφω","gráfo","I write","A","Communication"],
+  ["ακούω","akúo","I listen / hear","A","Communication"],
+  ["ρωτάω","rotáo","I ask","B","Communication"],
+  ["απαντάω","apandáo","I answer","B","Communication"],
+  ["τηλεφωνώ","tilefonó","I phone","B","Communication"],
+  ["στέλνω","stélno","I send","A","Communication"],
+  ["νομίζω","nomízo","I think / believe","A","Communication"],
+  ["ζητάω","zitáo","I ask for / request","B","Communication"],
+  ["φωνάζω","fonázo","I shout / call out","A","Communication"],
+
+  // ── Block 6: Movement & travel ───────────────────────────────────
+  ["πάω","páo","I go","irr","Movement & travel"],
+  ["έρχομαι","érchomai","I come","A","Movement & travel"],
+  ["φεύγω","févgo","I leave / go away","A","Movement & travel"],
+  ["φτάνω","ftáno","I arrive","A","Movement & travel"],
+  ["γυρίζω","yirízo","I return / turn","A","Movement & travel"],
+  ["ταξιδεύω","taxidévo","I travel","A","Movement & travel"],
+  ["περπατάω","perpatáo","I walk","B","Movement & travel"],
+  ["οδηγώ","odigó","I drive","B","Movement & travel"],
+  ["ανεβαίνω","anevéno","I go up / climb","A","Movement & travel"],
+  ["κατεβαίνω","katevéno","I go down","A","Movement & travel"],
+  ["μπαίνω","béno","I enter","A","Movement & travel"],
+  ["βγαίνω","vgéno","I go out / exit","A","Movement & travel"],
+  ["μετακομίζω","metakomízo","I move / relocate","A","Movement & travel"],
+
+  // ── Block 7: Learning & work ─────────────────────────────────────
+  ["δουλεύω","dulévo","I work","A","Learning & work"],
+  ["διαβάζω","diavázo","I read / study","A","Learning & work"],
+  ["μαθαίνω","mathéno","I learn","A","Learning & work"],
+  ["σπουδάζω","spudázo","I study at university","A","Learning & work"],
+  ["γράφω","gráfo","I write","A","Learning & work"],
+  ["αρχίζω","archízo","I start / begin","A","Learning & work"],
+  ["τελειώνω","telióno","I finish","A","Learning & work"],
+  ["συνεχίζω","sinechízo","I continue","A","Learning & work"],
+  ["αποφασίζω","apofasízo","I decide","A","Learning & work"],
+  ["κανονίζω","kanonízo","I organize / arrange","A","Learning & work"],
+  ["παρακολουθώ","parakoluthó","I attend / follow","B","Learning & work"],
+
+  // ── Block 8: Shopping & money ────────────────────────────────────
+  ["αγοράζω","agorázo","I buy","A","Shopping & money"],
+  ["πουλάω","puláo","I sell","B","Shopping & money"],
+  ["πληρώνω","pliróno","I pay","A","Shopping & money"],
+  ["ψωνίζω","psonízo","I shop","A","Shopping & money"],
+  ["παραγγέλνω","paranélno","I order (food/goods)","A","Shopping & money"],
+  ["χαλάω","chaláo","I break / go wrong","B","Shopping & money"],
+  ["κοστίζω","kostízo","I cost","A","Shopping & money"],
+
+  // ── Block 9: Feelings & body ─────────────────────────────────────
+  ["αγαπάω","agapáo","I love","B","Feelings & body"],
+  ["θέλω","thélo","I want","A","Feelings & body"],
+  ["αρέσω","aréso","I please / like","A","Feelings & body"],
+  ["χαίρομαι","chérome","I am happy / enjoy","B","Feelings & body"],
+  ["λυπάμαι","lipáme","I feel sorry / sad","B","Feelings & body"],
+  ["φοβάμαι","fováme","I am afraid","B","Feelings & body"],
+  ["πονάω","ponáo","I hurt / ache","B","Feelings & body"],
+  ["κουράζομαι","kurázomai","I get tired","B","Feelings & body"],
+  ["διψάω","dipsáo","I am thirsty","B","Feelings & body"],
+  ["πεινάω","pináo","I am hungry","B","Feelings & body"],
+  ["ξυπνάω","xipnáo","I wake up","B","Feelings & body"],
+  ["κοιμάμαι","kimáme","I sleep","B","Feelings & body"],
+
+  // ── Block 10: Social & life events ──────────────────────────────
+  ["γεννιέμαι","geniéme","I am born","B","Social & life events"],
+  ["μεγαλώνω","megalóno","I grow up","A","Social & life events"],
+  ["παντρεύομαι","pandrévomai","I get married","B","Social & life events"],
+  ["χωρίζω","chorízo","I divorce / separate","A","Social & life events"],
+  ["πεθαίνω","pethéno","I die","A","Social & life events"],
+  ["γνωρίζω","gnorízo","I meet / get to know","A","Social & life events"],
+  ["συναντάω","sinandáo","I meet (by arrangement)","B","Social & life events"],
+  ["περιμένω","periméno","I wait / expect","A","Social & life events"],
+  ["βοηθάω","voitháo","I help","B","Social & life events"],
+  ["καλώ","kaló","I invite / call","B","Social & life events"],
+  ["χαίρω πολύ","chéro polí","Nice to meet you","A","Social & life events"],
+
+  // ── Block 11: Food & leisure ─────────────────────────────────────
+  ["τρώω","tróo","I eat","irr","Food & leisure"],
+  ["πίνω","píno","I drink","irr","Food & leisure"],
+  ["παραγγέλνω","paranélno","I order (food)","A","Food & leisure"],
+  ["μαγειρεύω","mayirévo","I cook","A","Food & leisure"],
+  ["προτιμάω","protimáo","I prefer","B","Food & leisure"],
+  ["χορεύω","chorévo","I dance","A","Food & leisure"],
+  ["τραγουδάω","tragudáo","I sing","B","Food & leisure"],
+  ["παίζω","pézo","I play","A","Food & leisure"],
+  ["γελάω","yeláo","I laugh","B","Food & leisure"],
+  ["διασκεδάζω","diaaskedázo","I have fun / enjoy","A","Food & leisure"],
+  ["ξεναγώ","xenagó","I guide / show around","B","Food & leisure"],
+
+  // ── Block 12: Verbs of perception & misc ────────────────────────
+  ["βλέπω","vlépo","I see / watch","irr","Perception & misc"],
+  ["ακούω","akúo","I hear / listen","A","Perception & misc"],
+  ["μυρίζω","mirízo","I smell","A","Perception & misc"],
+  ["προσέχω","prosécho","I pay attention / take care","A","Perception & misc"],
+  ["χάνω","cháno","I miss / lose","A","Perception & misc"],
+  ["λείπω","lípo","I am absent / away","A","Perception & misc"],
+  ["αργώ","argó","I am late","B","Perception & misc"],
+  ["σταματάω","stamatáo","I stop","B","Perception & misc"],
+  ["χρησιμοποιώ","chrisimopió","I use","B","Perception & misc"],
+  ["πειράζω","pirázo","I bother / matter","A","Perception & misc"],
+  ["ζω","zo","I live","B","Perception & misc"],
+  ["περνάω","pernáo","I spend time / pass","B","Perception & misc"],
+  ["ξεχνάω","xechnáo","I forget","B","Perception & misc"],
+  ["φοράω","foráo","I wear","B","Perception & misc"],
+  ["φαίνομαι","fénome","I seem / appear","B","Perception & misc"],
 ];
 
 // Present tense conjugation table for group A and B
@@ -6061,11 +6192,16 @@ Rules:
   }
 }
 
+// Deduplicate VERBS_CORE by greek form (keep first occurrence per verb+block combo for drills)
+// For display, we show all grouped. For drill selection, unique by greek form.
+const VERB_BLOCKS = [...new Set(VERBS_CORE.map(v => v[4]))];
+
 function VerbDrillTab() {
   const [screen, setScreen]       = useState("menu");    // menu | study_verb | study_tense | study_drill | test_pick | test_game | test_result
   const [drillMode, setDrillMode] = useState("study");   // study | test
   const [selVerb, setSelVerb]     = useState(null);      // entry from VERBS_CORE
   const [selTense, setSelTense]   = useState("present");
+  const [selBlock, setSelBlock]   = useState("all");     // "all" or block name
   const [conjTable, setConjTable] = useState(null);
   const [loading, setLoading]     = useState(false);
   const [loadErr, setLoadErr]     = useState("");
@@ -6109,19 +6245,69 @@ function VerbDrillTab() {
         </button>
       </div>
 
-      <div style={{fontSize:12,color:"#888",fontWeight:500,marginBottom:8}}>Choose a verb:</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:"1.2rem"}}>
-        {VERBS_CORE.map(v => (
-          <button key={v[0]} onClick={()=>setSelVerb(v)}
-            style={{padding:"7px 13px",borderRadius:20,
-              border:`1.5px solid ${selVerb&&selVerb[0]===v[0]?"#534AB7":"#ddd"}`,
-              background:selVerb&&selVerb[0]===v[0]?"#534AB7":"white",
-              color:selVerb&&selVerb[0]===v[0]?"white":"#444",
-              fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
-            {v[0]} <span style={{fontSize:11,opacity:.6}}>({v[2].replace("I ","")})</span>
+      {/* Block filter */}
+      <div style={{fontSize:12,color:"#888",fontWeight:500,marginBottom:6}}>Filter by theme:</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:14,overflowX:"auto"}}>
+        <button onClick={()=>{setSelBlock("all");setSelVerb(null);}}
+          style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${selBlock==="all"?"#534AB7":"#ddd"}`,
+            background:selBlock==="all"?"#534AB7":"white",color:selBlock==="all"?"white":"#555",
+            fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          All
+        </button>
+        {VERB_BLOCKS.map(b => (
+          <button key={b} onClick={()=>{setSelBlock(b);setSelVerb(null);}}
+            style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${selBlock===b?"#534AB7":"#ddd"}`,
+              background:selBlock===b?"#534AB7":"white",color:selBlock===b?"white":"#555",
+              fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {b}
           </button>
         ))}
       </div>
+
+      {/* Verb list — grouped by block when "all" selected */}
+      {selBlock === "all" ? (
+        VERB_BLOCKS.map(block => {
+          const blockVerbs = VERBS_CORE.filter(v => v[4] === block);
+          // dedupe by greek form within block
+          const seen = new Set();
+          const unique = blockVerbs.filter(v => { if(seen.has(v[0])) return false; seen.add(v[0]); return true; });
+          return React.createElement("div", {key:block, style:{marginBottom:14}},
+            React.createElement("div", {style:{fontSize:11,fontWeight:700,color:"#534AB7",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}, block),
+            React.createElement("div", {style:{display:"flex",flexWrap:"wrap",gap:5}},
+              unique.map(v =>
+                React.createElement("button", {key:block+v[0], onClick:()=>setSelVerb(v),
+                  style:{padding:"6px 12px",borderRadius:20,
+                    border:`1.5px solid ${selVerb&&selVerb[0]===v[0]&&selVerb[4]===v[4]?"#534AB7":"#ddd"}`,
+                    background:selVerb&&selVerb[0]===v[0]&&selVerb[4]===v[4]?"#534AB7":"white",
+                    color:selVerb&&selVerb[0]===v[0]&&selVerb[4]===v[4]?"white":"#444",
+                    fontSize:13,cursor:"pointer",fontFamily:"inherit"}},
+                  v[0], " ", React.createElement("span",{style:{fontSize:11,opacity:.6}}, "(", v[2].replace("I ",""), ")")
+                )
+              )
+            )
+          );
+        })
+      ) : (
+        React.createElement(React.Fragment, null,
+          React.createElement("div", {style:{fontSize:12,color:"#888",fontWeight:500,marginBottom:8}}, "Choose a verb:"),
+          React.createElement("div", {style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:"1.2rem"}},
+            (() => {
+              const blockVerbs = VERBS_CORE.filter(v => v[4] === selBlock);
+              const seen = new Set();
+              return blockVerbs.filter(v => { if(seen.has(v[0])) return false; seen.add(v[0]); return true; }).map(v =>
+                React.createElement("button", {key:v[0], onClick:()=>setSelVerb(v),
+                  style:{padding:"7px 13px",borderRadius:20,
+                    border:`1.5px solid ${selVerb&&selVerb[0]===v[0]?"#534AB7":"#ddd"}`,
+                    background:selVerb&&selVerb[0]===v[0]?"#534AB7":"white",
+                    color:selVerb&&selVerb[0]===v[0]?"white":"#444",
+                    fontSize:13,cursor:"pointer",fontFamily:"inherit"}},
+                  v[0], " ", React.createElement("span",{style:{fontSize:11,opacity:.6}}, "(", v[2].replace("I ",""), ")")
+                )
+              );
+            })()
+          )
+        )
+      )}
 
       {drillMode === "study" && selVerb && (
         <div style={{marginBottom:"1rem"}}>
@@ -6946,7 +7132,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.56</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.57</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
