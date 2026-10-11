@@ -4489,7 +4489,7 @@ VOCABULARY RESTRICTION — use ONLY the most basic high-frequency verbs: είμ�
     ? `B1 level: longer natural sentences (8-12 words), freely mix all tenses (present, past simple, imperfect, future), all persons including plural, more complex contexts.
 VOCABULARY: use any verbs freely, including less common ones, phrasal verbs, formal register.`
     : `A2 level: moderate sentences (6-9 words), mainly present and past simple (αόριστος), 1st/2nd/3rd person singular, future occasionally.
-VOCABULARY RESTRICTION — use common everyday verbs a beginner-intermediate knows: go/come/buy/eat/drink/speak/work/live/see/know/want/give/take/help/open/close/read/write/listen/watch/travel/call/meet. Avoid rare or literary verbs like λύνω (solve), αναλύω (analyze), εκτιμώ (appreciate formally). Every verb must be something a student with 3-6 months of Greek would recognize.`;
+VOCABULARY RESTRICTION — ONLY use verbs from this exact list (provided as blanks above). Do NOT invent or substitute other verbs. Every verb blank must be one of the verbs given. Context words (non-blank) must also be simple A1-A2 vocabulary a student with 3-6 months of Greek would know. Absolutely NO rare, literary, or formal verbs.`;
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
@@ -4703,7 +4703,9 @@ function ArticlesTab({ mastery, rec }) {
   }
 
   async function startTenses() {
-    const allVerbs = WORDS.filter(w => w[3] === "Verbs");
+    // Use VERBS_CORE (lesson verbs, A1-A2 level) instead of the full WORDS dict
+    // Convert VERBS_CORE [greek, tr, english, group, block] → WORDS-compatible [greek, tr, english, "Verbs"]
+    const allVerbs = VERBS_CORE.map(v => [v[0], v[1], v[2], "Verbs"]);
     const topicWords = topic === "All" ? [] : filterWords(WORDS, topic, subtopic).filter(w => w[3] !== "Verbs");
     const pool = [...allVerbs, ...topicWords];
     setTensesLoading(true); setNoNouns(false);
@@ -7197,7 +7199,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.58</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.59</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
