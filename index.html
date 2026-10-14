@@ -4702,6 +4702,8 @@ function validateCasesSentencesV2(sentences, cases=["acc","gen"]) {
     // sentence must not end with the blank
     const afterBlank = q.gr.split("___")[1] || "";
     if (afterBlank.trim() === "" || afterBlank.trim() === "." || afterBlank.trim() === ";" || afterBlank.trim() === "!") return false;
+    // the declined noun must follow the blank (it is swapped for the base form until answered)
+    if (!afterBlank.includes(q.noun_form) || !q.noun_base) return false;
     return true;
   });
 }
@@ -5399,15 +5401,13 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       <span style={{ display:"inline-block", minWidth:40, borderBottom:"2px solid #534AB7", color:"#534AB7", fontWeight:700, fontSize:22 }}>___</span>
     );
 
-    // noun display: always visible with its form in parens before choosing
+    // noun display: dictionary form in brackets until the student has picked the declined form —
+    // showing the real form earlier would give the answer away
+    const nounBaseBare = (cur.noun_base || "").replace(/^(ο|η|το|οι|τα)\s+/, "").trim() || "?";
     const nounDisplay = bothDone ? (
       <span style={{ fontWeight:700, color: chosen===nounCorrect?"#085041":"#E24B4A", background: chosen===nounCorrect?"#E1F5EE":"#FCEBEB", borderRadius:4, padding:"0 6px" }}>{nounCorrect}</span>
-    ) : artDone ? (
-      // step 2: show (options) inline  — the noun form is what we're choosing
-      <span style={{ fontWeight:600, color:"#534AB7" }}>{nounCorrect}</span>
     ) : (
-      // step 1: show noun form visible so student knows which noun to think about
-      <span style={{ fontWeight:600, color:"#888" }}>{cur.noun_form}</span>
+      <span style={{ fontWeight:600, color: artDone ? "#534AB7" : "#888", whiteSpace:"nowrap" }}>({nounBaseBare})</span>
     );
 
     // Reconstruct sentence: blank slot + after-blank text (noun is embedded there)
@@ -5446,7 +5446,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
             {beforeBlank}{blankDisplay}{afterNode}
           </div>
           <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic", marginTop:6 }}>{cur.en}</div>
-          {cur.case_label && artDone && (
+          {cur.case_label && bothDone && (
             <div style={{ fontSize:11, color:"#9D96D8", marginTop:4 }}>{cur.case_label} · {cur.gender==="м"?"муж.":cur.gender==="ж"?"жен.":"ср."}</div>
           )}
         </div>
@@ -5477,7 +5477,10 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         {/* Step 2: noun form options */}
         {artDone && !bothDone && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            {shuf([...(cur.noun_form_options||[])]).map(a => {
+            {[...(cur.noun_form_options||[])]
+              // stable order per question (no reshuffle on every re-render)
+              .map(a => [a, [...(a + "|" + qi)].reduce((h,c)=>((h*31 + c.charCodeAt(0)) >>> 0), 7)])
+              .sort((x,y)=>x[1]-y[1]).map(x=>x[0]).map(a => {
               const isC = a===nounCorrect, isP = a===chosen;
               let bg="transparent", border="0.5px solid #ccc", color="#333";
               if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
@@ -8163,7 +8166,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.64-1438</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.65-1445</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
