@@ -7716,6 +7716,304 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color
   <footer>Род существительных · October 2026</footer>
 </div>`;
 
+const VERBS_CHEATSHEET_HTML = `<style>
+:root{--bg:#faf9f6;--surface:#fff;--border:#e2ddd6;--fg:#1a1714;--muted:#6b6560;--acc:#c45c2e;--gen:#2e6e8e;--nom:#4a7a4a;--prep:#6a4fa3;--rule:#f5f0e8;--rule-border:#d4c9a8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.5;padding:1rem 1rem 3rem}
+.page{max-width:980px;margin:0 auto}
+header{border-bottom:2px solid var(--border);padding-bottom:1rem;margin-bottom:1.2rem}
+.subtitle{color:var(--muted);font-size:.85rem;letter-spacing:.05em;text-transform:uppercase;margin-bottom:.4rem}
+h1{font-family:Georgia,serif;font-size:clamp(1.4rem,5vw,2.1rem);line-height:1.2}
+.tagline{color:var(--muted);margin-top:.4rem;font-size:.9rem}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:.8rem 0 1.4rem}
+.toc a{font-size:.82rem;text-decoration:none;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:3px 10px}
+.toc a b{color:var(--muted);font-weight:500}
+.legend{background:var(--rule);border:1.5px solid var(--rule-border);border-left:4px solid var(--acc);border-radius:8px;padding:.8rem 1rem;font-size:.86rem;margin-bottom:1.6rem}
+.legend p+p{margin-top:.35rem}
+.grp{margin-bottom:2rem}
+.grp h2{font-family:Georgia,serif;font-size:1.15rem;padding-bottom:.3rem;border-bottom:1.5px solid var(--border);display:flex;flex-wrap:wrap;gap:.2rem .6rem;align-items:baseline}
+.grp h2 .what{font-family:inherit;font-size:.85rem;font-weight:400;color:var(--muted)}
+.grp h2 .unit{margin-left:auto;font-family:inherit;font-size:.75rem;font-weight:500;color:var(--muted)}
+.para{font-family:Georgia,serif;font-size:.9rem;color:var(--muted);margin:.4rem 0 .6rem}
+.table-wrap{overflow-x:auto;margin-bottom:.4rem}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:640px}
+th{background:var(--surface);border:1px solid var(--border);padding:.4rem .55rem;text-align:left;font-weight:600;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+td{border:1px solid var(--border);padding:.38rem .55rem;vertical-align:top}
+tr:nth-child(even) td{background:#fdfcfa}
+tr.sub td{background:var(--rule)!important;font-size:.8rem;color:var(--fg);padding:.32rem .55rem}
+td.gr{font-family:Georgia,serif;font-size:.98rem;white-space:nowrap}
+td.now{font-weight:700}
+td.gr b{color:var(--acc)}
+.tha{color:var(--muted)}
+td.en{color:var(--muted);font-size:.85rem}
+.case{display:inline-block;font-size:.72rem;font-weight:700;border-radius:4px;padding:1px 6px;color:#fff;white-space:nowrap;margin-bottom:2px}
+.c-acc{background:var(--acc)}.c-accgen{background:linear-gradient(90deg,var(--acc) 55%,var(--gen) 55%)}.c-gen{background:var(--gen)}.c-nom{background:var(--nom)}.c-none{background:#a39d96}.c-prep{background:var(--prep)}
+.ex{display:block;font-family:Georgia,serif;font-size:.84rem;color:var(--fg)}
+footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.8rem}
+</style>
+<div class="page"><header><p class="subtitle">Ελληνικά · Ρήματα</p>
+<h1>Ρήματα: τώρα · χτες · αύριο<br><span style="font-weight:400;font-size:.72em;color:var(--muted)">Все глаголы словаря по типам спряжения</span></h1>
+<p class="tagline">199 глаголов · формы 1-го лица ед. числа: настоящее, аорист, будущее</p></header>
+<nav class="toc"><a href="#g-A">Τύπος Α <b>118</b></a><a href="#g-B1">Τύπος Β1 <b>26</b></a><a href="#g-B2">Τύπος Β2 <b>23</b></a><a href="#g-AB">Τύπος ΑΒ <b>4</b></a><a href="#g-G1">Τύπος Γ1 <b>17</b></a><a href="#g-G2">Τύπος Γ2 <b>3</b></a><a href="#g-IEM">-ιέμαι <b>3</b></a><a href="#g-OUM">-ούμαι <b>3</b></a><a href="#g-SP">Особые <b>2</b></a></nav>
+<div class="legend">
+<p><strong>Падеж задаёт глагол.</strong> Прямое дополнение («кого? что?») — <span class="case c-acc">Вин.</span> βλέπω <b>τον</b> φίλο.</p>
+<p>«Кому?» — <span class="case c-gen">Род.¹</span> или <span class="case c-prep">σε + Вин.</span>: <b>του</b> δίνω το βιβλίο = δίνω το βιβλίο <b>στον</b> Νίκο. <span class="case c-accgen">Вин. + Род.¹</span> = «что + кому».</p>
+<p>¹ Родительный здесь — только у местоимений (μου, σου, του, της, μας, σας, τους). С существительным — σε + винительный.</p>
+<p><span class="case c-none">—</span> нет дополнения, падеж задаёт предлог · <span class="case c-nom">Им.</span> после είμαι / γίνομαι / φαίνομαι · <span class="case c-prep">σε / από / με / για + Вин.</span> — предлоги всегда с винительным.</p>
+<p><strong>Будущее = θα + основа аориста</strong>: μίλη<b>σα</b> → θα μιλή<b>σω</b>. Выучил аорист — знаешь будущее.</p>
+</div>
+<section class="grp" id="g-A"><h2>Τύπος Α <span class="what">-ω, ударение на основе</span><span class="unit">Ενότητα 2</span></h2>
+<div class="para">γράφω · γράφεις · γράφει · γράφουμε · γράφετε · γράφουν(ε)</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-σα</b> → θα <b>-σω</b> &nbsp;·&nbsp; основа на -ζ-, -ν-, гласную (αγοράζω, τελειώνω)</td></tr>
+<tr><td class="gr now">αγοράζω</td><td class="gr">αγόρα<b>σα</b></td><td class="gr"><span class="tha">θα</span> αγοράσω</td><td class="en">buy</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του αγόρασα ένα δώρο</span></td></tr>
+<tr><td class="gr now">διαβάζω</td><td class="gr">διάβα<b>σα</b></td><td class="gr"><span class="tha">θα</span> διαβάσω</td><td class="en">read, study</td><td><span class="case c-acc">Вин.</span><span class="ex">διαβάζω το βιβλίο</span></td></tr>
+<tr><td class="gr now">αρχίζω</td><td class="gr">άρχι<b>σα</b></td><td class="gr"><span class="tha">θα</span> αρχίσω</td><td class="en">begin, start</td><td><span class="case c-acc">Вин.</span><span class="ex">αρχίζω τη δουλειά</span></td></tr>
+<tr><td class="gr now">γνωρίζω</td><td class="gr">γνώρι<b>σα</b></td><td class="gr"><span class="tha">θα</span> γνωρίσω</td><td class="en">know, meet</td><td><span class="case c-acc">Вин.</span><span class="ex">γνώρισα τη Μαρία</span></td></tr>
+<tr><td class="gr now">γυρίζω</td><td class="gr">γύρι<b>σα</b></td><td class="gr"><span class="tha">θα</span> γυρίσω</td><td class="en">return, turn</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">γυρίζω στο σπίτι</span></td></tr>
+<tr><td class="gr now">τελειώνω</td><td class="gr">τελείω<b>σα</b></td><td class="gr"><span class="tha">θα</span> τελειώσω</td><td class="en">finish</td><td><span class="case c-acc">Вин.</span><span class="ex">τελειώνω την άσκηση</span></td></tr>
+<tr><td class="gr now">αποφασίζω</td><td class="gr">αποφάσι<b>σα</b></td><td class="gr"><span class="tha">θα</span> αποφασίσω</td><td class="en">decide</td><td><span class="case c-prep">να + глагол</span><span class="ex">αποφάσισα να φύγω</span></td></tr>
+<tr><td class="gr now">συνεχίζω</td><td class="gr">συνέχι<b>σα</b></td><td class="gr"><span class="tha">θα</span> συνεχίσω</td><td class="en">continue</td><td><span class="case c-acc">Вин.</span><span class="ex">συνεχίζω το μάθημα</span></td></tr>
+<tr><td class="gr now">πληρώνω</td><td class="gr">πλήρω<b>σα</b></td><td class="gr"><span class="tha">θα</span> πληρώσω</td><td class="en">pay</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">πληρώνω τον λογαριασμό</span></td></tr>
+<tr><td class="gr now">θυμώνω</td><td class="gr">θύμω<b>σα</b></td><td class="gr"><span class="tha">θα</span> θυμώσω</td><td class="en">get angry</td><td><span class="case c-prep">με + Вин.</span><span class="ex">θυμώνω με τον φίλο μου</span></td></tr>
+<tr><td class="gr now">ψωνίζω</td><td class="gr">ψώνι<b>σα</b></td><td class="gr"><span class="tha">θα</span> ψωνίσω</td><td class="en">shop</td><td><span class="case c-acc">Вин.</span><span class="ex">ψωνίζω ρούχα</span></td></tr>
+<tr><td class="gr now">ανακοινώνω</td><td class="gr">ανακοίνω<b>σα</b></td><td class="gr"><span class="tha">θα</span> ανακοινώσω</td><td class="en">announce</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">μας ανακοίνωσε τα νέα</span></td></tr>
+<tr><td class="gr now">ανακυκλώνω</td><td class="gr">ανακύκλω<b>σα</b></td><td class="gr"><span class="tha">θα</span> ανακυκλώσω</td><td class="en">recycle</td><td><span class="case c-acc">Вин.</span><span class="ex">ανακυκλώνω το χαρτί</span></td></tr>
+<tr><td class="gr now">βελτιώνω</td><td class="gr">βελτίω<b>σα</b></td><td class="gr"><span class="tha">θα</span> βελτιώσω</td><td class="en">improve</td><td><span class="case c-acc">Вин.</span><span class="ex">βελτιώνω τα ελληνικά μου</span></td></tr>
+<tr><td class="gr now">γεμίζω</td><td class="gr">γέμι<b>σα</b></td><td class="gr"><span class="tha">θα</span> γεμίσω</td><td class="en">fill</td><td><span class="case c-acc">Вин.</span><span class="ex">γεμίζω το ποτήρι</span></td></tr>
+<tr><td class="gr now">γλυτώνω</td><td class="gr">γλύτω<b>σα</b></td><td class="gr"><span class="tha">θα</span> γλυτώσω</td><td class="en">escape, save</td><td><span class="case c-prep">από + Вин.</span><span class="ex">γλύτωσα από τη βροχή</span></td></tr>
+<tr><td class="gr now">δανείζω</td><td class="gr">δάνει<b>σα</b></td><td class="gr"><span class="tha">θα</span> δανείσω</td><td class="en">lend</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του δάνεισα το αυτοκίνητο</span></td></tr>
+<tr><td class="gr now">ενημερώνω</td><td class="gr">ενημέρω<b>σα</b></td><td class="gr"><span class="tha">θα</span> ενημερώσω</td><td class="en">inform</td><td><span class="case c-acc">Вин.</span><span class="ex">ενημερώνω τον διευθυντή</span></td></tr>
+<tr><td class="gr now">εξετάζω</td><td class="gr">εξέτα<b>σα</b></td><td class="gr"><span class="tha">θα</span> εξετάσω</td><td class="en">examine</td><td><span class="case c-acc">Вин.</span><span class="ex">ο γιατρός εξετάζει τον ασθενή</span></td></tr>
+<tr><td class="gr now">ετοιμάζω</td><td class="gr">ετοίμα<b>σα</b></td><td class="gr"><span class="tha">θα</span> ετοιμάσω</td><td class="en">prepare</td><td><span class="case c-acc">Вин.</span><span class="ex">ετοιμάζω το φαγητό</span></td></tr>
+<tr><td class="gr now">καθαρίζω</td><td class="gr">καθάρι<b>σα</b></td><td class="gr"><span class="tha">θα</span> καθαρίσω</td><td class="en">clean</td><td><span class="case c-acc">Вин.</span><span class="ex">καθαρίζω την κουζίνα</span></td></tr>
+<tr><td class="gr now">κατορθώνω</td><td class="gr">κατόρθω<b>σα</b></td><td class="gr"><span class="tha">θα</span> κατορθώσω</td><td class="en">achieve</td><td><span class="case c-prep">να + глагол</span><span class="ex">κατόρθωσα να τελειώσω</span></td></tr>
+<tr><td class="gr now">κουράζω</td><td class="gr">κούρα<b>σα</b></td><td class="gr"><span class="tha">θα</span> κουράσω</td><td class="en">tire</td><td><span class="case c-acc">Вин.</span><span class="ex">η δουλειά με κουράζει</span></td></tr>
+<tr><td class="gr now">μεγαλώνω</td><td class="gr">μεγάλω<b>σα</b></td><td class="gr"><span class="tha">θα</span> μεγαλώσω</td><td class="en">grow up, raise</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">μεγάλωσα στην Αθήνα</span></td></tr>
+<tr><td class="gr now">μετακομίζω</td><td class="gr">μετακόμι<b>σα</b></td><td class="gr"><span class="tha">θα</span> μετακομίσω</td><td class="en">move house</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">μετακόμισα στη Λεμεσό</span></td></tr>
+<tr><td class="gr now">μοιράζω</td><td class="gr">μοίρα<b>σα</b></td><td class="gr"><span class="tha">θα</span> μοιράσω</td><td class="en">share</td><td><span class="case c-acc">Вин.</span><span class="ex">μοιράζω το κέικ</span></td></tr>
+<tr><td class="gr now">ονομάζω</td><td class="gr">ονόμα<b>σα</b></td><td class="gr"><span class="tha">θα</span> ονομάσω</td><td class="en">name</td><td><span class="case c-acc">Вин.</span><span class="ex">τον ονόμασαν Νίκο</span></td></tr>
+<tr><td class="gr now">οργανώνω</td><td class="gr">οργάνω<b>σα</b></td><td class="gr"><span class="tha">θα</span> οργανώσω</td><td class="en">organise</td><td><span class="case c-acc">Вин.</span><span class="ex">οργανώνω ένα πάρτι</span></td></tr>
+<tr><td class="gr now">πλησιάζω</td><td class="gr">πλησία<b>σα</b></td><td class="gr"><span class="tha">θα</span> πλησιάσω</td><td class="en">approach</td><td><span class="case c-acc">Вин.</span><span class="ex">πλησιάζω την πόρτα</span></td></tr>
+<tr><td class="gr now">ποτίζω</td><td class="gr">πότι<b>σα</b></td><td class="gr"><span class="tha">θα</span> ποτίσω</td><td class="en">water (plants)</td><td><span class="case c-acc">Вин.</span><span class="ex">ποτίζω τα λουλούδια</span></td></tr>
+<tr><td class="gr now">σηκώνω</td><td class="gr">σήκω<b>σα</b></td><td class="gr"><span class="tha">θα</span> σηκώσω</td><td class="en">lift, raise</td><td><span class="case c-acc">Вин.</span><span class="ex">σηκώνω την τσάντα</span></td></tr>
+<tr><td class="gr now">συγκεντρώνω</td><td class="gr">συγκέντρω<b>σα</b></td><td class="gr"><span class="tha">θα</span> συγκεντρώσω</td><td class="en">gather, concentrate</td><td><span class="case c-acc">Вин.</span><span class="ex">συγκεντρώνω χρήματα</span></td></tr>
+<tr><td class="gr now">φροντίζω</td><td class="gr">φρόντι<b>σα</b></td><td class="gr"><span class="tha">θα</span> φροντίσω</td><td class="en">take care of</td><td><span class="case c-acc">Вин.</span><span class="ex">φροντίζω τα παιδιά</span></td></tr>
+<tr><td class="gr now">ψηφίζω</td><td class="gr">ψήφι<b>σα</b></td><td class="gr"><span class="tha">θα</span> ψηφίσω</td><td class="en">vote</td><td><span class="case c-acc">Вин.</span><span class="ex">ψηφίζω τον υποψήφιο</span></td></tr>
+<tr><td class="gr now">αδειάζω</td><td class="gr">άδεια<b>σα</b></td><td class="gr"><span class="tha">θα</span> αδειάσω</td><td class="en">empty</td><td><span class="case c-acc">Вин.</span><span class="ex">αδειάζω το ψυγείο</span></td></tr>
+<tr><td class="gr now">δοκιμάζω</td><td class="gr">δοκίμα<b>σα</b></td><td class="gr"><span class="tha">θα</span> δοκιμάσω</td><td class="en">try, taste</td><td><span class="case c-acc">Вин.</span><span class="ex">δοκιμάζω το φαγητό</span></td></tr>
+<tr><td class="gr now">ανεβάζω</td><td class="gr">ανέβα<b>σα</b></td><td class="gr"><span class="tha">θα</span> ανεβάσω</td><td class="en">upload, raise</td><td><span class="case c-acc">Вин.</span><span class="ex">ανεβάζω τη φωτογραφία</span></td></tr>
+<tr><td class="gr now">κατεβάζω</td><td class="gr">κατέβα<b>σα</b></td><td class="gr"><span class="tha">θα</span> κατεβάσω</td><td class="en">download, bring down</td><td><span class="case c-acc">Вин.</span><span class="ex">κατεβάζω την εφαρμογή</span></td></tr>
+<tr><td class="gr now">μοιάζω</td><td class="gr">έμοια<b>σα</b></td><td class="gr"><span class="tha">θα</span> μοιάσω</td><td class="en">resemble</td><td><span class="case c-gen">σε + Вин. / Род.¹</span><span class="ex">μοιάζω στη μητέρα μου</span></td></tr>
+<tr><td class="gr now">εκφράζω</td><td class="gr">εξέφρα<b>σα</b></td><td class="gr"><span class="tha">θα</span> εκφράσω</td><td class="en">express</td><td><span class="case c-acc">Вин.</span><span class="ex">εκφράζω τη γνώμη μου</span></td></tr>
+<tr><td class="gr now">αρέσω</td><td class="gr">άρε<b>σα</b></td><td class="gr"><span class="tha">θα</span> αρέσω</td><td class="en">please (like)</td><td><span class="case c-gen">Род.¹</span><span class="ex">μου αρέσει ο καφές</span></td></tr>
+<tr><td class="gr now">νιώθω</td><td class="gr">ένιω<b>σα</b></td><td class="gr"><span class="tha">θα</span> νιώσω</td><td class="en">feel</td><td><span class="case c-acc">Вин.</span><span class="ex">νιώθω χαρά</span></td></tr>
+<tr><td class="gr now">χάνω</td><td class="gr">έχα<b>σα</b></td><td class="gr"><span class="tha">θα</span> χάσω</td><td class="en">lose, miss</td><td><span class="case c-acc">Вин.</span><span class="ex">έχασα το λεωφορείο</span></td></tr>
+<tr><td class="gr now">φτάνω</td><td class="gr">έφτα<b>σα</b></td><td class="gr"><span class="tha">θα</span> φτάσω</td><td class="en">arrive, reach</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">φτάνω στο αεροδρόμιο</span></td></tr>
+<tr><td class="gr now">λύνω</td><td class="gr">έλυ<b>σα</b></td><td class="gr"><span class="tha">θα</span> λύσω</td><td class="en">solve, untie</td><td><span class="case c-acc">Вин.</span><span class="ex">λύνω το πρόβλημα</span></td></tr>
+<tr><td class="gr now">κλείνω</td><td class="gr">έκλει<b>σα</b></td><td class="gr"><span class="tha">θα</span> κλείσω</td><td class="en">close, book</td><td><span class="case c-acc">Вин.</span><span class="ex">κλείνω την πόρτα</span></td></tr>
+<tr><td class="gr now">σβήνω</td><td class="gr">έσβη<b>σα</b></td><td class="gr"><span class="tha">θα</span> σβήσω</td><td class="en">turn off, erase</td><td><span class="case c-acc">Вин.</span><span class="ex">σβήνω το φως</span></td></tr>
+<tr><td class="gr now">αφήνω</td><td class="gr">άφη<b>σα</b></td><td class="gr"><span class="tha">θα</span> αφήσω</td><td class="en">let, leave behind</td><td><span class="case c-acc">Вин.</span><span class="ex">αφήνω το κλειδί εδώ</span></td></tr>
+<tr><td class="gr now">συστήνω</td><td class="gr">σύστη<b>σα</b></td><td class="gr"><span class="tha">θα</span> συστήσω</td><td class="en">introduce, recommend</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σου συστήνω τον Νίκο</span></td></tr>
+<tr><td class="gr now">συνδέω</td><td class="gr">συνέδε<b>σα</b></td><td class="gr"><span class="tha">θα</span> συνδέσω</td><td class="en">connect</td><td><span class="case c-acc">Вин.</span><span class="ex">συνδέω τον υπολογιστή</span></td></tr>
+<tr><td class="gr now">απαγορεύω</td><td class="gr">απαγόρευ<b>σα</b></td><td class="gr"><span class="tha">θα</span> απαγορεύσω</td><td class="en">forbid</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του απαγόρευσα το κινητό</span></td></tr>
+<tr><td class="gr now">απογοητεύω</td><td class="gr">απογοήτευ<b>σα</b></td><td class="gr"><span class="tha">θα</span> απογοητεύσω</td><td class="en">disappoint</td><td><span class="case c-acc">Вин.</span><span class="ex">μη με απογοητεύσεις</span></td></tr>
+<tr class="sub"><td colspan="5">Аорист <b>-ξα</b> → θα <b>-ξω</b> &nbsp;·&nbsp; основа на -γ-, -χ-, часть -ζω (ανοίγω, ψάχνω, παίζω)</td></tr>
+<tr><td class="gr now">ανοίγω</td><td class="gr">άνοι<b>ξα</b></td><td class="gr"><span class="tha">θα</span> ανοίξω</td><td class="en">open</td><td><span class="case c-acc">Вин.</span><span class="ex">ανοίγω το παράθυρο</span></td></tr>
+<tr><td class="gr now">αλλάζω</td><td class="gr">άλλα<b>ξα</b></td><td class="gr"><span class="tha">θα</span> αλλάξω</td><td class="en">change</td><td><span class="case c-acc">Вин.</span><span class="ex">αλλάζω ρούχα</span></td></tr>
+<tr><td class="gr now">δείχνω</td><td class="gr">έδει<b>ξα</b></td><td class="gr"><span class="tha">θα</span> δείξω</td><td class="en">show</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σου δείχνω το σπίτι</span></td></tr>
+<tr><td class="gr now">διαλέγω</td><td class="gr">διάλε<b>ξα</b></td><td class="gr"><span class="tha">θα</span> διαλέξω</td><td class="en">choose</td><td><span class="case c-acc">Вин.</span><span class="ex">διαλέγω ένα φόρεμα</span></td></tr>
+<tr><td class="gr now">επιλέγω</td><td class="gr">επέλε<b>ξα</b></td><td class="gr"><span class="tha">θα</span> επιλέξω</td><td class="en">select</td><td><span class="case c-acc">Вин.</span><span class="ex">επιλέγω τη σωστή απάντηση</span></td></tr>
+<tr><td class="gr now">ελέγχω</td><td class="gr">έλεγ<b>ξα</b></td><td class="gr"><span class="tha">θα</span> ελέγξω</td><td class="en">check, control</td><td><span class="case c-acc">Вин.</span><span class="ex">ελέγχω τα email</span></td></tr>
+<tr><td class="gr now">κοιτάζω</td><td class="gr">κοίτα<b>ξα</b></td><td class="gr"><span class="tha">θα</span> κοιτάξω</td><td class="en">look at</td><td><span class="case c-acc">Вин.</span><span class="ex">κοιτάζω τον χάρτη</span></td></tr>
+<tr><td class="gr now">παίζω</td><td class="gr">έπαι<b>ξα</b></td><td class="gr"><span class="tha">θα</span> παίξω</td><td class="en">play</td><td><span class="case c-acc">Вин.</span><span class="ex">παίζω ποδόσφαιρο</span></td></tr>
+<tr><td class="gr now">ψάχνω</td><td class="gr">έψα<b>ξα</b></td><td class="gr"><span class="tha">θα</span> ψάξω</td><td class="en">search, look for</td><td><span class="case c-acc">Вин.</span><span class="ex">ψάχνω τα κλειδιά μου</span></td></tr>
+<tr><td class="gr now">τρέχω</td><td class="gr">έτρε<b>ξα</b></td><td class="gr"><span class="tha">θα</span> τρέξω</td><td class="en">run</td><td><span class="case c-none">—</span><span class="ex">τρέχω στο πάρκο</span></td></tr>
+<tr><td class="gr now">ταιριάζω</td><td class="gr">ταίρια<b>ξα</b></td><td class="gr"><span class="tha">θα</span> ταιριάξω</td><td class="en">match, suit</td><td><span class="case c-gen">Род.¹</span><span class="ex">σου ταιριάζει το χρώμα</span></td></tr>
+<tr><td class="gr now">υποστηρίζω</td><td class="gr">υποστήρι<b>ξα</b></td><td class="gr"><span class="tha">θα</span> υποστηρίξω</td><td class="en">support</td><td><span class="case c-acc">Вин.</span><span class="ex">υποστηρίζω την ομάδα</span></td></tr>
+<tr><td class="gr now">αναπτύσσω</td><td class="gr">ανέπτυ<b>ξα</b></td><td class="gr"><span class="tha">θα</span> αναπτύξω</td><td class="en">develop</td><td><span class="case c-acc">Вин.</span><span class="ex">αναπτύσσω μια εφαρμογή</span></td></tr>
+<tr><td class="gr now">αντέχω</td><td class="gr">άντε<b>ξα</b></td><td class="gr"><span class="tha">θα</span> αντέξω</td><td class="en">endure, stand</td><td><span class="case c-acc">Вин.</span><span class="ex">δεν αντέχω τη ζέστη</span></td></tr>
+<tr><td class="gr now">προσέχω</td><td class="gr">πρόσε<b>ξα</b></td><td class="gr"><span class="tha">θα</span> προσέξω</td><td class="en">pay attention</td><td><span class="case c-acc">Вин.</span><span class="ex">πρόσεχε τον δρόμο</span></td></tr>
+<tr><td class="gr now">υπάρχω</td><td class="gr">υπήρ<b>ξα</b></td><td class="gr"><span class="tha">θα</span> υπάρξω</td><td class="en">exist (there is)</td><td><span class="case c-nom">Им.</span><span class="ex">υπάρχει ένα πρόβλημα</span></td></tr>
+<tr class="sub"><td colspan="5">Аорист <b>-ψα</b> → θα <b>-ψω</b> &nbsp;·&nbsp; -εύω, -πω, -φω, -βω, -πτω (δουλεύω, γράφω, κρύβω)</td></tr>
+<tr><td class="gr now">δουλεύω</td><td class="gr">δούλε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> δουλέψω</td><td class="en">work</td><td><span class="case c-none">—</span><span class="ex">δουλεύω σε μια εταιρεία</span></td></tr>
+<tr><td class="gr now">γράφω</td><td class="gr">έγρα<b>ψα</b></td><td class="gr"><span class="tha">θα</span> γράψω</td><td class="en">write</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του γράφω ένα γράμμα</span></td></tr>
+<tr><td class="gr now">μαγειρεύω</td><td class="gr">μαγείρε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> μαγειρέψω</td><td class="en">cook</td><td><span class="case c-acc">Вин.</span><span class="ex">μαγειρεύω μακαρόνια</span></td></tr>
+<tr><td class="gr now">ξοδεύω</td><td class="gr">ξόδε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> ξοδέψω</td><td class="en">spend (money)</td><td><span class="case c-acc">Вин.</span><span class="ex">ξόδεψα πολλά λεφτά</span></td></tr>
+<tr><td class="gr now">πιστεύω</td><td class="gr">πίστε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> πιστέψω</td><td class="en">believe</td><td><span class="case c-acc">Вин.</span><span class="ex">σε πιστεύω</span></td></tr>
+<tr><td class="gr now">χορεύω</td><td class="gr">χόρε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> χορέψω</td><td class="en">dance</td><td><span class="case c-none">—</span><span class="ex">χορεύουμε όλο το βράδυ</span></td></tr>
+<tr><td class="gr now">μαζεύω</td><td class="gr">μάζε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> μαζέψω</td><td class="en">collect, gather</td><td><span class="case c-acc">Вин.</span><span class="ex">μαζεύω τα πράγματά μου</span></td></tr>
+<tr><td class="gr now">μπερδεύω</td><td class="gr">μπέρδε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> μπερδέψω</td><td class="en">confuse, mix up</td><td><span class="case c-acc">Вин.</span><span class="ex">μπερδεύω τις λέξεις</span></td></tr>
+<tr><td class="gr now">κρύβω</td><td class="gr">έκρυ<b>ψα</b></td><td class="gr"><span class="tha">θα</span> κρύψω</td><td class="en">hide</td><td><span class="case c-acc">Вин.</span><span class="ex">κρύβω το δώρο</span></td></tr>
+<tr><td class="gr now">λείπω</td><td class="gr">έλει<b>ψα</b></td><td class="gr"><span class="tha">θα</span> λείψω</td><td class="en">be absent, be missed</td><td><span class="case c-gen">Род.¹</span><span class="ex">μου λείπεις</span></td></tr>
+<tr><td class="gr now">βλάπτω</td><td class="gr">έβλα<b>ψα</b></td><td class="gr"><span class="tha">θα</span> βλάψω</td><td class="en">harm</td><td><span class="case c-acc">Вин.</span><span class="ex">το κάπνισμα βλάπτει την υγεία</span></td></tr>
+<tr><td class="gr now">ανακαλύπτω</td><td class="gr">ανακάλυ<b>ψα</b></td><td class="gr"><span class="tha">θα</span> ανακαλύψω</td><td class="en">discover</td><td><span class="case c-acc">Вин.</span><span class="ex">ανακάλυψα ένα ωραίο μαγαζί</span></td></tr>
+<tr><td class="gr now">διακόπτω</td><td class="gr">διέκο<b>ψα</b></td><td class="gr"><span class="tha">θα</span> διακόψω</td><td class="en">interrupt</td><td><span class="case c-acc">Вин.</span><span class="ex">μη με διακόπτεις</span></td></tr>
+<tr><td class="gr now">επιστρέφω</td><td class="gr">επέστρε<b>ψα</b></td><td class="gr"><span class="tha">θα</span> επιστρέψω</td><td class="en">return</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">επιστρέφω στην Κύπρο</span></td></tr>
+<tr><td class="gr now">αντιγράφω</td><td class="gr">αντέγρα<b>ψα</b></td><td class="gr"><span class="tha">θα</span> αντιγράψω</td><td class="en">copy</td><td><span class="case c-acc">Вин.</span><span class="ex">αντιγράφω το κείμενο</span></td></tr>
+<tr><td class="gr now">καταγράφω</td><td class="gr">κατέγρα<b>ψα</b></td><td class="gr"><span class="tha">θα</span> καταγράψω</td><td class="en">record</td><td><span class="case c-acc">Вин.</span><span class="ex">καταγράφω τα έξοδα</span></td></tr>
+<tr class="sub"><td colspan="5">Неправильные и без отдельного аориста — учить тройкой</td></tr>
+<tr><td class="gr now">έχω</td><td class="gr">είχα</td><td class="gr"><span class="tha">θα</span> έχω</td><td class="en">have</td><td><span class="case c-acc">Вин.</span><span class="ex">έχω ένα αυτοκίνητο</span></td></tr>
+<tr><td class="gr now">θέλω</td><td class="gr">ήθελα</td><td class="gr"><span class="tha">θα</span> θέλω</td><td class="en">want</td><td><span class="case c-acc">Вин.</span><span class="ex">θέλω έναν καφέ</span></td></tr>
+<tr><td class="gr now">ξέρω</td><td class="gr">ήξερα</td><td class="gr"><span class="tha">θα</span> ξέρω</td><td class="en">know</td><td><span class="case c-acc">Вин.</span><span class="ex">ξέρω τον Γιάννη</span></td></tr>
+<tr><td class="gr now">κάνω</td><td class="gr">έκανα</td><td class="gr"><span class="tha">θα</span> κάνω</td><td class="en">do, make</td><td><span class="case c-acc">Вин.</span><span class="ex">κάνω τα μαθήματα</span></td></tr>
+<tr><td class="gr now">βλέπω</td><td class="gr">είδα</td><td class="gr"><span class="tha">θα</span> δω</td><td class="en">see</td><td><span class="case c-acc">Вин.</span><span class="ex">βλέπω τον φίλο μου</span></td></tr>
+<tr><td class="gr now">πίνω</td><td class="gr">ήπια</td><td class="gr"><span class="tha">θα</span> πιω</td><td class="en">drink</td><td><span class="case c-acc">Вин.</span><span class="ex">πίνω νερό</span></td></tr>
+<tr><td class="gr now">μαθαίνω</td><td class="gr">έμαθα</td><td class="gr"><span class="tha">θα</span> μάθω</td><td class="en">learn</td><td><span class="case c-acc">Вин.</span><span class="ex">μαθαίνω ελληνικά</span></td></tr>
+<tr><td class="gr now">καταλαβαίνω</td><td class="gr">κατάλαβα</td><td class="gr"><span class="tha">θα</span> καταλάβω</td><td class="en">understand</td><td><span class="case c-acc">Вин.</span><span class="ex">καταλαβαίνω την ερώτηση</span></td></tr>
+<tr><td class="gr now">φεύγω</td><td class="gr">έφυγα</td><td class="gr"><span class="tha">θα</span> φύγω</td><td class="en">leave</td><td><span class="case c-prep">από + Вин.</span><span class="ex">φεύγω από το γραφείο</span></td></tr>
+<tr><td class="gr now">αποφεύγω</td><td class="gr">απέφυγα</td><td class="gr"><span class="tha">θα</span> αποφύγω</td><td class="en">avoid</td><td><span class="case c-acc">Вин.</span><span class="ex">αποφεύγω τη ζάχαρη</span></td></tr>
+<tr><td class="gr now">παίρνω</td><td class="gr">πήρα</td><td class="gr"><span class="tha">θα</span> πάρω</td><td class="en">take, get</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σου πήρα ένα δώρο</span></td></tr>
+<tr><td class="gr now">δίνω</td><td class="gr">έδωσα</td><td class="gr"><span class="tha">θα</span> δώσω</td><td class="en">give</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του δίνω το βιβλίο</span></td></tr>
+<tr><td class="gr now">μένω</td><td class="gr">έμεινα</td><td class="gr"><span class="tha">θα</span> μείνω</td><td class="en">live, stay</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">μένω στη Λεμεσό</span></td></tr>
+<tr><td class="gr now">περιμένω</td><td class="gr">περίμενα</td><td class="gr"><span class="tha">θα</span> περιμένω</td><td class="en">wait (for)</td><td><span class="case c-acc">Вин.</span><span class="ex">περιμένω το λεωφορείο</span></td></tr>
+<tr><td class="gr now">βάζω</td><td class="gr">έβαλα</td><td class="gr"><span class="tha">θα</span> βάλω</td><td class="en">put</td><td><span class="case c-acc">Вин.</span><span class="ex">βάζω το γάλα στο ψυγείο</span></td></tr>
+<tr><td class="gr now">βρίσκω</td><td class="gr">βρήκα</td><td class="gr"><span class="tha">θα</span> βρω</td><td class="en">find</td><td><span class="case c-acc">Вин.</span><span class="ex">βρήκα δουλειά</span></td></tr>
+<tr><td class="gr now">πλένω</td><td class="gr">έπλυνα</td><td class="gr"><span class="tha">θα</span> πλύνω</td><td class="en">wash</td><td><span class="case c-acc">Вин.</span><span class="ex">πλένω τα πιάτα</span></td></tr>
+<tr><td class="gr now">φέρνω</td><td class="gr">έφερα</td><td class="gr"><span class="tha">θα</span> φέρω</td><td class="en">bring</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σου φέρνω καφέ</span></td></tr>
+<tr><td class="gr now">πηγαίνω</td><td class="gr">πήγα</td><td class="gr"><span class="tha">θα</span> πάω</td><td class="en">go</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">πηγαίνω στη δουλειά</span></td></tr>
+<tr><td class="gr now">μπαίνω</td><td class="gr">μπήκα</td><td class="gr"><span class="tha">θα</span> μπω</td><td class="en">enter</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">μπαίνω στο σπίτι</span></td></tr>
+<tr><td class="gr now">βγαίνω</td><td class="gr">βγήκα</td><td class="gr"><span class="tha">θα</span> βγω</td><td class="en">go out</td><td><span class="case c-prep">από + Вин.</span><span class="ex">βγαίνω από το σπίτι</span></td></tr>
+<tr><td class="gr now">ανεβαίνω</td><td class="gr">ανέβηκα</td><td class="gr"><span class="tha">θα</span> ανέβω</td><td class="en">go up, climb</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">ανεβαίνω στον δεύτερο όροφο</span></td></tr>
+<tr><td class="gr now">κατεβαίνω</td><td class="gr">κατέβηκα</td><td class="gr"><span class="tha">θα</span> κατέβω</td><td class="en">go down, get off</td><td><span class="case c-prep">από + Вин.</span><span class="ex">κατεβαίνω από το λεωφορείο</span></td></tr>
+<tr><td class="gr now">πεθαίνω</td><td class="gr">πέθανα</td><td class="gr"><span class="tha">θα</span> πεθάνω</td><td class="en">die</td><td><span class="case c-none">—</span><span class="ex">πέθανε το 1990</span></td></tr>
+<tr><td class="gr now">πετυχαίνω</td><td class="gr">πέτυχα</td><td class="gr"><span class="tha">θα</span> πετύχω</td><td class="en">succeed</td><td><span class="case c-acc">Вин.</span><span class="ex">πέτυχα τον στόχο μου</span></td></tr>
+<tr><td class="gr now">τυχαίνω</td><td class="gr">έτυχα</td><td class="gr"><span class="tha">θα</span> τύχω</td><td class="en">happen (to be)</td><td><span class="case c-prep">να + глагол</span><span class="ex">έτυχε να είμαι εκεί</span></td></tr>
+<tr><td class="gr now">παραλαμβάνω</td><td class="gr">παρέλαβα</td><td class="gr"><span class="tha">θα</span> παραλάβω</td><td class="en">receive</td><td><span class="case c-acc">Вин.</span><span class="ex">παραλαμβάνω το δέμα</span></td></tr>
+<tr><td class="gr now">παραγγέλνω</td><td class="gr">παρήγγειλα</td><td class="gr"><span class="tha">θα</span> παραγγείλω</td><td class="en">order</td><td><span class="case c-acc">Вин.</span><span class="ex">παραγγέλνω μια πίτσα</span></td></tr>
+<tr><td class="gr now">αποστέλλω</td><td class="gr">απέστειλα</td><td class="gr"><span class="tha">θα</span> αποστείλω</td><td class="en">send (formal)</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σας αποστέλλω το έγγραφο</span></td></tr>
+<tr><td class="gr now">προσφέρω</td><td class="gr">πρόσφερα</td><td class="gr"><span class="tha">θα</span> προσφέρω</td><td class="en">offer</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του προσφέρω καφέ</span></td></tr>
+<tr><td class="gr now">διευθύνω</td><td class="gr">διηύθυνα</td><td class="gr"><span class="tha">θα</span> διευθύνω</td><td class="en">manage, direct</td><td><span class="case c-acc">Вин.</span><span class="ex">διευθύνω την εταιρεία</span></td></tr>
+<tr><td class="gr now">συμμετέχω</td><td class="gr">συμμετείχα</td><td class="gr"><span class="tha">θα</span> συμμετέχω</td><td class="en">participate</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">συμμετέχω στη συνάντηση</span></td></tr>
+<tr><td class="gr now">αξίζω</td><td class="gr">άξιζα</td><td class="gr"><span class="tha">θα</span> αξίζει</td><td class="en">be worth, deserve</td><td><span class="case c-acc">Вин.</span><span class="ex">αξίζει τον κόπο</span></td></tr>
+<tr><td class="gr now">ενδιαφέρω</td><td class="gr">ενδιέφερα</td><td class="gr"><span class="tha">θα</span> ενδιαφέρει</td><td class="en">interest</td><td><span class="case c-acc">Вин.</span><span class="ex">με ενδιαφέρει η ιστορία</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-B1"><h2>Τύπος Β1 <span class="what">-άω / -ώ, во 2-м лице -άς</span><span class="unit">Ενότητες 4, 6</span></h2>
+<div class="para">μιλάω · μιλάς · μιλάει · μιλάμε · μιλάτε · μιλάνε</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-ησα</b> → θα <b>-ήσω</b> (основная модель)</td></tr>
+<tr><td class="gr now">μιλάω</td><td class="gr">μίλ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> μιλήσω</td><td class="en">speak</td><td><span class="case c-gen">σε + Вин. / Род.¹</span><span class="ex">του μιλάω / μιλάω στον Νίκο</span></td></tr>
+<tr><td class="gr now">αγαπάω</td><td class="gr">αγάπ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> αγαπήσω</td><td class="en">love</td><td><span class="case c-acc">Вин.</span><span class="ex">αγαπάω τη θάλασσα</span></td></tr>
+<tr><td class="gr now">βοηθάω</td><td class="gr">βοήθ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> βοηθήσω</td><td class="en">help</td><td><span class="case c-acc">Вин.</span><span class="ex">βοηθάω τη μητέρα μου</span></td></tr>
+<tr><td class="gr now">ζητάω</td><td class="gr">ζήτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ζητήσω</td><td class="en">ask for</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">του ζήτησα βοήθεια</span></td></tr>
+<tr><td class="gr now">κρατάω</td><td class="gr">κράτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> κρατήσω</td><td class="en">hold, keep</td><td><span class="case c-acc">Вин.</span><span class="ex">κρατάω την ομπρέλα</span></td></tr>
+<tr><td class="gr now">ξεκινάω</td><td class="gr">ξεκίν<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ξεκινήσω</td><td class="en">start, set off</td><td><span class="case c-acc">Вин.</span><span class="ex">ξεκινάω τη δουλειά</span></td></tr>
+<tr><td class="gr now">πουλάω</td><td class="gr">πούλ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> πουλήσω</td><td class="en">sell</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">πούλησα το αυτοκίνητο</span></td></tr>
+<tr><td class="gr now">ρωτάω</td><td class="gr">ρώτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ρωτήσω</td><td class="en">ask</td><td><span class="case c-acc">Вин.</span><span class="ex">ρωτάω τον δάσκαλο</span></td></tr>
+<tr><td class="gr now">σταματάω</td><td class="gr">σταμάτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> σταματήσω</td><td class="en">stop</td><td><span class="case c-acc">Вин.</span><span class="ex">σταματάω το αυτοκίνητο</span></td></tr>
+<tr><td class="gr now">συναντάω</td><td class="gr">συνάντ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> συναντήσω</td><td class="en">meet</td><td><span class="case c-acc">Вин.</span><span class="ex">συναντάω τους φίλους μου</span></td></tr>
+<tr><td class="gr now">τραγουδάω</td><td class="gr">τραγούδ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> τραγουδήσω</td><td class="en">sing</td><td><span class="case c-acc">Вин.</span><span class="ex">τραγουδάω ένα τραγούδι</span></td></tr>
+<tr><td class="gr now">απαντάω</td><td class="gr">απάντ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> απαντήσω</td><td class="en">answer</td><td><span class="case c-gen">σε + Вин. / Род.¹</span><span class="ex">του απάντησα / απαντάω στην ερώτηση</span></td></tr>
+<tr><td class="gr now">προτιμάω</td><td class="gr">προτίμ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> προτιμήσω</td><td class="en">prefer</td><td><span class="case c-acc">Вин.</span><span class="ex">προτιμάω το τσάι</span></td></tr>
+<tr><td class="gr now">μετράω</td><td class="gr">μέτρ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> μετρήσω</td><td class="en">count, measure</td><td><span class="case c-acc">Вин.</span><span class="ex">μετράω τα λεφτά</span></td></tr>
+<tr><td class="gr now">νικώ</td><td class="gr">νίκ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> νικήσω</td><td class="en">win, beat</td><td><span class="case c-acc">Вин.</span><span class="ex">νικήσαμε την ομάδα</span></td></tr>
+<tr><td class="gr now">αποκτώ</td><td class="gr">απέκτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> αποκτήσω</td><td class="en">acquire</td><td><span class="case c-acc">Вин.</span><span class="ex">απέκτησα εμπειρία</span></td></tr>
+<tr><td class="gr now">κατακτώ</td><td class="gr">κατέκτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> κατακτήσω</td><td class="en">conquer, achieve</td><td><span class="case c-acc">Вин.</span><span class="ex">κατέκτησε το βουνό</span></td></tr>
+<tr><td class="gr now">παρατώ</td><td class="gr">παράτ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> παρατήσω</td><td class="en">give up, quit</td><td><span class="case c-acc">Вин.</span><span class="ex">παράτησα το κάπνισμα</span></td></tr>
+<tr><td class="gr now">αφορώ</td><td class="gr">—</td><td class="gr"><span class="tha">θα</span> αφορά</td><td class="en">concern</td><td><span class="case c-acc">Вин.</span><span class="ex">αυτό δε σε αφορά</span></td></tr>
+<tr class="sub"><td colspan="5">Аорист <b>-ασα</b> → θα <b>-άσω</b></td></tr>
+<tr><td class="gr now">γελάω</td><td class="gr">γέλ<b>ασα</b></td><td class="gr"><span class="tha">θα</span> γελάσω</td><td class="en">laugh</td><td><span class="case c-prep">με + Вин.</span><span class="ex">γελάω με το αστείο</span></td></tr>
+<tr><td class="gr now">ξεχνάω</td><td class="gr">ξέχ<b>ασα</b></td><td class="gr"><span class="tha">θα</span> ξεχάσω</td><td class="en">forget</td><td><span class="case c-acc">Вин.</span><span class="ex">ξέχασα το κινητό μου</span></td></tr>
+<tr><td class="gr now">περνάω</td><td class="gr">πέρ<b>ασα</b></td><td class="gr"><span class="tha">θα</span> περάσω</td><td class="en">pass, spend (time)</td><td><span class="case c-acc">Вин.</span><span class="ex">περνάω τον δρόμο / περάσαμε ωραία</span></td></tr>
+<tr><td class="gr now">χαμογελάω</td><td class="gr">χαμογέλ<b>ασα</b></td><td class="gr"><span class="tha">θα</span> χαμογελάσω</td><td class="en">smile</td><td><span class="case c-gen">σε + Вин. / Род.¹</span><span class="ex">της χαμογέλασα</span></td></tr>
+<tr><td class="gr now">χαλάω</td><td class="gr">χάλ<b>ασα</b></td><td class="gr"><span class="tha">θα</span> χαλάσω</td><td class="en">break, spoil</td><td><span class="case c-acc">Вин.</span><span class="ex">χάλασα το ρολόι</span></td></tr>
+<tr class="sub"><td colspan="5">Аорист <b>-ξα</b> → θα <b>-ξω</b> (редкие)</td></tr>
+<tr><td class="gr now">πετάω</td><td class="gr">πέτα<b>ξα</b></td><td class="gr"><span class="tha">θα</span> πετάξω</td><td class="en">fly, throw</td><td><span class="case c-acc">Вин.</span><span class="ex">πετάω τα σκουπίδια</span></td></tr>
+<tr><td class="gr now">πηδώ</td><td class="gr">πήδη<b>ξα</b></td><td class="gr"><span class="tha">θα</span> πηδήξω</td><td class="en">jump</td><td><span class="case c-none">—</span><span class="ex">πηδάω πάνω από το νερό</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-B2"><h2>Τύπος Β2 <span class="what">-ώ, во 2-м лице -είς</span><span class="unit">Ενότητα 6</span></h2>
+<div class="para">μπορώ · μπορείς · μπορεί · μπορούμε · μπορείτε · μπορούν(ε)</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-ησα</b> → θα <b>-ήσω</b></td></tr>
+<tr><td class="gr now">οδηγώ</td><td class="gr">οδήγ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> οδηγήσω</td><td class="en">drive</td><td><span class="case c-acc">Вин.</span><span class="ex">οδηγώ το αυτοκίνητο</span></td></tr>
+<tr><td class="gr now">τηλεφωνώ</td><td class="gr">τηλεφών<b>ησα</b></td><td class="gr"><span class="tha">θα</span> τηλεφωνήσω</td><td class="en">phone</td><td><span class="case c-gen">σε + Вин. / Род.¹</span><span class="ex">του τηλεφωνώ / τηλεφωνώ στη μαμά</span></td></tr>
+<tr><td class="gr now">ζω</td><td class="gr">έζ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ζήσω</td><td class="en">live</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">ζω στην Κύπρο</span></td></tr>
+<tr><td class="gr now">παρακολουθώ</td><td class="gr">παρακολούθ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> παρακολουθήσω</td><td class="en">follow, attend</td><td><span class="case c-acc">Вин.</span><span class="ex">παρακολουθώ το μάθημα</span></td></tr>
+<tr><td class="gr now">προσπαθώ</td><td class="gr">προσπάθ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> προσπαθήσω</td><td class="en">try</td><td><span class="case c-prep">να + глагол</span><span class="ex">προσπαθώ να μάθω</span></td></tr>
+<tr><td class="gr now">χρησιμοποιώ</td><td class="gr">χρησιμοποί<b>ησα</b></td><td class="gr"><span class="tha">θα</span> χρησιμοποιήσω</td><td class="en">use</td><td><span class="case c-acc">Вин.</span><span class="ex">χρησιμοποιώ τον υπολογιστή</span></td></tr>
+<tr><td class="gr now">κατοικώ</td><td class="gr">κατοίκ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> κατοικήσω</td><td class="en">reside</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">κατοικώ στη Λευκωσία</span></td></tr>
+<tr><td class="gr now">κατανοώ</td><td class="gr">κατανό<b>ησα</b></td><td class="gr"><span class="tha">θα</span> κατανοήσω</td><td class="en">comprehend</td><td><span class="case c-acc">Вин.</span><span class="ex">κατανοώ το πρόβλημα</span></td></tr>
+<tr><td class="gr now">ασκώ</td><td class="gr">άσκ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ασκήσω</td><td class="en">practise, exercise</td><td><span class="case c-acc">Вин.</span><span class="ex">ασκώ το επάγγελμα</span></td></tr>
+<tr><td class="gr now">διατηρώ</td><td class="gr">διατήρ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> διατηρήσω</td><td class="en">maintain, keep</td><td><span class="case c-acc">Вин.</span><span class="ex">διατηρώ το σπίτι καθαρό</span></td></tr>
+<tr><td class="gr now">ενοχλώ</td><td class="gr">ενόχλ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ενοχλήσω</td><td class="en">bother</td><td><span class="case c-acc">Вин.</span><span class="ex">σε ενοχλώ;</span></td></tr>
+<tr><td class="gr now">εξηγώ</td><td class="gr">εξήγ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> εξηγήσω</td><td class="en">explain</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σου εξηγώ τον κανόνα</span></td></tr>
+<tr><td class="gr now">ηρεμώ</td><td class="gr">ηρέμ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ηρεμήσω</td><td class="en">calm down</td><td><span class="case c-none">—</span><span class="ex">ηρέμησε λίγο</span></td></tr>
+<tr><td class="gr now">παρατηρώ</td><td class="gr">παρατήρ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> παρατηρήσω</td><td class="en">observe, notice</td><td><span class="case c-acc">Вин.</span><span class="ex">παρατηρώ τους ανθρώπους</span></td></tr>
+<tr><td class="gr now">προειδοποιώ</td><td class="gr">προειδοποί<b>ησα</b></td><td class="gr"><span class="tha">θα</span> προειδοποιήσω</td><td class="en">warn</td><td><span class="case c-acc">Вин.</span><span class="ex">σε προειδοποιώ</span></td></tr>
+<tr><td class="gr now">συμφωνώ</td><td class="gr">συμφών<b>ησα</b></td><td class="gr"><span class="tha">θα</span> συμφωνήσω</td><td class="en">agree</td><td><span class="case c-prep">με + Вин.</span><span class="ex">συμφωνώ μαζί σου</span></td></tr>
+<tr><td class="gr now">ωφελώ</td><td class="gr">ωφέλ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> ωφελήσω</td><td class="en">benefit</td><td><span class="case c-acc">Вин.</span><span class="ex">το περπάτημα σε ωφελεί</span></td></tr>
+<tr><td class="gr now">λειτουργώ</td><td class="gr">λειτούργ<b>ησα</b></td><td class="gr"><span class="tha">θα</span> λειτουργήσω</td><td class="en">function, work</td><td><span class="case c-none">—</span><span class="ex">το ασανσέρ δε λειτουργεί</span></td></tr>
+<tr class="sub"><td colspan="5">Аорист <b>-εσα</b> → θα <b>-έσω</b></td></tr>
+<tr><td class="gr now">μπορώ</td><td class="gr">μπόρ<b>εσα</b></td><td class="gr"><span class="tha">θα</span> μπορέσω</td><td class="en">can, be able</td><td><span class="case c-prep">να + глагол</span><span class="ex">μπορώ να έρθω</span></td></tr>
+<tr><td class="gr now">καλώ</td><td class="gr">κάλ<b>εσα</b></td><td class="gr"><span class="tha">θα</span> καλέσω</td><td class="en">call, invite</td><td><span class="case c-acc">Вин.</span><span class="ex">καλώ τους φίλους μου</span></td></tr>
+<tr><td class="gr now">προσκαλώ</td><td class="gr">προσκάλ<b>εσα</b></td><td class="gr"><span class="tha">θα</span> προσκαλέσω</td><td class="en">invite</td><td><span class="case c-acc">Вин.</span><span class="ex">σας προσκαλώ στο πάρτι</span></td></tr>
+<tr><td class="gr now">συγχωρώ</td><td class="gr">συγχώρ<b>εσα</b></td><td class="gr"><span class="tha">θα</span> συγχωρέσω</td><td class="en">forgive</td><td><span class="case c-acc">Вин.</span><span class="ex">με συγχωρείτε</span></td></tr>
+<tr><td class="gr now">αρκώ</td><td class="gr">άρκ<b>εσα</b></td><td class="gr"><span class="tha">θα</span> αρκέσει</td><td class="en">suffice</td><td><span class="case c-none">—</span><span class="ex">αρκεί μια ώρα</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-AB"><h2>Τύπος ΑΒ <span class="what">гласная + -ω, короткие формы</span><span class="unit">Ενότητα 7</span></h2>
+<div class="para">λέω · λες · λέει · λέμε · λέτε · λένε</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист у каждого свой</td></tr>
+<tr><td class="gr now">λέω</td><td class="gr">είπα</td><td class="gr"><span class="tha">θα</span> πω</td><td class="en">say, tell</td><td><span class="case c-accgen">Вин. + Род.¹</span><span class="ex">σου λέω την αλήθεια</span></td></tr>
+<tr><td class="gr now">τρώω</td><td class="gr">έφαγα</td><td class="gr"><span class="tha">θα</span> φάω</td><td class="en">eat</td><td><span class="case c-acc">Вин.</span><span class="ex">τρώω ψωμί</span></td></tr>
+<tr><td class="gr now">ακούω</td><td class="gr">άκουσα</td><td class="gr"><span class="tha">θα</span> ακούσω</td><td class="en">hear, listen</td><td><span class="case c-acc">Вин.</span><span class="ex">ακούω μουσική</span></td></tr>
+<tr><td class="gr now">κλαίω</td><td class="gr">έκλαψα</td><td class="gr"><span class="tha">θα</span> κλάψω</td><td class="en">cry</td><td><span class="case c-none">—</span><span class="ex">το μωρό κλαίει</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-G1"><h2>Τύπος Γ1 <span class="what">-ομαι</span><span class="unit">Ενότητα 9</span></h2>
+<div class="para">έρχομαι · έρχεσαι · έρχεται · ερχόμαστε · έρχεστε · έρχονται</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-θηκα / -τηκα</b> → θα <b>-θώ / -τώ</b></td></tr>
+<tr><td class="gr now">σκέφτομαι</td><td class="gr">σκέφ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> σκεφτώ</td><td class="en">think</td><td><span class="case c-acc">Вин.</span><span class="ex">σε σκέφτομαι</span></td></tr>
+<tr><td class="gr now">χρειάζομαι</td><td class="gr">χρειάσ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> χρειαστώ</td><td class="en">need</td><td><span class="case c-acc">Вин.</span><span class="ex">χρειάζομαι βοήθεια</span></td></tr>
+<tr><td class="gr now">φαντάζομαι</td><td class="gr">φαντάσ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> φανταστώ</td><td class="en">imagine</td><td><span class="case c-acc">Вин.</span><span class="ex">φαντάζομαι το ταξίδι</span></td></tr>
+<tr><td class="gr now">επισκέπτομαι</td><td class="gr">επισκέφ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> επισκεφτώ</td><td class="en">visit</td><td><span class="case c-acc">Вин.</span><span class="ex">επισκέπτομαι τη γιαγιά μου</span></td></tr>
+<tr><td class="gr now">εμπιστεύομαι</td><td class="gr">εμπιστεύ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> εμπιστευτώ</td><td class="en">trust</td><td><span class="case c-acc">Вин.</span><span class="ex">σε εμπιστεύομαι</span></td></tr>
+<tr><td class="gr now">αναπαύομαι</td><td class="gr">αναπαύ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> αναπαυτώ</td><td class="en">rest</td><td><span class="case c-none">—</span><span class="ex">αναπαύομαι το απόγευμα</span></td></tr>
+<tr><td class="gr now">βιάζομαι</td><td class="gr">βιάσ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> βιαστώ</td><td class="en">hurry</td><td><span class="case c-none">—</span><span class="ex">βιάζομαι, αργώ!</span></td></tr>
+<tr><td class="gr now">εργάζομαι</td><td class="gr">εργάσ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> εργαστώ</td><td class="en">work (formal)</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">εργάζομαι σε μια τράπεζα</span></td></tr>
+<tr><td class="gr now">ζαλίζομαι</td><td class="gr">ζαλίσ<b>τηκα</b></td><td class="gr"><span class="tha">θα</span> ζαλιστώ</td><td class="en">get dizzy</td><td><span class="case c-none">—</span><span class="ex">ζαλίζομαι στο πλοίο</span></td></tr>
+<tr><td class="gr now">αντιλαμβάνομαι</td><td class="gr">αντιλήφ<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> αντιληφθώ</td><td class="en">realise</td><td><span class="case c-acc">Вин.</span><span class="ex">αντιλήφθηκα το λάθος</span></td></tr>
+<tr><td class="gr now">ενδιαφέρομαι</td><td class="gr">ενδιαφέρ<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> ενδιαφερθώ</td><td class="en">be interested</td><td><span class="case c-prep">για + Вин.</span><span class="ex">ενδιαφέρομαι για τη θέση</span></td></tr>
+<tr><td class="gr now">συμπεριφέρομαι</td><td class="gr">συμπεριφέρ<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> συμπεριφερθώ</td><td class="en">behave</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">συμπεριφέρεται καλά στα παιδιά</span></td></tr>
+<tr class="sub"><td colspan="5">Неправильные</td></tr>
+<tr><td class="gr now">έρχομαι</td><td class="gr">ήρθα</td><td class="gr"><span class="tha">θα</span> έρθω</td><td class="en">come</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">έρχομαι στο σπίτι σου</span></td></tr>
+<tr><td class="gr now">γίνομαι</td><td class="gr">έγινα</td><td class="gr"><span class="tha">θα</span> γίνω</td><td class="en">become</td><td><span class="case c-nom">Им.</span><span class="ex">θέλω να γίνω γιατρός</span></td></tr>
+<tr><td class="gr now">φαίνομαι</td><td class="gr">φάνηκα</td><td class="gr"><span class="tha">θα</span> φανώ</td><td class="en">seem, appear</td><td><span class="case c-nom">Им.</span><span class="ex">φαίνεσαι κουρασμένος</span></td></tr>
+<tr><td class="gr now">χαίρομαι</td><td class="gr">χάρηκα</td><td class="gr"><span class="tha">θα</span> χαρώ</td><td class="en">be glad</td><td><span class="case c-prep">για + Вин.</span><span class="ex">χαίρομαι για σένα</span></td></tr>
+<tr><td class="gr now">κάθομαι</td><td class="gr">κάθισα</td><td class="gr"><span class="tha">θα</span> καθίσω</td><td class="en">sit, stay</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">κάθομαι στην καρέκλα</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-G2"><h2>Τύπος Γ2 <span class="what">-άμαι</span><span class="unit">Ενότητα 11</span></h2>
+<div class="para">θυμάμαι · θυμάσαι · θυμάται · θυμόμαστε · θυμάστε · θυμούνται</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-ήθηκα</b> → θα <b>-ηθώ</b></td></tr>
+<tr><td class="gr now">θυμάμαι</td><td class="gr">θυμή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> θυμηθώ</td><td class="en">remember</td><td><span class="case c-acc">Вин.</span><span class="ex">θυμάμαι το σπίτι μου</span></td></tr>
+<tr><td class="gr now">φοβάμαι</td><td class="gr">φοβή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> φοβηθώ</td><td class="en">be afraid</td><td><span class="case c-acc">Вин.</span><span class="ex">φοβάμαι τους σκύλους</span></td></tr>
+<tr><td class="gr now">κοιμάμαι</td><td class="gr">κοιμή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> κοιμηθώ</td><td class="en">sleep</td><td><span class="case c-none">—</span><span class="ex">κοιμάμαι αργά</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-IEM"><h2>-ιέμαι <span class="what">вне учебника, спрягается почти как Γ2</span><span class="unit">аорист — Ενότητα 13</span></h2>
+<div class="para">γεννιέμαι · γεννιέσαι · γεννιέται · γεννιόμαστε · γεννιέστε · γεννιούνται</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-ήθηκα</b> → θα <b>-ηθώ</b></td></tr>
+<tr><td class="gr now">γεννιέμαι</td><td class="gr">γεννή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> γεννηθώ</td><td class="en">be born</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">γεννήθηκα στη Μόσχα</span></td></tr>
+<tr><td class="gr now">βαριέμαι</td><td class="gr">βαρέ<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> βαρεθώ</td><td class="en">be bored</td><td><span class="case c-acc">Вин.</span><span class="ex">βαριέμαι τη δουλειά</span></td></tr>
+<tr><td class="gr now">αναρωτιέμαι</td><td class="gr">αναρωτή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> αναρωτηθώ</td><td class="en">wonder</td><td><span class="case c-none">—</span><span class="ex">αναρωτιέμαι αν θα έρθει</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-OUM"><h2>-ούμαι <span class="what">вне учебника</span></h2>
+<div class="para">αρνούμαι · αρνείσαι · αρνείται · αρνούμαστε · αρνείστε · αρνούνται</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr class="sub"><td colspan="5">Аорист <b>-ήθηκα</b> → θα <b>-ηθώ</b></td></tr>
+<tr><td class="gr now">αρνούμαι</td><td class="gr">αρνή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> αρνηθώ</td><td class="en">refuse</td><td><span class="case c-acc">Вин.</span><span class="ex">αρνούμαι την πρόταση</span></td></tr>
+<tr><td class="gr now">ασχολούμαι</td><td class="gr">ασχολή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> ασχοληθώ</td><td class="en">deal with, be busy with</td><td><span class="case c-prep">με + Вин.</span><span class="ex">ασχολούμαι με τη μουσική</span></td></tr>
+<tr><td class="gr now">παραιτούμαι</td><td class="gr">παραιτή<b>θηκα</b></td><td class="gr"><span class="tha">θα</span> παραιτηθώ</td><td class="en">resign</td><td><span class="case c-prep">από + Вин.</span><span class="ex">παραιτήθηκα από τη δουλειά</span></td></tr>
+</tbody></table></div></section>
+<section class="grp" id="g-SP"><h2>Особые <span class="what">своя парадигма — учить целиком</span><span class="unit">Ενότητες 1, 6, 12</span></h2>
+<div class="para">είμαι · είσαι · είναι · είμαστε · είστε · είναι  |  πάω · πας · πάει · πάμε · πάτε · πάνε</div>
+<div class="table-wrap"><table><thead><tr><th>Τώρα</th><th>Χτες</th><th>Αύριο</th><th>English</th><th>Падеж</th></tr></thead><tbody>
+<tr><td class="gr now">είμαι</td><td class="gr">ήμουν</td><td class="gr"><span class="tha">θα</span> είμαι</td><td class="en">be</td><td><span class="case c-nom">Им.</span><span class="ex">είμαι γιατρός</span></td></tr>
+<tr><td class="gr now">πάω</td><td class="gr">πήγα</td><td class="gr"><span class="tha">θα</span> πάω</td><td class="en">go</td><td><span class="case c-prep">σε + Вин.</span><span class="ex">πάω στη θάλασσα</span></td></tr>
+</tbody></table></div></section>
+<footer>Типы — по учебнику «Ελληνικά Α΄» (Ενότητες 2–14). Формы проверены по таблицам аориста и будущего (Ενότητες 12–14) · October 2026</footer></div>`;
+
 const THEORY_RESOURCES = [
   {
     id: "gender-cheatsheet",
@@ -7738,6 +8036,17 @@ const THEORY_RESOURCES = [
     border: "#f0c4ac",
     icon: "📋",
     html: CASES_CHEATSHEET_HTML,
+  },
+  {
+    id: "verbs-cheatsheet",
+    title: "Ρήματα",
+    subtitle: "Все глаголы словаря: τώρα · χτες · αύριο · падеж — по типам Α, Β1, Β2, ΑΒ, Γ1, Γ2",
+    tag: "Verbs",
+    color: "#6a4fa3",
+    bg: "#f3effa",
+    border: "#d3c6ec",
+    icon: "🔤",
+    html: VERBS_CHEATSHEET_HTML,
   },
 ];
 
@@ -8166,7 +8475,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.65-1445</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.66-1530</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
