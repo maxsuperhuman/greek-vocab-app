@@ -1310,12 +1310,16 @@ async function fetchArticlesBatch(words) {
   if (uncached.length === 0) return {};
 
   const list = uncached.map(w => `"${w[0]}"`).join(", ");
-  const prompt = `For each Greek word below, give its definite article (ο, η, or το) if it is a noun, or "none" if it is not a noun (verb, adjective, adverb, phrase, expression, etc).
+  const prompt = `For each Greek entry below, return its article (ο, η, or το) if it is a noun, otherwise "none".
+Rules:
+- If the entry already starts with an article (ο/η/το), return that article
+- If it is a verb, adjective, adverb, greeting, phrase or expression, return "none"
+- Use the EXACT same key string I give you
 
-Words: ${list}
+Entries: ${list}
 
-Return ONLY a JSON object mapping each exact word to its article:
-{"word1": "ο", "word2": "η", "word3": "none"}`;
+Return ONLY valid JSON, keys must be exactly as given:
+{"entry1": "η", "entry2": "none"}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1339,13 +1343,22 @@ Return ONLY a JSON object mapping each exact word to its article:
     if (!jsonMatch) throw new Error("No JSON");
     const result = parseCardJson(jsonMatch[0]);
     if (!result) throw new Error("Could not parse articles JSON");
+    // Only save words that actually appear in the result — don't save "none" for API failures
     for (const w of uncached) {
-      const article = result[w[0]] || "none";
-      await saveArticleToCache(w[0], article);
+      const article = result[w[0]];
+      if (article !== undefined) {
+        await saveArticleToCache(w[0], article);
+      } else {
+        // Try with just the base word (without article prefix like "η ", "ο ", "το ")
+        const bare = w[0].replace(/^(ο|η|το)\s+/i, "");
+        const articleFromBare = result[bare];
+        await saveArticleToCache(w[0], articleFromBare || "none");
+      }
     }
     return result;
   } catch(e) {
     console.error("Articles batch fetch error:", e);
+    // On error, don't save anything — words remain uncached and will retry next scan
     return {};
   }
 }
@@ -4584,58 +4597,22 @@ function ArticlesTab({ mastery, rec }) {
 
   const ARTICLES = ["ο", "η", "το"];
 
-  // Run the one-time full-database prescan, or top up any new words added since
-  // (e.g. via photo import or manual add) that weren't covered by the original scan.
-  // window.__articleMapCache keeps the map in memory so switching tabs doesn't re-scan.
+  // Build articleMap instantly from the word list itself — no API needed.
+  // Greek nouns in WORDS start with "ο ", "η ", or "το " — extract that directly.
+  // window.__articleMapCache keeps it in memory so switching tabs is instant.
   React.useEffect(() => {
     if (window.__articleMapCache) {
       setArticleMap(window.__articleMapCache);
       return;
     }
-    let cancelled = false;
-    async function run() {
-      const map = {};
-      const toFetch = [];
-      for (const w of WORDS) {
-        const cached = await getArticleFromCache(w[0]);
-        if (cached !== null) map[w[0]] = cached;
-        else toFetch.push(w);
-      }
-      if (cancelled) return;
-
-      if (toFetch.length === 0) {
-        window.__articleMapCache = map;
-        setArticleMap(map);
-        return;
-      }
-
-      // Need API key to scan — if missing, show key modal
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        setNeedsKey(true);
-        setShowKeyModal(true);
-        setPhase("setup");
-        return;
-      }
-
-      // Either first run, or new words were added since the last scan — fetch what's missing.
-      setPhase("prescan"); setScanProgress(WORDS.length - toFetch.length); setScanTotal(WORDS.length);
-      const BATCH = 25;
-      for (let i = 0; i < toFetch.length; i += BATCH) {
-        if (cancelled) return;
-        const batch = toFetch.slice(i, i+BATCH);
-        const result = await fetchArticlesBatch(batch);
-        for (const w of batch) map[w[0]] = result[w[0]] || "none";
-        setScanProgress(p => Math.min(p + batch.length, WORDS.length));
-      }
-      if (cancelled) return;
-      await saveArticleToCache(ARTICLE_PRESCAN_DONE_KEY, true);
-      window.__articleMapCache = map;
-      setArticleMap(map);
-      setPhase("setup");
+    const ARTICLE_RE = /^(ο|η|το)\s/;
+    const map = {};
+    for (const w of WORDS) {
+      const m = w[0].match(ARTICLE_RE);
+      map[w[0]] = m ? m[1] : "none";
     }
-    run();
-    return () => { cancelled = true; };
+    window.__articleMapCache = map;
+    setArticleMap(map);
   }, []);
 
   React.useEffect(() => { setSubtopic("All"); }, [topic]);
@@ -4917,21 +4894,21 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
           <div style={{ marginBottom:8 }}>The noun scan found 0 nouns — this can happen if the API response was malformed. Re-scan to fix it.</div>
           <button onClick={async () => {
             window.__articleMapCache = null;
-            // Clear all cached articles from IndexedDB
+            // Clear all cached articles: delete each word's cache entry directly
             try {
               const db = await openDB();
-              const tx = db.transaction(DB_STORE, "readwrite");
-              const store = tx.objectStore(DB_STORE);
-              const req = store.getAllKeys();
-              await new Promise(r => { req.onsuccess = async () => {
-                for (const k of req.result) {
-                  if (typeof k === "string" && k.startsWith(ARTICLE_CACHE_PREFIX)) store.delete(k);
-                }
-                r();
-              }; });
-            } catch(e) {}
-            setArticleMap(null);
-            setPhase("prescan");
+              const deletePromises = WORDS.map(w => new Promise(res => {
+                try {
+                  const tx = db.transaction(DB_STORE, "readwrite");
+                  tx.objectStore(DB_STORE).delete(ARTICLE_CACHE_PREFIX + w[0]);
+                  tx.oncomplete = res; tx.onerror = res;
+                } catch(e) { res(); }
+              }));
+              // Also delete the prescan-done marker
+              const tx2 = db.transaction(DB_STORE, "readwrite");
+              tx2.objectStore(DB_STORE).delete(ARTICLE_PRESCAN_DONE_KEY);
+              await Promise.all(deletePromises);
+            } catch(e) { console.error("Clear cache error:", e); }
             window.location.reload();
           }} style={{ padding:"6px 14px", borderRadius:8, border:"none", background:"#E24B4A", color:"white", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
             🔄 Re-scan nouns
@@ -6894,32 +6871,257 @@ function StatsTab({ mastery }) {
 
 // ─── Audit Tab ─────────────────────────────────────────────────────
 // ─── Theory Tab ────────────────────────────────────────────────────
+
+const CASES_CHEATSHEET_HTML = `<style>
+:root{--bg:#faf9f6;--surface:#ffffff;--border:#e2ddd6;--fg:#1a1714;--muted:#6b6560;--acc:#c45c2e;--gen:#2e6e8e;--rule:#f5f0e8;--rule-border:#d4c9a8;--nom:#4a7a4a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.6;padding:1rem 1rem 3rem}
+.page{max-width:860px;margin:0 auto}
+header{border-bottom:2px solid var(--border);padding-bottom:1.25rem;margin-bottom:2rem}
+.subtitle{color:var(--muted);font-size:0.85rem;letter-spacing:.05em;text-transform:uppercase;margin-bottom:0.4rem}
+h1{font-family:Georgia,serif;font-size:clamp(1.4rem,5vw,2.2rem);line-height:1.2;font-weight:700}
+.tagline{color:var(--muted);margin-top:0.4rem;font-size:0.9rem}
+h2{font-family:Georgia,serif;font-size:1.1rem;font-weight:700;margin-bottom:1rem;padding-bottom:0.4rem;border-bottom:1.5px solid var(--border)}
+.section{margin-bottom:2.5rem}
+.badge{display:inline-block;font-size:0.75rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:2px 7px}
+.badge-acc{background:var(--acc);color:#fff}.badge-gen{background:var(--gen);color:#fff}.badge-nom{background:var(--nom);color:#fff}
+.case-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:560px){.case-grid{grid-template-columns:1fr}}
+.case-card{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:1.25rem 1.1rem}
+.case-card.acc{border-top:4px solid var(--acc)}.case-card.gen{border-top:4px solid var(--gen)}
+.case-card h3{font-family:Georgia,serif;font-size:1rem;font-weight:700;margin-bottom:0.75rem}
+.case-card .greek{font-size:1.1rem;color:var(--acc)}.case-card.gen .greek{color:var(--gen)}
+.meta-row{display:flex;flex-direction:column;gap:0.3rem;font-size:0.9rem}
+.meta-row strong{color:var(--muted);font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em}
+.rule-box{background:var(--rule);border:1.5px solid var(--rule-border);border-left:4px solid var(--acc);border-radius:8px;padding:1rem 1.2rem;margin-bottom:1.5rem}
+.rule-box p{font-size:0.95rem}
+.examples{display:flex;flex-direction:column;gap:0.65rem}
+.example{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;font-size:0.92rem}
+.example .greek-ex{font-family:Georgia,serif;font-size:1rem;margin-bottom:0.2rem}
+.example .translation{color:var(--muted);font-size:0.85rem}
+.acc-color{color:var(--acc);font-weight:600}.gen-color{color:var(--gen);font-weight:600}.nom-color{color:var(--nom);font-weight:600}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:0.88rem}
+th{background:var(--surface);border:1px solid var(--border);padding:0.5rem 0.7rem;text-align:left;font-weight:600;font-size:0.78rem;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+td{border:1px solid var(--border);padding:0.5rem 0.7rem;vertical-align:middle}
+tr:nth-child(even) td{background:var(--surface)}
+.cell-nom{color:var(--nom);font-weight:600;font-family:Georgia,serif}
+.cell-gen{color:var(--gen);font-weight:600;font-family:Georgia,serif}
+.cell-acc{color:var(--acc);font-weight:600;font-family:Georgia,serif}
+.th-nom{color:var(--nom)!important}.th-gen{color:var(--gen)!important}.th-acc{color:var(--acc)!important}
+.contrast-grid{display:flex;flex-direction:column;gap:0.6rem}
+.contrast{display:grid;grid-template-columns:1fr auto 1fr;gap:0.5rem;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.65rem 1rem;font-size:0.9rem}
+.contrast .vs{color:var(--muted);font-size:0.8rem;text-align:center}
+@media(max-width:480px){.contrast{grid-template-columns:1fr}.contrast .vs{text-align:left}}
+.e-nom{color:var(--nom);font-weight:700}.e-gen{color:var(--gen);font-weight:700}.e-acc{color:var(--acc);font-weight:700}
+.stem{color:var(--muted)}
+.type-label{font-size:0.82rem;color:var(--muted);line-height:1.3;white-space:nowrap}
+.type-label em{font-style:normal;font-weight:600;color:var(--fg)}
+.note-box{background:var(--rule);border:1.5px solid var(--rule-border);border-left:4px solid var(--gen);border-radius:8px;padding:0.9rem 1.1rem;font-size:0.88rem;margin-top:1rem}
+.note-box p+p{margin-top:0.4rem}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:0.8rem}
+</style>
+<div class="page">
+  <header>
+    <p class="subtitle">Ελληνικά · Greek Grammar</p>
+    <h1>Αιτιατική &amp; Γενική<br><span style="font-weight:400;font-size:0.75em;color:var(--muted)">Accusative &amp; Genitive Cases</span></h1>
+    <p class="tagline">From your lessons · Units 11–15</p>
+  </header>
+  <section class="section">
+    <h2>What each case does</h2>
+    <div class="case-grid">
+      <div class="case-card acc">
+        <h3><span class="badge badge-acc">Αιτιατική</span> Accusative</h3>
+        <div class="meta-row">
+          <div><strong>Role</strong> Direct object — who/what receives the action</div>
+          <div><strong>Question</strong> <span class="greek">Ποιον; Ποια; Τι;</span><br><em style="font-size:0.82rem;color:var(--muted)">Whom? Which? What?</em></div>
+          <div><strong>Also called</strong> <em>Άμεσο αντικείμενο</em></div>
+          <div><strong>Example verb</strong> <span class="greek">βλέπω, ακούω, αγαπώ…</span></div>
+        </div>
+      </div>
+      <div class="case-card gen">
+        <h3><span class="badge badge-gen">Γενική</span> Genitive</h3>
+        <div class="meta-row">
+          <div><strong>Role</strong> Indirect object — to whom / possession</div>
+          <div><strong>Question</strong> <span class="greek">Σε ποιον; Σε ποια;</span><br><em style="font-size:0.82rem;color:var(--muted)">To whom? For whom?</em></div>
+          <div><strong>Also called</strong> <em>Έμμεσο αντικείμενο</em></div>
+          <div><strong>Example verb</strong> <span class="greek">μιλάω, λέω, δίνω, στέλνω…</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <h2>⭐ The key rule</h2>
+    <div class="rule-box">
+      <strong>The Greek verb determines the pronoun case</strong> — not the English translation.
+      <p style="margin-top:0.5rem;color:var(--muted);font-size:0.88rem">Ask yourself: does the verb take a direct object (→ accusative) or an indirect one (→ genitive)?</p>
+    </div>
+    <div class="examples">
+      <div class="example">
+        <div class="greek-ex"><span class="acc-color">Τον</span> βλέπω. ← Βλέπω <span class="acc-color">ποιον;</span> = Παναγιώτη</div>
+        <div class="translation">I see <em>him</em>. → direct object → <strong>accusative</strong> τον</div>
+      </div>
+      <div class="example">
+        <div class="greek-ex"><span class="gen-color">Του</span> μιλάω. ← Μιλάω <span class="gen-color">σε ποιον;</span> = Παναγιώτη</div>
+        <div class="translation">I talk to <em>him</em>. → indirect object → <strong>genitive</strong> του</div>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <h2>Noun declension: Nominative → Genitive → Accusative</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.9rem">Stem is grey · <span style="color:var(--nom);font-weight:600">ending = nominative</span> · <span style="color:var(--gen);font-weight:600">ending = genitive</span> · <span style="color:var(--acc);font-weight:600">ending = accusative</span></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th class="th-nom">Nom. SG</th><th class="th-gen">Gen. SG</th><th class="th-acc">Acc. SG</th><th class="th-nom">Nom. PL</th><th class="th-gen">Gen. PL</th><th class="th-acc">Acc. PL</th></tr></thead>
+        <tbody>
+          <tr><td class="type-label">masc.<br><em>-ος</em></td><td class="cell-nom"><span class="stem">ο φίλ</span><span class="e-nom">ος</span></td><td class="cell-gen"><span class="stem">του φίλ</span><span class="e-gen">ου</span></td><td class="cell-acc"><span class="stem">τον φίλ</span><span class="e-acc">ο</span></td><td class="cell-nom"><span class="stem">οι φίλ</span><span class="e-nom">οι</span></td><td class="cell-gen"><span class="stem">των φίλ</span><span class="e-gen">ων</span></td><td class="cell-acc"><span class="stem">τους φίλ</span><span class="e-acc">ους</span></td></tr>
+          <tr><td class="type-label">masc.<br><em>-ας</em></td><td class="cell-nom"><span class="stem">ο άντρ</span><span class="e-nom">ας</span></td><td class="cell-gen"><span class="stem">του άντρ</span><span class="e-gen">α</span></td><td class="cell-acc"><span class="stem">τον άντρ</span><span class="e-acc">α</span></td><td class="cell-nom"><span class="stem">οι άντρ</span><span class="e-nom">ες</span></td><td class="cell-gen"><span class="stem">των αντρ</span><span class="e-gen">ών</span></td><td class="cell-acc"><span class="stem">τους άντρ</span><span class="e-acc">ες</span></td></tr>
+          <tr><td class="type-label">fem.<br><em>-α</em></td><td class="cell-nom"><span class="stem">η γυναίκ</span><span class="e-nom">α</span></td><td class="cell-gen"><span class="stem">της γυναίκ</span><span class="e-gen">ας</span></td><td class="cell-acc"><span class="stem">τη γυναίκ</span><span class="e-acc">α</span></td><td class="cell-nom"><span class="stem">οι γυναίκ</span><span class="e-nom">ες</span></td><td class="cell-gen"><span class="stem">των γυναικ</span><span class="e-gen">ών</span></td><td class="cell-acc"><span class="stem">τις γυναίκ</span><span class="e-acc">ες</span></td></tr>
+          <tr><td class="type-label">fem.<br><em>-η</em></td><td class="cell-nom"><span class="stem">η φίλ</span><span class="e-nom">η</span></td><td class="cell-gen"><span class="stem">της φίλ</span><span class="e-gen">ης</span></td><td class="cell-acc"><span class="stem">τη φίλ</span><span class="e-acc">η</span></td><td class="cell-nom"><span class="stem">οι φίλ</span><span class="e-nom">ες</span></td><td class="cell-gen"><span class="stem">των φίλ</span><span class="e-gen">ων</span></td><td class="cell-acc"><span class="stem">τις φίλ</span><span class="e-acc">ες</span></td></tr>
+          <tr><td class="type-label">neut.<br><em>-ο</em></td><td class="cell-nom"><span class="stem">το βιβλί</span><span class="e-nom">ο</span></td><td class="cell-gen"><span class="stem">του βιβλί</span><span class="e-gen">ου</span></td><td class="cell-acc"><span class="stem">το βιβλί</span><span class="e-acc">ο</span></td><td class="cell-nom"><span class="stem">τα βιβλί</span><span class="e-nom">α</span></td><td class="cell-gen"><span class="stem">των βιβλί</span><span class="e-gen">ων</span></td><td class="cell-acc"><span class="stem">τα βιβλί</span><span class="e-acc">α</span></td></tr>
+          <tr><td class="type-label">neut.<br><em>-ί</em></td><td class="cell-nom"><span class="stem">το παιδ</span><span class="e-nom">ί</span></td><td class="cell-gen"><span class="stem">του παιδ</span><span class="e-gen">ιού</span></td><td class="cell-acc"><span class="stem">το παιδ</span><span class="e-acc">ί</span></td><td class="cell-nom"><span class="stem">τα παιδ</span><span class="e-nom">ιά</span></td><td class="cell-gen"><span class="stem">των παιδ</span><span class="e-gen">ιών</span></td><td class="cell-acc"><span class="stem">τα παιδ</span><span class="e-acc">ιά</span></td></tr>
+          <tr><td class="type-label">neut.<br><em>-μα</em></td><td class="cell-nom"><span class="stem">το μάθη</span><span class="e-nom">μα</span></td><td class="cell-gen"><span class="stem">του μαθή</span><span class="e-gen">ματος</span></td><td class="cell-acc"><span class="stem">το μάθη</span><span class="e-acc">μα</span></td><td class="cell-nom"><span class="stem">τα μαθή</span><span class="e-nom">ματα</span></td><td class="cell-gen"><span class="stem">των μαθη</span><span class="e-gen">μάτων</span></td><td class="cell-acc"><span class="stem">τα μαθή</span><span class="e-acc">ματα</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note-box" style="border-left-color:var(--nom);margin-top:1rem">
+      <p>🎯 <strong>Genitive is always the most distinctive form</strong> — it's the hardest to confuse: <span class="e-gen">-ου / -ας / -ης / -ών / -ματος</span></p>
+      <p style="margin-top:0.4rem">🔁 <strong>Neuter &amp; feminine:</strong> Nom. = Acc. in both singular and plural — only the article changes.</p>
+    </div>
+  </section>
+  <section class="section">
+    <h2>Personal pronouns — short forms</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Person</th><th class="th-acc">Αιτιατική — Direct (Accusative)</th><th class="th-gen">Γενική — Indirect (Genitive)</th></tr></thead>
+        <tbody>
+          <tr><td>εγώ / I</td><td class="cell-acc">με</td><td class="cell-gen">μου</td></tr>
+          <tr><td>εσύ / you</td><td class="cell-acc">σε</td><td class="cell-gen">σου</td></tr>
+          <tr><td>αυτός / he</td><td class="cell-acc">τον</td><td class="cell-gen">του</td></tr>
+          <tr><td>αυτή / she</td><td class="cell-acc">την</td><td class="cell-gen">της</td></tr>
+          <tr><td>αυτό / it</td><td class="cell-acc">το</td><td class="cell-gen">του</td></tr>
+          <tr><td>εμείς / we</td><td class="cell-acc">μας</td><td class="cell-gen">μας</td></tr>
+          <tr><td>εσείς / you pl.</td><td class="cell-acc">σας</td><td class="cell-gen">σας</td></tr>
+          <tr><td>αυτοί / they (m.)</td><td class="cell-acc">τους</td><td class="cell-gen">τους</td></tr>
+          <tr><td>αυτές / they (f.) ⚠️</td><td class="cell-acc" style="font-weight:700">τις</td><td class="cell-gen" style="font-weight:700">τους</td></tr>
+          <tr><td>αυτά / they (n.)</td><td class="cell-acc">τα</td><td class="cell-gen">τους</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note-box">
+      <p>⚠️ <strong>αυτές (they f.)</strong>: accusative is <strong style="color:var(--acc)">τις</strong> but genitive is <strong style="color:var(--gen)">τους</strong> — same as the masculine!</p>
+      <p>💡 <strong>μας / σας</strong>: same form in both cases — context (verb type) tells you which one.</p>
+    </div>
+  </section>
+  <section class="section">
+    <h2>Contrast pairs from lessons</h2>
+    <div class="contrast-grid">
+      <div class="contrast">
+        <div><span class="acc-color">Σε</span> είδα.<br><span style="font-size:0.8rem;color:var(--muted)">I saw you. (direct)</span></div>
+        <div class="vs">but</div>
+        <div>δε <span class="gen-color">σου</span> μίλησα.<br><span style="font-size:0.8rem;color:var(--muted)">I didn't talk to you. (indirect)</span></div>
+      </div>
+      <div class="contrast">
+        <div><span class="acc-color">Τον</span> είδα.<br><span style="font-size:0.8rem;color:var(--muted)">I saw him. (direct)</span></div>
+        <div class="vs">but</div>
+        <div>δε <span class="gen-color">του</span> μίλησα.<br><span style="font-size:0.8rem;color:var(--muted)">I didn't talk to him. (indirect)</span></div>
+      </div>
+      <div class="contrast">
+        <div><span class="acc-color">Τον</span> βλέπω τον Παναγιώτη.<br><span style="font-size:0.8rem;color:var(--muted)">I see Panagiotis.</span></div>
+        <div class="vs">vs</div>
+        <div><span class="gen-color">Του</span> μιλάω στον Παναγιώτη.<br><span style="font-size:0.8rem;color:var(--muted)">I talk to Panagiotis.</span></div>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <h2>Article quick reference</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Case</th><th>Masc. (ο)</th><th>Fem. (η)</th><th>Neut. (το)</th><th>Pl. Masc.</th><th>Pl. Fem.</th><th>Pl. Neut.</th></tr></thead>
+        <tbody>
+          <tr><td class="cell-nom"><strong>Nom.</strong></td><td class="cell-nom">ο</td><td class="cell-nom">η</td><td class="cell-nom">το</td><td class="cell-nom">οι</td><td class="cell-nom">οι</td><td class="cell-nom">τα</td></tr>
+          <tr><td class="cell-gen"><strong>Gen.</strong></td><td class="cell-gen">του</td><td class="cell-gen">της</td><td class="cell-gen">του</td><td class="cell-gen">των</td><td class="cell-gen">των</td><td class="cell-gen">των</td></tr>
+          <tr><td class="cell-acc"><strong>Acc.</strong></td><td class="cell-acc">τον / το*</td><td class="cell-acc">τη(ν)*</td><td class="cell-acc">το</td><td class="cell-acc">τους</td><td class="cell-acc">τις</td><td class="cell-acc">τα</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note-box">
+      <p>* <strong>τον → τo</strong> before consonants in informal speech (τον/το Γιώργη).</p>
+      <p>* <strong>τη(ν)</strong>: add -ν before a vowel or κ/π/τ/ξ/ψ (την Ελένη, τη Μαρία).</p>
+    </div>
+  </section>
+  <footer>Compiled from lesson PDFs · Units 11–15 · October 2026</footer>
+</div>`;
+
 const THEORY_RESOURCES = [
   {
     id: "cases-cheatsheet",
     title: "Αιτιατική & Γενική",
     subtitle: "Accusative vs Genitive — pronouns, noun endings, key rule",
-    url: "https://claude.ai/artifact/9RAZ6ULXBSVpvPt9xq7DEW",
     tag: "Cases",
     color: "#c45c2e",
     bg: "#fdf0eb",
     border: "#f0c4ac",
     icon: "📋",
+    html: CASES_CHEATSHEET_HTML,
   },
 ];
 
+function CheatsheetModal({ resource, onClose }) {
+  // Close on backdrop click
+  function onBackdrop(e) { if (e.target === e.currentTarget) onClose(); }
+  // Prevent body scroll while open
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div onClick={onBackdrop} style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"rgba(0,0,0,0.5)", display:"flex", flexDirection:"column",
+      alignItems:"stretch"
+    }}>
+      <div style={{
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        background:"#fff", borderBottom:"1px solid #e2ddd6",
+        padding:"10px 16px", flexShrink:0
+      }}>
+        <div>
+          <span style={{ fontSize:14, fontWeight:600, color:"#1a1714" }}>{resource.title}</span>
+          <span style={{ marginLeft:8, fontSize:11, fontWeight:600, textTransform:"uppercase",
+            background:resource.color, color:"#fff", borderRadius:5, padding:"1px 7px" }}>
+            {resource.tag}
+          </span>
+        </div>
+        <button onClick={onClose} style={{
+          fontSize:22, lineHeight:1, background:"none", border:"none",
+          cursor:"pointer", color:"#888", padding:"0 4px"
+        }}>×</button>
+      </div>
+      <iframe
+        srcDoc={resource.html}
+        style={{ flex:1, border:"none", background:"#faf9f6" }}
+        sandbox="allow-same-origin"
+      />
+    </div>
+  );
+}
+
 function TheoryTab() {
+  const [open, setOpen] = React.useState(null);
   return (
     <div style={{ padding:"0 0 2rem" }}>
+      {open && <CheatsheetModal resource={open} onClose={()=>setOpen(null)}/>}
       <div style={{ fontSize:13, color:"#888", marginBottom:"1rem" }}>
         Grammar cheatsheets from your lessons — tap to open.
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem" }}>
         {THEORY_RESOURCES.map(r => (
-          <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer"
+          <div key={r.id} onClick={()=>setOpen(r)}
             style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px",
               background: r.bg, border:`1px solid ${r.border}`, borderLeft:`4px solid ${r.color}`,
-              borderRadius:12, textDecoration:"none", color:"inherit" }}>
+              borderRadius:12, cursor:"pointer", color:"inherit" }}>
             <span style={{ fontSize:28, lineHeight:1 }}>{r.icon}</span>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:15, fontWeight:600, color:"#1a1714", marginBottom:2 }}>{r.title}</div>
@@ -6929,8 +7131,8 @@ function TheoryTab() {
               background: r.color, color:"#fff", borderRadius:6, padding:"2px 8px", whiteSpace:"nowrap" }}>
               {r.tag}
             </span>
-            <span style={{ fontSize:18, color: r.color, flexShrink:0 }}>↗</span>
-          </a>
+            <span style={{ fontSize:18, color: r.color, flexShrink:0 }}>▶</span>
+          </div>
         ))}
       </div>
       <div style={{ marginTop:"2rem", fontSize:11, color:"#bbb", textAlign:"center" }}>
