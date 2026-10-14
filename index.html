@@ -4372,6 +4372,110 @@ const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τ
 // The exercise has TWO steps per sentence:
 //   step 1 — pick the correct article (blank in sentence)
 //   step 2 — pick the correct noun form (shown in parens in sentence, choose whole word)
+// ─── Case reference table (same look as Theory → Αιτιατική & Γενική) ──
+const CR_COLORS = { nom:"#4a7a4a", gen:"#2e6e8e", acc:"#c45c2e" };
+const CR_ARTICLES = [
+  { k:"nom", label:"Ном.", cells:["ο","η","το","οι","οι","τα"] },
+  { k:"gen", label:"Род.", cells:["του","της","του","των","των","των"] },
+  { k:"acc", label:"Вин.", cells:["τον","τη(ν)","το","τους","τις","τα"] },
+  { k:"se",  label:"σε+",  cells:["στον","στη(ν)","στο","στους","στις","στα"] },
+];
+// [type, stem/endings per column: nomSg, genSg, accSg, nomPl, genPl, accPl]
+const CR_NOUNS = [
+  { t:"м. -ος", g:"м", re:/ος$/,  f:[["ο φίλ","ος"],["του φίλ","ου"],["τον φίλ","ο"],["οι φίλ","οι"],["των φίλ","ων"],["τους φίλ","ους"]] },
+  { t:"м. -ας", g:"м", re:/ας$/,  f:[["ο άντρ","ας"],["του άντρ","α"],["τον άντρ","α"],["οι άντρ","ες"],["των αντρ","ών"],["τους άντρ","ες"]] },
+  { t:"м. -ης", g:"м", re:/ης$/,  f:[["ο μαθητ","ής"],["του μαθητ","ή"],["τον μαθητ","ή"],["οι μαθητ","ές"],["των μαθητ","ών"],["τους μαθητ","ές"]] },
+  { t:"ж. -α",  g:"ж", re:/α$/,   f:[["η γυναίκ","α"],["της γυναίκ","ας"],["τη γυναίκ","α"],["οι γυναίκ","ες"],["των γυναικ","ών"],["τις γυναίκ","ες"]] },
+  { t:"ж. -η",  g:"ж", re:/η$/,   f:[["η φίλ","η"],["της φίλ","ης"],["τη φίλ","η"],["οι φίλ","ες"],["των φίλ","ων"],["τις φίλ","ες"]] },
+  { t:"ср. -ο", g:"ср", re:/ο$/,  f:[["το βιβλί","ο"],["του βιβλί","ου"],["το βιβλί","ο"],["τα βιβλί","α"],["των βιβλί","ων"],["τα βιβλί","α"]] },
+  { t:"ср. -ι", g:"ср", re:/ι$/,  f:[["το παιδ","ί"],["του παιδ","ιού"],["το παιδ","ί"],["τα παιδ","ιά"],["των παιδ","ιών"],["τα παιδ","ιά"]] },
+  { t:"ср. -μα",g:"ср", re:/μα$/, f:[["το μάθη","μα"],["του μαθή","ματος"],["το μάθη","μα"],["τα μαθή","ματα"],["των μαθη","μάτων"],["τα μαθή","ματα"]] },
+];
+const CR_COLKEYS = ["nom","gen","acc","nom","gen","acc"];
+function crStripAccents(x){ return (x||"").normalize("NFD").replace(/[̀-ͯ]/g,""); }
+function crInfo(caseLabel, gender, nounBase) {
+  const lbl = caseLabel || "";
+  const ck = /Род/.test(lbl) ? "gen" : /Вин/.test(lbl) ? "acc" : /Ном/.test(lbl) ? "nom" : null;
+  const pl = /мн/.test(lbl);
+  const art = ((nounBase||"").match(/^(ο|η|το)\s/)||[])[1];
+  const g = gender || (art==="ο"?"м":art==="η"?"ж":art==="το"?"ср":null);
+  const gi = g==="м"?0 : g==="ж"?1 : g==="ср"?2 : null;
+  const word = crStripAccents((nounBase||"").replace(/^(ο|η|το)\s+/,"").trim());
+  let ni = -1;
+  if (word) {
+    // -μα before -α; only rows of the same gender (so neuter -ος / feminine -ος don't land on "м. -ος")
+    const order = [7,0,1,2,3,4,5,6];
+    for (const i of order) { const r = CR_NOUNS[i]; if ((!g || r.g===g) && r.re.test(word)) { ni = i; break; } }
+  }
+  return { ck, pl, gi, ni };
+}
+function CaseRefTable({ answer, caseLabel, gender, nounBase }) {
+  const { ck, pl, gi, ni } = crInfo(caseLabel, gender, nounBase);
+  const exactCol = (gi!==null) ? (pl ? gi+3 : gi) : null;
+  const ans = (answer||"").trim();
+  const isHit = (rowK, ci, val) => {
+    if (exactCol!==null && ck) return rowK===ck && ci===exactCol;
+    const v = val.replace("(ν)","");
+    return ans && (val===ans || v===ans || v+"ν"===ans);
+  };
+  const th = { padding:"5px 6px", textAlign:"center", fontWeight:600, fontSize:10.5, letterSpacing:".03em", textTransform:"uppercase", color:"#6b6560", border:"1px solid #e2ddd6", background:"#fff", whiteSpace:"nowrap" };
+  const td = { padding:"5px 6px", textAlign:"center", border:"1px solid #e2ddd6", fontFamily:"Georgia,serif", fontSize:14, whiteSpace:"nowrap" };
+  const nounCol = ck ? (CR_COLKEYS.findIndex((k,i)=>k===ck && (i>=3)===pl)) : -1;
+  return (
+    <div style={{ background:"#faf9f6", border:"1px solid #e2ddd6", borderRadius:10, padding:"10px 10px 8px", marginBottom:10 }}>
+      <div style={{ fontSize:11, color:"#6b6560", fontWeight:600, letterSpacing:".05em", textTransform:"uppercase", marginBottom:6 }}>
+        Артикли · <span style={{color:CR_COLORS.nom}}>Ном.</span> <span style={{color:CR_COLORS.gen}}>Род.</span> <span style={{color:CR_COLORS.acc}}>Вин.</span>
+      </div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead><tr>
+            <th style={th}></th><th style={th}>Муж. (ο)</th><th style={th}>Жен. (η)</th><th style={th}>Ср. (το)</th>
+            <th style={th}>Мн. муж.</th><th style={th}>Мн. жен.</th><th style={th}>Мн. ср.</th>
+          </tr></thead>
+          <tbody>
+            {CR_ARTICLES.map(row => {
+              const c = CR_COLORS[row.k] || "#888";
+              return (
+                <tr key={row.k}>
+                  <td style={{ ...td, fontFamily:"inherit", fontSize:12, fontWeight:700, color:c, background:"#fff" }}>{row.label}</td>
+                  {row.cells.map((v,ci) => {
+                    const hit = isHit(row.k, ci, v);
+                    return <td key={ci} style={{ ...td, color: row.k==="se" ? "#555" : c, fontWeight: hit ? 800 : 600,
+                      background: hit ? c : (ci%2 ? "#fff" : "#fdfcfa"), ...(hit ? { color:"#fff", borderRadius:4 } : {}) }}>{v}</td>;
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {ni >= 0 && (
+        <div style={{ marginTop:10 }}>
+          <div style={{ fontSize:11, color:"#6b6560", fontWeight:600, letterSpacing:".05em", textTransform:"uppercase", marginBottom:6 }}>
+            Окончания · тип «{CR_NOUNS[ni].t}»{nounBase ? <span style={{ textTransform:"none", fontWeight:400 }}> — как {nounBase}</span> : null}
+          </div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr>
+                {["Им. ед.","Род. ед.","Вин. ед.","Им. мн.","Род. мн.","Вин. мн."].map((h,i)=>
+                  <th key={i} style={{ ...th, color: CR_COLORS[CR_COLKEYS[i]] }}>{h}</th>)}
+              </tr></thead>
+              <tbody><tr>
+                {CR_NOUNS[ni].f.map(([stem,end],i) => {
+                  const c = CR_COLORS[CR_COLKEYS[i]]; const hit = i===nounCol;
+                  return <td key={i} style={{ ...td, fontSize:13, background: hit ? "#fff3c4" : "#fff", outline: hit ? "2px solid "+c : "none" }}>
+                    <span style={{ color:"#9a948e" }}>{stem}</span><span style={{ color:c, fontWeight:700 }}>{end}</span>
+                  </td>;
+                })}
+              </tr></tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Last failure reason from Grammar fetchers — shown in the setup banner instead of a generic message
 let __grammarFetchErr = null;
 function setGrammarErr(kind, detail) { __grammarFetchErr = { kind, detail: detail || "" }; }
@@ -5313,39 +5417,8 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         {/* After both steps: case table + Next */}
         {bothDone && (
           <div>
-            {/* Compact article table */}
-            {(() => {
-              const CASE_TABLE = [
-                { caseRu:"Ном.", m:"ο",    f:"η",    n:"το",  mp:"οι",   fp:"οι",   np:"τα"  },
-                { caseRu:"Род.", m:"του",  f:"της",  n:"του", mp:"των",  fp:"των",  np:"των" },
-                { caseRu:"Вин.", m:"τον",  f:"την",  n:"το",  mp:"τους", fp:"τις",  np:"τα"  },
-                { caseRu:"σε+",  m:"στον", f:"στην", n:"στο", mp:"στους",fp:"στις", np:"στα" },
-              ];
-              const cols = ["caseRu","m","f","n","mp","fp","np"];
-              const heads = ["","ο (м)","η (ж)","το (ср)","оι (мн.м)","οι (мн.ж)","τα (мн.ср)"];
-              return (
-                <div style={{ marginBottom:10 }}>
-                  <div style={{ overflowX:"auto" }}>
-                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                      <thead>
-                        <tr>{heads.map((h,i)=><th key={i} style={{ padding:"4px 5px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee", whiteSpace:"nowrap", fontSize:11 }}>{h}</th>)}</tr>
-                      </thead>
-                      <tbody>
-                        {CASE_TABLE.map((row,ri)=>(
-                          <tr key={ri} style={{ background:ri%2===0?"#fafafa":"white" }}>
-                            {cols.map((col,ci)=>{
-                              const val = row[col];
-                              const isHit = ci>0 && val===artCorrect;
-                              return <td key={ci} style={{ padding:"5px 5px", textAlign:"center", fontWeight:isHit?700:ci===0?500:400, color:isHit?"#3C3489":ci===0?"#666":"#333", background:isHit?"#E8E6FF":"transparent", borderRadius:isHit?4:0, fontSize:ci===0?11:13 }}>{val}</td>;
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Article + noun-ending reference (Theory style) */}
+            <CaseRefTable answer={artCorrect} caseLabel={qs[qi] && qs[qi].case_label} gender={qs[qi] && qs[qi].gender} nounBase={qs[qi] && qs[qi].noun_base} />
             {explanation && (
               <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12 }}>
                 {explanation === "loading"
@@ -5609,33 +5682,8 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
                     })}
                   </div>
                 )}
-                {/* Article table — highlight only this blank's answer */}
-                <div style={{ overflowX:"auto", marginBottom:8 }}>
-                  <div style={{ fontSize:11, color:"#888", marginBottom:4, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Артикли</div>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                    <thead>
-                      <tr>{heads.map((h,i)=><th key={i} style={{ padding:"4px 5px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee", whiteSpace:"nowrap", fontSize:11 }}>{h}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {CASE_TABLE.map((row,ri)=>(
-                        <tr key={ri} style={{ background: ri%2===0?"#fafafa":"white" }}>
-                          {cols.map((col,ci)=>{
-                            const val = row[col];
-                            const isHit = ci>0 && val===curBlankAns;
-                            return <td key={ci} style={{
-                              padding:"5px 5px", textAlign:"center",
-                              fontWeight: isHit ? 700 : ci===0 ? 500 : 400,
-                              color: isHit ? "#3C3489" : ci===0 ? "#666" : "#333",
-                              background: isHit ? "#E8E6FF" : "transparent",
-                              borderRadius: isHit ? 4 : 0,
-                              fontSize: ci===0 ? 11 : 13,
-                            }}>{val}</td>;
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {/* Article reference (Theory style) — highlight this blank's answer */}
+                <CaseRefTable answer={curBlankAns} />
                 {/* Morphology filtered to active tab's blank_index */}
                 {(() => {
                   // support both old (no blank_index) and new (with blank_index) format
@@ -8029,7 +8077,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.61-1408</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.62-1433</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
