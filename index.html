@@ -4586,7 +4586,12 @@ function ArticlesTab({ mastery, rec }) {
 
   // Run the one-time full-database prescan, or top up any new words added since
   // (e.g. via photo import or manual add) that weren't covered by the original scan.
+  // window.__articleMapCache keeps the map in memory so switching tabs doesn't re-scan.
   React.useEffect(() => {
+    if (window.__articleMapCache) {
+      setArticleMap(window.__articleMapCache);
+      return;
+    }
     let cancelled = false;
     async function run() {
       const map = {};
@@ -4599,6 +4604,7 @@ function ArticlesTab({ mastery, rec }) {
       if (cancelled) return;
 
       if (toFetch.length === 0) {
+        window.__articleMapCache = map;
         setArticleMap(map);
         return;
       }
@@ -4624,6 +4630,7 @@ function ArticlesTab({ mastery, rec }) {
       }
       if (cancelled) return;
       await saveArticleToCache(ARTICLE_PRESCAN_DONE_KEY, true);
+      window.__articleMapCache = map;
       setArticleMap(map);
       setPhase("setup");
     }
@@ -4865,6 +4872,13 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         ))}
       </div>
 
+      {/* Noun scan stats — small diagnostic line */}
+      {articleMap && (
+        <div style={{ fontSize:11, color:"#aaa", marginBottom:"0.8rem", textAlign:"right" }}>
+          {Object.values(articleMap).filter(v=>["ο","η","το"].includes(v)).length} nouns identified out of {WORDS.length} words
+        </div>
+      )}
+
       {/* Language level picker — only for cases / tenses */}
       {(mode === "cases" || mode === "tenses") && (
         <div style={{ marginBottom:"1rem" }}>
@@ -4893,6 +4907,35 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       {noNouns && (
         <div style={{ background:"#FFF3CD", border:"0.5px solid #BA7517", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#7A4F00", marginBottom:"1rem" }}>
           No nouns found in this selection — try a different topic.
+        </div>
+      )}
+
+      {/* Re-scan button — shown only when scan has run but 0 nouns found (bad data) */}
+      {articleMap && Object.values(articleMap).filter(v=>["ο","η","το"].includes(v)).length === 0 && (
+        <div style={{ background:"#FEECEB", border:"0.5px solid #E24B4A", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#8B1A19", marginBottom:"1rem" }}>
+          <div style={{ fontWeight:600, marginBottom:4 }}>⚠️ Scan result looks empty</div>
+          <div style={{ marginBottom:8 }}>The noun scan found 0 nouns — this can happen if the API response was malformed. Re-scan to fix it.</div>
+          <button onClick={async () => {
+            window.__articleMapCache = null;
+            // Clear all cached articles from IndexedDB
+            try {
+              const db = await openDB();
+              const tx = db.transaction(DB_STORE, "readwrite");
+              const store = tx.objectStore(DB_STORE);
+              const req = store.getAllKeys();
+              await new Promise(r => { req.onsuccess = async () => {
+                for (const k of req.result) {
+                  if (typeof k === "string" && k.startsWith(ARTICLE_CACHE_PREFIX)) store.delete(k);
+                }
+                r();
+              }; });
+            } catch(e) {}
+            setArticleMap(null);
+            setPhase("prescan");
+            window.location.reload();
+          }} style={{ padding:"6px 14px", borderRadius:8, border:"none", background:"#E24B4A", color:"white", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+            🔄 Re-scan nouns
+          </button>
         </div>
       )}
 
