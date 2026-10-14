@@ -4368,88 +4368,79 @@ const ARTICLE_PRESCAN_DONE_KEY = "article_prescan_done_v1";
 // All Greek article forms + null (no article)
 const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅","στον","στην","στο","στους","στις","στα"];
 
-async function fetchCasesSentences(words, articleMap, level="A2") {
+// New Cases format: each sentence has one focus noun from our dictionary.
+// The exercise has TWO steps per sentence:
+//   step 1 — pick the correct article (blank in sentence)
+//   step 2 — pick the correct noun form (shown in parens in sentence, choose whole word)
+async function fetchCasesSentences(nouns, count=10) {
   const apiKey = await getApiKey();
   if (!apiKey) return null;
-  // mix nouns and verbs/other for ∅ cases
-  const nouns = shuf(words.filter(w => ["ο","η","το"].includes(articleMap[w[0]]))).slice(0, 8);
-  const others = shuf(words.filter(w => !["ο","η","το"].includes(articleMap[w[0]]))).slice(0, 4);
-  const pool = [...nouns, ...others];
-  if (!pool.length) return null;
-  const list = pool.map(w => `${w[0]} (${w[2]}, ${["ο","η","το"].includes(articleMap[w[0]]) ? articleMap[w[0]] : "verb/adj"})`).join(", ");
-  const levelGuide = level === "A1"
-    ? `A1 level: very short sentences (4-6 words), only nominative and accusative cases, present tense only, no genitive, no plural articles.
-VOCABULARY RESTRICTION — use ONLY these types of words in the sentence (not just the blank): body parts, family members (mother/father/brother/sister/child), food and drink (bread/water/coffee/milk), colors, numbers, basic places (house/school/market/beach/street), basic verbs (be/have/go/see/eat/drink/want/speak/work/live). Do NOT use abstract, literary or low-frequency words. Every content word in the sentence must be something a total beginner would know.`
-    : level === "B1"
-    ? `B1 level: longer natural sentences (8-12 words), mix all cases including genitive and plurals freely, varied tenses, more complex structures.
-VOCABULARY: freely use any words including abstract nouns, verbs with prefixes, formal register, idiomatic expressions.`
-    : `A2 level: moderate sentences (6-9 words), mix nominative/accusative/genitive, some plural articles, everyday topics.
-VOCABULARY RESTRICTION — use only common everyday words a beginner-intermediate student knows: home/daily routine/shopping/transport/weather/food/simple emotions/common places. Avoid rare, literary, technical or abstract words. No verbs like λύνω (solve), εξηγώ (explain), αναλύω (analyze) — stick to high-frequency vocabulary.`;
+  if (!nouns.length) return null;
+  // pick up to count nouns, shuffled
+  const pool = shuf(nouns).slice(0, count);
+  const list = pool.map(w => {
+    // w[0] like "ο πατέρας" — strip article prefix for the base form display
+    const bare = w[0].replace(/^(ο|η|το)\s+/i,"");
+    const art = w[0].match(/^(ο|η|το)/i)?.[1] || "?";
+    return `${w[0]} (${w[2]}, ${art})`;
+  }).join("; ");
+
+  const prompt =
+`You are a Greek language exercise generator. For each noun below, create ONE natural Greek sentence that practices a declined form of that noun (not nominative — use accusative, genitive, or plural).
+
+NOUNS: ${list}
+
+RULES:
+- The sentence must use ONE of the nouns above as the focus noun
+- Replace the article before the focus noun with ___ (blank)
+- Show the focus noun in its declined form — this is what the student sees and must choose
+- The student will separately: (1) choose the article, (2) choose which noun form is correct
+- Mix cases across sentences: accusative, genitive, plural nominative, plural accusative
+- Cover all genders: masculine (ο), feminine (η), neuter (το)
+- Cover singular and plural
+- Sentences should be natural, everyday Greek (A2 level)
+- Use verbs from: είμαι, έχω, πάω, βλέπω, τρώω, πίνω, αγοράζω, παίρνω, δίνω, μένω, θέλω, έρχομαι, κάνω, ακούω, φεύγω, βρίσκω, χρειάζομαι
+- Do NOT use unusual or literary words in the rest of the sentence
+- English translation required
+
+Return ONLY a JSON array of exactly ${pool.length} items:
+[{
+  "gr": "Βλέπω ___ πατέρα μου κάθε βράδυ.",
+  "en": "I see my father every evening.",
+  "noun_base": "ο πατέρας",
+  "noun_form": "πατέρα",
+  "noun_form_options": ["πατέρα","πατέρας","πατέρες","πατέρων"],
+  "article_answer": "τον",
+  "article_options": ["τον","του","ο","τους"],
+  "case_label": "Вин. ед.",
+  "gender": "м"
+},{
+  "gr": "Η τιμή ___ εισιτηρίου είναι ακριβή.",
+  "en": "The price of the ticket is expensive.",
+  "noun_base": "το εισιτήριο",
+  "noun_form": "εισιτηρίου",
+  "noun_form_options": ["εισιτηρίου","εισιτήριο","εισιτήρια","εισιτηρίων"],
+  "article_answer": "του",
+  "article_options": ["του","το","τα","της"],
+  "case_label": "Род. ед.",
+  "gender": "ср"
+}]
+
+Important:
+- noun_form: the declined form AS IT APPEARS in the sentence
+- noun_form_options: 4 options — the correct form + 3 plausible wrong forms (different case/number of the SAME noun)
+- article_answer: the correct article for the blank
+- article_options: 4 options — correct article + 3 plausible wrong ones
+- case_label in Russian: Ном./Вин./Род. + ед./мн.
+- gender: м/ж/ср`;
+
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5", max_tokens: 2000,
-        messages: [{ role:"user", content:
-`Create 7 Greek sentences (${level} level) using words from this list: ${list}
-LANGUAGE LEVEL GUIDANCE: ${levelGuide}
-
-RULES for blanks:
-- Replace EVERY SINGLE article in the sentence with "___" — NO exceptions
-- This means genitive articles (του/της/των) MUST also be blanks, not left as written text
-- Example: "Η παραλία του νησιού" → CORRECT: "___ παραλία ___ νησιού" (two blanks: η and του)
-- Example: "Βλέπω τον αδερφό της φίλης" → CORRECT: "Βλέπω ___ αδερφό ___ φίλης" (τον + της both blanked)
-- WRONG (do NOT do this): "Η παραλία του νησιού έχει ___ καλό κλίμα" — leaving του as text
-- Some sentences should use predicates/adjectives where NO article appears before a word — use "∅" as answer for those blanks
-- IMPORTANT: σε merges with articles: σε + τον = στον, σε + την = στην, σε + το = στο, σε + τους = στους, σε + τις = στις, σε + τα = στα
-  When using σε + article construction, write "σε ___" in the sentence (keep σε visible, blank is just the article)
-  The answer is the standalone article form (τον/την/το/τους/τις/τα), NOT the merged form
-  Example: "Πάω σε ___ σχολείο" → answer: "το", options: ["το","τον","την","τα"]
-  Example: "Μένω σε ___ σπίτι κοντά στην παραλία" → answer: "το", options: ["το","τον","την","τα"]
-- Available article forms for blanks (standalone only): ο η το τον την τους τις τα του της των ∅
-- Mix all cases: nominative, genitive (του/της/των), accusative, plural forms — genitive is especially important to practice
-- Include some sentences with σε ___ construction (aim for 2-3 out of 7)
-- Do NOT show the case name anywhere — student must figure it out from context
-- Make distractors plausible (e.g. τον/την/το/τα for accusative; τον/την/τα/της for mixed)
-- IMPORTANT: The blank must NEVER be the last word of the sentence — there must always be a noun or other word after it
-- Write only natural, real-world Greek sentences that a native speaker would actually say
-- Do NOT generate absurd or grammatically impossible sentences like "Γεννιέμαι νέος" (I am born young)
-- Include English translation
-
-Return ONLY a JSON array. Each item = one sentence with potentially multiple blanks:
-- For blanks that follow "σε" in the sentence, add "se_merge":true to that blank object
-[{
-  "gr": "Βλέπω ___ αδερφό ___ φίλου μου.",
-  "en": "I see my friend's brother.",
-  "blanks": [
-    {"answer":"τον","options":["τον","την","του","τα"]},
-    {"answer":"του","options":["του","της","τους","τον"]}
-  ],
-  "morphology": [
-    {"blank_index":0,"word":"αδερφό","base":"αδερφός","stem":"αδερφ","ending":"ό","case":"Вин.","gender":"м"},
-    {"blank_index":1,"word":"φίλου","base":"φίλος","stem":"φίλ","ending":"ου","case":"Род.","gender":"м"}
-  ]
-},{
-  "gr": "Πάω σε ___ αγορά κάθε Σάββατο.",
-  "en": "I go to the market every Saturday.",
-  "blanks": [
-    {"answer":"την","options":["την","τον","το","τις"],"se_merge":true}
-  ],
-  "morphology": [
-    {"blank_index":0,"word":"αγορά","base":"αγορά","stem":"αγορ","ending":"ά","case":"Вин.","gender":"ж"}
-  ]
-}]
-
-morphology: list ONLY nouns and adjectives that appear in declined form (NOT in nominative). For each:
-- blank_index: which blank (0-based) this noun/adjective belongs to — i.e. it follows that blank's article
-- word: the form as it appears in the sentence
-- base: nominative singular (dictionary form)
-- stem: the unchanged part
-- ending: the changed suffix (what was added/changed)
-- case: Ном./Род./Вин.
-- gender: м/ж/ср`
-        }]
+        model: "claude-haiku-4-5", max_tokens: 3000,
+        messages: [{ role:"user", content: prompt }]
       })
     });
     if (res.ok) {
@@ -4457,31 +4448,25 @@ morphology: list ONLY nouns and adjectives that appear in declined form (NOT in 
       const match = d.content[0].text.match(/\[[\s\S]*\]/);
       if (match) {
         const raw = JSON.parse(match[0]);
-        return validateCasesSentences(raw);
+        return validateCasesSentencesV2(raw);
       }
     }
-  } catch(e) {}
+  } catch(e) { console.error("fetchCasesSentences error:", e); }
   return null;
 }
 
-function validateCasesSentences(sentences) {
+function validateCasesSentencesV2(sentences) {
   return sentences.filter(q => {
-    if (!q || !q.gr || !q.blanks || !q.blanks.length) return false;
-    const parts = q.gr.split("___");
-    // Must have exactly blanks.length + 1 parts
-    if (parts.length !== q.blanks.length + 1) return false;
-    // Last blank must not be at the very end of the sentence (after final punctuation)
-    const lastPart = parts[parts.length - 1].trim();
-    if (lastPart === "" || lastPart === "." || lastPart === ";" || lastPart === "!") return false;
-    // Each blank answer must be a valid Greek article or ∅
-    const validArticles = new Set(["ο","η","το","τον","την","τους","τις","τα","του","της","των","∅",
-      "στον","στην","στο","στους","στις","στα"]);
-    if (!q.blanks.every(b => b.answer && validArticles.has(b.answer))) return false;
-    // Options must include the correct answer
-    if (!q.blanks.every(b => (b.options||[]).includes(b.answer))) return false;
-    // Sentence must have a real noun/verb — at least 4 Greek words
-    const words = q.gr.replace(/___/g,"").trim().split(/\s+/).filter(w => w.length > 1);
-    if (words.length < 3) return false;
+    if (!q || !q.gr || !q.article_answer || !q.noun_form) return false;
+    // must have exactly one blank in the sentence
+    if ((q.gr.match(/___/g)||[]).length !== 1) return false;
+    // article options must include answer, 4 options
+    if (!q.article_options || !q.article_options.includes(q.article_answer) || q.article_options.length < 2) return false;
+    // noun form options must include the correct form
+    if (!q.noun_form_options || !q.noun_form_options.includes(q.noun_form) || q.noun_form_options.length < 2) return false;
+    // sentence must not end with the blank
+    const afterBlank = q.gr.split("___")[1] || "";
+    if (afterBlank.trim() === "" || afterBlank.trim() === "." || afterBlank.trim() === ";" || afterBlank.trim() === "!") return false;
     return true;
   });
 }
@@ -4569,13 +4554,15 @@ function validateTensesSentences(sentences) {
 
 function ArticlesTab({ mastery, rec }) {
   const [mode, setMode]   = useState(null); // null | "gender" | "cases" | "tenses"
-  const [topic, setTopic] = useState("All");
+  const [topics, setTopics] = useState(["All"]); // multiselect for cases; single for gender
+  const [topic, setTopic] = useState("All");     // kept for gender/tenses single-select
   const [subtopic, setSubtopic] = useState("All");
   const [cnt, setCnt]     = useState("20");
+  const [casesCnt, setCasesCnt] = useState("10"); // sentence count for cases mode
   const [phase, setPhase] = useState("setup"); // prescan | setup | game | result
   const [scanProgress, setScanProgress] = useState(0);
   const [scanTotal, setScanTotal] = useState(0);
-  const [qs, setQs]       = useState([]); // [{w, article}] or [{gr,en,noun,case,answer,options}]
+  const [qs, setQs]       = useState([]); // [{w, article}] for gender | [{gr,en,noun_form,...}] for cases | [{gr,...}] for tenses
   const [qi, setQi]       = useState(0);
   const [score, setScore] = useState(0);
   const [chosen, setChosen] = useState(null);
@@ -4590,12 +4577,29 @@ function ArticlesTab({ mastery, rec }) {
   const [explanation, setExplanation] = useState(null); // null | "loading" | string
   const [caseTab, setCaseTab] = useState(0); // active blank tab in Cases cheat-sheet
   const [langLevel, setLangLevel] = useState("A2"); // A1 | A2 | B1
+  // Cases new-format step: "article" | "noun"
+  const [casesStep, setCasesStep] = useState("article");
+  const [articleChosen, setArticleChosen] = useState(null); // what user picked for article step
+  const [articleLocked, setArticleLocked] = useState(false);
   // article for every word once prescanned: { greekWord: "ο"|"η"|"το"|"none" }
   const [articleMap, setArticleMap] = useState(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
 
   const ARTICLES = ["ο", "η", "το"];
+
+  // toggle a topic in multiselect (for cases mode)
+  function toggleTopic(t) {
+    if (t === "All") { setTopics(["All"]); return; }
+    setTopics(prev => {
+      const without = prev.filter(x => x !== "All");
+      if (without.includes(t)) {
+        const next = without.filter(x => x !== t);
+        return next.length ? next : ["All"];
+      }
+      return [...without, t];
+    });
+  }
 
   // Build articleMap instantly from the word list itself — no API needed.
   // Greek nouns in WORDS start with "ο ", "η ", or "το " — extract that directly.
@@ -4671,18 +4675,25 @@ function ArticlesTab({ mastery, rec }) {
   }
 
   async function startCases() {
-    const pool = filterWords(WORDS, topic, subtopic);
+    // gather nouns from selected topics (multiselect)
+    const allNouns = WORDS.filter(w => articleMap && ARTICLES.includes(articleMap[w[0]]));
+    const pool = topics.includes("All")
+      ? allNouns
+      : allNouns.filter(w => topics.includes(w[3]));
+    if (!pool.length) { setNoNouns(true); return; }
+    const wantCount = parseInt(casesCnt) || 10;
     setCasesLoading(true); setNoNouns(false);
-    let fetched = await fetchCasesSentences(pool, articleMap, langLevel);
+    let fetched = await fetchCasesSentences(pool, wantCount);
     // Retry once if too few valid sentences came back
-    if (fetched && fetched.length < 4) {
-      const extra = await fetchCasesSentences(pool, articleMap, langLevel);
-      if (extra) fetched = [...fetched, ...extra].slice(0, 9);
+    if (fetched && fetched.length < Math.min(4, wantCount)) {
+      const extra = await fetchCasesSentences(pool, wantCount - fetched.length);
+      if (extra) fetched = [...fetched, ...extra].slice(0, wantCount);
     }
     setCasesLoading(false);
     if (!fetched || !fetched.length) { setNoNouns(true); return; }
     setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
     setBlankIdx(0); setFilledBlanks([]); setPendingAdvance(false); setExplanation(null);
+    setCasesStep("article"); setArticleChosen(null); setArticleLocked(false);
     setPhase("game");
   }
 
@@ -4753,6 +4764,7 @@ function ArticlesTab({ mastery, rec }) {
     if (nextQ >= qs.length) { setPhase("result"); return; }
     setQi(nextQ); setBlankIdx(0); setFilledBlanks([]);
     setLocked(false); setChosen(null); setPendingAdvance(false); setCaseTab(0);
+    setCasesStep("article"); setArticleChosen(null); setArticleLocked(false);
   }
 
   async function fetchExplanation() {
@@ -4761,7 +4773,30 @@ function ArticlesTab({ mastery, rec }) {
     setExplanation("loading");
     const apiKey = await getApiKey();
     if (!apiKey) { setExplanation("No API key set."); return; }
-    const blanksDesc = q.blanks.map((b,i) => `Blank ${i+1}: answer="${b.answer}"`).join(", ");
+    // new cases format
+    if (mode === "cases" && q.article_answer) {
+      const prompt = `Объясни по-русски грамматику в этом греческом предложении. Пиши коротко и понятно для начинающего.
+Предложение: "${q.gr.replace("___", q.article_answer)}" — ${q.en}
+Существительное: ${q.noun_base} → форма "${q.noun_form}" (${q.case_label})
+Артикль: ${q.article_answer}
+
+Объясни:
+1. Почему существительное стоит в этом падеже (${q.case_label}) — какова его роль в предложении
+2. Как изменилось окончание: ${q.noun_base.replace(/^(ο|η|το)\s+/,"")} → ${q.noun_form}
+3. Почему артикль именно ${q.article_answer} (род, падеж, число)
+💡 Подсказка: как запомнить это изменение`;
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method:"POST",
+          headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:600, messages:[{ role:"user", content:prompt }] })
+        });
+        if (res.ok) { const d=await res.json(); setExplanation(d.content[0].text); }
+        else { setExplanation("Ошибка запроса."); }
+      } catch(e) { setExplanation("Ошибка: "+e.message); }
+      return;
+    }
+    const blanksDesc = (q.blanks||[]).map((b,i) => `Blank ${i+1}: answer="${b.answer}"`).join(", ");
     const isTenses = mode === "tenses";
     const prompt = isTenses
       ? `Объясни по-русски глагольные формы в греческом предложении. Пиши понятно для начинающего.
@@ -4856,8 +4891,8 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         </div>
       )}
 
-      {/* Language level picker — only for cases / tenses */}
-      {(mode === "cases" || mode === "tenses") && (
+      {/* Language level picker — only for tenses (not cases) */}
+      {mode === "tenses" && (
         <div style={{ marginBottom:"1rem" }}>
           <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Уровень:</div>
           <div style={{ display:"flex", gap:6 }}>
@@ -4877,6 +4912,44 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
                 <div style={{ fontSize:10, color: langLevel===l.id ? "#7F79C8" : "#aaa", marginTop:2 }}>{l.desc}</div>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cases: sentence count picker + multiselect topics */}
+      {mode === "cases" && (
+        <div style={{ marginBottom:"1rem" }}>
+          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Предложений:</div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
+            {["10","20","30","50","100"].map(v => (
+              <button key={v} onClick={()=>setCasesCnt(v)} style={{
+                padding:"6px 14px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+                border: casesCnt===v ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                background: casesCnt===v ? "#EEEDFE" : "white",
+                color: casesCnt===v ? "#3C3489" : "#555",
+                fontSize:14, fontWeight: casesCnt===v ? 700 : 400, transition:"all .15s"
+              }}>{v}</button>
+            ))}
+          </div>
+          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Темы (мультивыбор):</div>
+          <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+            {["All",...TOPICS.filter(t=>t!=="All")].map(t => {
+              const on = topics.includes(t);
+              const count = t==="All"
+                ? Object.values(articleMap||{}).filter(v=>ARTICLES.includes(v)).length
+                : (nounCounts?.byTopic?.[t]||0);
+              return (
+                <button key={t} onClick={()=>toggleTopic(t)} style={{
+                  padding:"5px 11px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+                  border: on ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                  background: on ? "#EEEDFE" : "white",
+                  color: on ? "#3C3489" : "#555",
+                  fontSize:12, fontWeight: on ? 700 : 400, transition:"all .15s"
+                }}>
+                  {t}{count ? ` (${count})` : ""}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -4916,18 +4989,22 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         </div>
       )}
 
-      {/* Topic filter */}
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"0.6rem" }}>
-        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {availableTopics.map(t=>(
-          <Chip key={t} label={wordCounts && t!=="All" ? `${t} (${wordCounts.byTopic[t] || 0})` : t} on={topic===t} onClick={()=>setTopic(t)}/>
-        ))}
-      </div>
-      {availableSubtopics && (
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.8rem" }}>
-          {availableSubtopics.map(s => (
-            <Chip key={s} label={wordCounts && s!=="All" && wordCounts.bySubtopic[topic] ? `${s} (${wordCounts.bySubtopic[topic][s] || 0})` : s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
-          ))}
+      {/* Topic filter — only for gender and tenses, not cases (cases has its own multiselect above) */}
+      {mode !== "cases" && (
+        <div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"0.6rem" }}>
+            <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
+            {availableTopics.map(t=>(
+              <Chip key={t} label={wordCounts && t!=="All" ? `${t} (${wordCounts.byTopic[t] || 0})` : t} on={topic===t} onClick={()=>setTopic(t)}/>
+            ))}
+          </div>
+          {availableSubtopics && (
+            <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.8rem" }}>
+              {availableSubtopics.map(s => (
+                <Chip key={s} label={wordCounts && s!=="All" && wordCounts.bySubtopic[topic] ? `${s} (${wordCounts.bySubtopic[topic][s] || 0})` : s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -4958,11 +5035,16 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
     </div>
   );
 
-  const totalBlanks = mode === "cases" ? qs.reduce((sum, q) => sum + (q.blanks ? q.blanks.length : 1), 0) : qs.length;
+  const totalBlanks = mode === "cases"
+    ? (qs[0] && qs[0].article_answer
+        ? qs.length * 2  // new format: 2 points per sentence (article + noun)
+        : qs.reduce((sum, q) => sum + (q.blanks ? q.blanks.length : 1), 0))
+    : qs.length;
   if (phase === "result") return <ResBox score={score} total={totalBlanks} onRetry={()=>{
-    const reshuffled = mode === "cases" ? [...qs] : shuf([...qs]);
+    const reshuffled = mode === "cases" ? shuf([...qs]) : shuf([...qs]);
     setQs(reshuffled); setQi(0); setScore(0); setLocked(false); setChosen(null);
     setBlankIdx(0); setFilledBlanks([]);
+    setCasesStep("article"); setArticleChosen(null); setArticleLocked(false);
     setPhase("game");
   }}/>;
 
@@ -5012,11 +5094,194 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
     );
   }
 
-  // ── Cases game ───────────────────────────────────────────────────
-  const blanks = cur.blanks || [];
+  // ── Cases game (new format) ──────────────────────────────────────
+  // New format: each sentence has article_answer + noun_form as two separate steps
+  const isNewCasesFormat = mode === "cases" && cur && cur.article_answer;
+
+  if (mode === "cases" && isNewCasesFormat) {
+    const [beforeBlank, afterBlank] = cur.gr.split("___");
+    const artCorrect = cur.article_answer;
+    const nounCorrect = cur.noun_form;
+    const artDone = articleLocked; // step 1 done
+    const bothDone = pendingAdvance;
+
+    // what to show in the sentence blank slot
+    const blankDisplay = artDone ? (
+      <span style={{ fontWeight:700, color: articleChosen===artCorrect?"#085041":"#E24B4A", background: articleChosen===artCorrect?"#E1F5EE":"#FCEBEB", borderRadius:4, padding:"0 5px" }}>{artCorrect}</span>
+    ) : (
+      <span style={{ display:"inline-block", minWidth:40, borderBottom:"2px solid #534AB7", color:"#534AB7", fontWeight:700, fontSize:22 }}>___</span>
+    );
+
+    // noun display: always visible with its form in parens before choosing
+    const nounDisplay = bothDone ? (
+      <span style={{ fontWeight:700, color: chosen===nounCorrect?"#085041":"#E24B4A", background: chosen===nounCorrect?"#E1F5EE":"#FCEBEB", borderRadius:4, padding:"0 6px" }}>{nounCorrect}</span>
+    ) : artDone ? (
+      // step 2: show (options) inline  — the noun form is what we're choosing
+      <span style={{ fontWeight:600, color:"#534AB7" }}>{nounCorrect}</span>
+    ) : (
+      // step 1: show noun form visible so student knows which noun to think about
+      <span style={{ fontWeight:600, color:"#888" }}>{cur.noun_form}</span>
+    );
+
+    // Reconstruct sentence: blank slot + after-blank text (noun is embedded there)
+    // afterBlank already contains the noun form text — we just highlight it when in step 2
+    const afterNode = (() => {
+      if (!afterBlank) return null;
+      const nf = cur.noun_form;
+      const idx = afterBlank.indexOf(nf);
+      if (idx === -1) return <span>{afterBlank}</span>;
+      return (
+        <span>
+          {afterBlank.slice(0, idx)}
+          {nounDisplay}
+          {afterBlank.slice(idx + nf.length)}
+        </span>
+      );
+    })();
+
+    return (
+      <div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+          <button onClick={()=>setPhase("setup")} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>← Back</button>
+          <span style={{ fontSize:13, color:"#888" }}>{qi+1}/{qs.length}</span>
+          <Pill>{score} correct</Pill>
+        </div>
+        <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
+        <div style={{ marginBottom:"1.2rem" }}/>
+
+        {/* Sentence card */}
+        <div style={{ border:"0.5px solid #e0e0e0", borderRadius:12, padding:"1.4rem 1rem", marginBottom:"1rem", background:"white", textAlign:"center" }}>
+          {/* Step label */}
+          <div style={{ fontSize:11, color:"#888", marginBottom:8, fontWeight:500, textTransform:"uppercase", letterSpacing:".06em" }}>
+            {!artDone ? "Шаг 1 / 2 — Выбери артикль" : bothDone ? "✓ Готово" : "Шаг 2 / 2 — Выбери форму существительного"}
+          </div>
+          <div style={{ fontSize:20, fontWeight:500, color:"#222", lineHeight:2 }}>
+            {beforeBlank}{blankDisplay}{afterNode}
+          </div>
+          <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic", marginTop:6 }}>{cur.en}</div>
+          {cur.case_label && artDone && (
+            <div style={{ fontSize:11, color:"#9D96D8", marginTop:4 }}>{cur.case_label} · {cur.gender==="м"?"муж.":cur.gender==="ж"?"жен.":"ср."}</div>
+          )}
+        </div>
+
+        {/* Step 1: article options */}
+        {!artDone && (
+          <div style={{ display:"grid", gridTemplateColumns:`repeat(${(cur.article_options||[]).length},1fr)`, gap:8 }}>
+            {(cur.article_options||[]).map(a => {
+              const isC = a===artCorrect, isP = a===articleChosen;
+              let bg="transparent", border="0.5px solid #ccc", color="#333";
+              if (articleLocked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
+              return (
+                <button key={a} disabled={articleLocked} onClick={()=>{
+                  if (articleLocked) return;
+                  const ok = a === artCorrect;
+                  setArticleChosen(a); setArticleLocked(true);
+                  if (ok) setScore(s=>s+1);
+                  setTimeout(() => { setCasesStep("noun"); }, ok ? 500 : 1100);
+                }}
+                  style={{ padding:"18px 8px", border, borderRadius:10, background:bg, color, fontSize:22, fontWeight:600, cursor:articleLocked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
+                  {a}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Step 2: noun form options */}
+        {artDone && !bothDone && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {shuf([...(cur.noun_form_options||[])]).map(a => {
+              const isC = a===nounCorrect, isP = a===chosen;
+              let bg="transparent", border="0.5px solid #ccc", color="#333";
+              if (locked) { if (isC) { bg="#E1F5EE"; border="0.5px solid #1D9E75"; color="#085041"; } else if (isP) { bg="#FCEBEB"; border="0.5px solid #E24B4A"; color="#501313"; } }
+              return (
+                <button key={a} disabled={locked} onClick={()=>{
+                  if (locked) return;
+                  const ok = a === nounCorrect;
+                  setChosen(a); setLocked(true);
+                  if (ok) setScore(s=>s+1);
+                  setTimeout(() => { setPendingAdvance(true); }, ok ? 600 : 1300);
+                }}
+                  style={{ padding:"16px 8px", border, borderRadius:10, background:bg, color, fontSize:18, fontWeight:600, cursor:locked?"default":"pointer", fontFamily:"inherit", transition:"background .15s" }}>
+                  {a}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* After both steps: case table + Next */}
+        {bothDone && (
+          <div>
+            {/* Compact article table */}
+            {(() => {
+              const CASE_TABLE = [
+                { caseRu:"Ном.", m:"ο",    f:"η",    n:"το",  mp:"οι",   fp:"οι",   np:"τα"  },
+                { caseRu:"Род.", m:"του",  f:"της",  n:"του", mp:"των",  fp:"των",  np:"των" },
+                { caseRu:"Вин.", m:"τον",  f:"την",  n:"το",  mp:"τους", fp:"τις",  np:"τα"  },
+                { caseRu:"σε+",  m:"στον", f:"στην", n:"στο", mp:"στους",fp:"στις", np:"στα" },
+              ];
+              const cols = ["caseRu","m","f","n","mp","fp","np"];
+              const heads = ["","ο (м)","η (ж)","το (ср)","оι (мн.м)","οι (мн.ж)","τα (мн.ср)"];
+              return (
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                      <thead>
+                        <tr>{heads.map((h,i)=><th key={i} style={{ padding:"4px 5px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee", whiteSpace:"nowrap", fontSize:11 }}>{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {CASE_TABLE.map((row,ri)=>(
+                          <tr key={ri} style={{ background:ri%2===0?"#fafafa":"white" }}>
+                            {cols.map((col,ci)=>{
+                              const val = row[col];
+                              const isHit = ci>0 && val===artCorrect;
+                              return <td key={ci} style={{ padding:"5px 5px", textAlign:"center", fontWeight:isHit?700:ci===0?500:400, color:isHit?"#3C3489":ci===0?"#666":"#333", background:isHit?"#E8E6FF":"transparent", borderRadius:isHit?4:0, fontSize:ci===0?11:13 }}>{val}</td>;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+            {explanation && (
+              <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12 }}>
+                {explanation === "loading"
+                  ? <span style={{ color:"#888" }}>⏳ Спрашиваю Клода…</span>
+                  : explanation.split("\n").filter(l=>l.trim()).map((line,i) => {
+                      const parts2 = line.split(/(\*\*[^*]+\*\*)/g).map((p,j)=>p.startsWith("**")&&p.endsWith("**")?<strong key={j} style={{color:"#534AB7"}}>{p.slice(2,-2)}</strong>:p);
+                      return <div key={i} style={{ lineHeight:1.6, padding:"2px 0" }}>{parts2}</div>;
+                    })
+                }
+              </div>
+            )}
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={fetchExplanation} disabled={explanation==="loading"}
+                style={{ padding:"12px 16px", borderRadius:10, border:"0.5px solid #AFA9EC", background:"#EEEDFE", color:"#3C3489", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>?</button>
+              <button onClick={()=>{
+                const nextQ = qi + 1;
+                setExplanation(null);
+                if (nextQ >= qs.length) { setPhase("result"); return; }
+                setQi(nextQ); setLocked(false); setChosen(null); setPendingAdvance(false);
+                setCasesStep("article"); setArticleChosen(null); setArticleLocked(false);
+              }}
+                style={{ flex:1, padding:"12px 24px", borderRadius:10, border:"none", background:"#534AB7", color:"white", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                Далее →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Cases game (old tenses/fallback) ─────────────────────────────
+  const blanks = cur && cur.blanks ? cur.blanks : [];
   const curBlank = blanks[blankIdx] || {};
   const casesCorrect = curBlank.answer;
-  const parts = cur.gr ? cur.gr.split("___") : [];
+  const parts = cur && cur.gr ? cur.gr.split("___") : [];
 
   // Build sentence display: filled blanks show answer, current blank is active, future = "___"
   // For tenses mode: parts after a blank may start with "(infinitive) " — extract as hint above blank
