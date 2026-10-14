@@ -8088,13 +8088,28 @@ const THEORY_RESOURCES = [
 
 function CheatsheetModal({ resource, onClose }) {
   // Close on backdrop click
-  function onBackdrop(e) { if (e.target === e.currentTarget) onClose(); }
+  function onBackdrop(e) { if (e.target === e.currentTarget) goBack(); }
   // Prevent body scroll while open
   React.useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
+  // Phone back gesture / browser Back and Esc close the sheet instead of leaving the app
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+  React.useEffect(() => {
+    try { history.pushState({ cheatsheet: true }, ""); } catch(e) {}
+    const onPop = () => onCloseRef.current();
+    const onKey = (e) => { if (e.key === "Escape") goBack(); };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("popstate", onPop); window.removeEventListener("keydown", onKey); };
+  }, []);
+  function goBack() {
+    // pop our history entry (fires popstate → onClose); fall back to closing directly
+    if (history.state && history.state.cheatsheet) history.back(); else onCloseRef.current();
+  }
   return (
     <div onClick={onBackdrop} style={{
       position:"fixed", inset:0, zIndex:9999,
@@ -8104,18 +8119,23 @@ function CheatsheetModal({ resource, onClose }) {
       <div style={{
         display:"flex", alignItems:"center", justifyContent:"space-between",
         background:"#fff", borderBottom:"1px solid #e2ddd6",
-        padding:"10px 16px", flexShrink:0
+        padding:"8px 12px", flexShrink:0, gap:10
       }}>
-        <div>
+        <button onClick={goBack} style={{
+          display:"flex", alignItems:"center", gap:4, flexShrink:0,
+          padding:"7px 12px", borderRadius:10, border:"1px solid #d3c6ec", background:"#f3effa",
+          color:"#3C3489", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit"
+        }}>← Назад</button>
+        <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
           <span style={{ fontSize:14, fontWeight:600, color:"#1a1714" }}>{resource.title}</span>
           <span style={{ marginLeft:8, fontSize:11, fontWeight:600, textTransform:"uppercase",
             background:resource.color, color:"#fff", borderRadius:5, padding:"1px 7px" }}>
             {resource.tag}
           </span>
         </div>
-        <button onClick={onClose} style={{
+        <button onClick={goBack} aria-label="Закрыть" style={{
           fontSize:22, lineHeight:1, background:"none", border:"none",
-          cursor:"pointer", color:"#888", padding:"0 4px"
+          cursor:"pointer", color:"#888", padding:"0 4px", flexShrink:0
         }}>×</button>
       </div>
       <iframe
@@ -8511,7 +8531,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.67-1720</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.68-1722</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
