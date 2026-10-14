@@ -5091,7 +5091,7 @@ function ArticlesTab({ mastery, rec }) {
     const n = parseInt(casesCnt) || 10;
     const slots = planVerbSlots(verbs, verbTenses, n);
     setTensesLoading(true); setNoNouns(false); setFetchErr(null); __grammarFetchErr = null;
-    const fetched = await fetchVerbSentences(slots, anchors, langLevel);
+    const fetched = await fetchVerbSentences(slots, anchors, "A2"); // fixed: short everyday A2 sentences
     setTensesLoading(false);
     if (!fetched || !fetched.length) { setFetchErr(__grammarFetchErr || { kind:"unknown" }); return; }
     const shuffled = shuf(fetched).map(q => ({
@@ -5270,31 +5270,6 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       {articleMap && (
         <div style={{ fontSize:11, color:"#aaa", marginBottom:"0.8rem", textAlign:"right" }}>
           {Object.values(articleMap).filter(v=>["ο","η","το"].includes(v)).length} nouns identified out of {WORDS.length} words
-        </div>
-      )}
-
-      {/* Language level picker — only for tenses (not cases) */}
-      {mode === "tenses" && (
-        <div style={{ marginBottom:"1rem" }}>
-          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Уровень:</div>
-          <div style={{ display:"flex", gap:6 }}>
-            {[
-              { id:"A1", desc:"Совсем базовый" },
-              { id:"A2", desc:"Элементарный" },
-              { id:"B1", desc:"Средний" },
-            ].map(l => (
-              <button key={l.id} onClick={()=>setLangLevel(l.id)} style={{
-                flex:1, padding:"8px 6px", borderRadius:10, cursor:"pointer", fontFamily:"inherit",
-                border: langLevel===l.id ? "1.5px solid #534AB7" : "0.5px solid #ddd",
-                background: langLevel===l.id ? "#EEEDFE" : "white",
-                color: langLevel===l.id ? "#3C3489" : "#555",
-                transition:"all .15s"
-              }}>
-                <div style={{ fontSize:15, fontWeight:700 }}>{l.id}</div>
-                <div style={{ fontSize:10, color: langLevel===l.id ? "#7F79C8" : "#aaa", marginTop:2 }}>{l.desc}</div>
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -8665,7 +8640,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.69-1745</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.70-1750</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
