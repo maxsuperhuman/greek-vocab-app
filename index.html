@@ -4514,6 +4514,75 @@ async function fetchCasesSentences(nouns, count=10, cases=["acc","gen"]) {
   return out.length ? out.slice(0, count) : null;
 }
 
+// Turn one line of model markdown into {text, kind} for the "?" explanation box; null = skip line
+function mdLine(line) {
+  let t = line.trim();
+  if (!t || /^-{3,}$/.test(t) || /^\|?[\s\-:|]+\|?$/.test(t)) return null;      // hr / table separator
+  let kind = "text";
+  if (/^#{1,6}\s/.test(t)) { kind = "head"; t = t.replace(/^#{1,6}\s+/, ""); }
+  if (/^\|.*\|$/.test(t)) t = t.slice(1, -1).split("|").map(c => c.trim()).filter(Boolean).join("  ·  ");
+  if (/^[-•]\s/.test(t)) t = "• " + t.slice(2);
+  t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1$2");                          // *italic* → plain
+  return { text: t, kind };
+}
+
+// ─── Vocabulary control for generated sentences ───────────────────
+// Function words that are always allowed in a sentence (accent-stripped)
+const GR_FUNCTION_WORDS = new Set(("ο η το οι τα του της των τον την τη τους τις στον στην στη στο στους στις στα στου στης " +
+  "ενας ενα μια μια ενος μιας εναν σε με για απο χωρις μετα πριν προς κατα μεχρι ως " +
+  "και αλλα η ή ουτε ομως που οτι αν οταν γιατι επειδη να θα δεν δε μην μη " +
+  "μου σου του της μας σας τους με σε τον την το τα τις εγω εσυ αυτος αυτη αυτο αυτοι αυτες αυτα αυτον αυτην αυτου αυτης αυτων " +
+  "ποιος ποια ποιο τι πως πουν που ποτε ποσο ποσα " +
+  "ειμαι εισαι ειναι ειμαστε ειστε ημουν ησουν ηταν ημασταν " +
+  "εχω εχεις εχει εχουμε εχετε εχουν ειχα ειχε " +
+  "πολυ πολλα πολλοι πολλες λιγο λιγα πιο παντα ποτε ηδη ακομα ακομη μονο επισης ετσι " +
+  "εδω εκει τωρα σημερα αυριο χθες χτες απογευμα βραδυ πρωι καθε ολα ολοι ολες ολο ολη αλλο αλλη αλλος αλλα " +
+  "ναι οχι καλα καλο καλη καλος πηγα πηγε πηγαμε ειδα ειδε φαγα ηπια ηρθα ηρθε ειπα ειπε").split(/\s+/));
+function grNorm(x){ return (x||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/ς/g,"σ"); }
+let __knownStems = null;
+function getKnownStems() {
+  if (__knownStems) return __knownStems;
+  const stems = new Set();
+  const add = (entry) => {
+    String(entry||"").replace(/^(ο|η|το|οι|τα)\s+/,"").split(/[\s\/,()]+/).forEach(tok => {
+      const t = grNorm(tok).replace(/[^α-ω]/g,"");
+      if (t.length < 2) return;
+      // stem = word minus a 2-letter ending, 3..6 letters (γεμιζω → γεμι, βλεπω → βλε)
+      stems.add(t.slice(0, Math.min(6, Math.max(3, t.length - 2))));
+    });
+  };
+  WORDS.forEach(w => add(w[0]));
+  if (typeof VERBS_CORE !== "undefined") VERBS_CORE.forEach(v => add(v[0]));
+  __knownStems = stems;
+  return stems;
+}
+// Words in a Greek sentence that are not in the user's dictionary (blank and focus noun ignored)
+function unknownWords(gr, ignore=[]) {
+  const stems = getKnownStems();
+  const skip = new Set(ignore.map(grNorm));
+  const out = [];
+  for (const raw of (gr||"").replace(/___/g," ").split(/[\s.,;!?«»"'·:()\-–—]+/)) {
+    const t = grNorm(raw).replace(/[^α-ω]/g,"");
+    if (t.length < 2 || GR_FUNCTION_WORDS.has(t) || skip.has(t)) continue;
+    let ok = false;
+    const minN = t.length >= 6 ? 4 : 3;   // long words need a 4+ letter stem match
+    for (let n = Math.min(6, t.length); n >= minN; n--) { if (stems.has(t.slice(0, n))) { ok = true; break; } }
+    if (!ok) out.push(raw);
+  }
+  return out;
+}
+// Context vocabulary sent to the model: words from the chosen topics + adjectives + core verbs
+function contextVocab(nouns, max=180) {
+  const topics = new Set(nouns.map(w => w[3]));
+  const fromTopics = WORDS.filter(w => topics.has(w[3]));
+  const adjs = WORDS.filter(w => w[3] === "Adjectives");
+  const verbs = (typeof VERBS_CORE !== "undefined" ? VERBS_CORE : []).map(v => [v[0]]);
+  const pick = [...shuf(fromTopics).slice(0, 110), ...shuf(adjs).slice(0, 30), ...verbs.slice(0, 60)];
+  const seen = new Set(); const words = [];
+  for (const w of pick) { const g = w[0]; if (!seen.has(g)) { seen.add(g); words.push(g); } if (words.length >= max) break; }
+  return words.join(", ");
+}
+
 async function fetchCasesBatch(nouns, count=10, cases=["acc","gen"]) {
   const apiKey = await getApiKey();
   if (!apiKey) { setGrammarErr("nokey"); return null; }
@@ -4527,6 +4596,7 @@ async function fetchCasesBatch(nouns, count=10, cases=["acc","gen"]) {
     return `${w[0]} (${w[2]}, ${art})`;
   }).join("; ");
 
+  const vocab = contextVocab(nouns);
   const onlyAcc = cases.length === 1 && cases[0] === "acc";
   const onlyGen = cases.length === 1 && cases[0] === "gen";
   const caseRule = onlyAcc
@@ -4550,9 +4620,12 @@ RULES:
 ${mixRule}
 - Cover all genders: masculine (ο), feminine (η), neuter (το)
 - Cover singular and plural
-- Sentences should be natural, everyday Greek (A2 level)
-- Use verbs from: είμαι, έχω, πάω, βλέπω, τρώω, πίνω, αγοράζω, παίρνω, δίνω, μένω, θέλω, έρχομαι, κάνω, ακούω, φεύγω, βρίσκω, χρειάζομαι
-- Do NOT use unusual or literary words in the rest of the sentence
+- Sentences should be SHORT (5–9 words), simple everyday Greek (A1–A2 level)
+- VOCABULARY RESTRICTION (strict): apart from the focus noun, build the sentence ONLY from the STUDENT VOCABULARY below (any inflected form is fine) plus articles, prepositions, pronouns, είμαι/έχω, and very basic adverbs (πολύ, εδώ, τώρα, σήμερα, κάθε μέρα). Do NOT use any other noun, verb or adjective — the student does not know them.
+- Prefer verbs: είμαι, έχω, πάω, βλέπω, τρώω, πίνω, αγοράζω, παίρνω, δίνω, μένω, θέλω, έρχομαι, κάνω, ακούω, βρίσκω, χρειάζομαι
+- Do NOT use unusual or literary words
+
+STUDENT VOCABULARY: ${vocab}
 - English translation required
 
 Return ONLY a JSON array of exactly ${pool.length} items:
@@ -4600,8 +4673,10 @@ Important:
     const text = (d.content && d.content[0] && d.content[0].text) || "";
     const raw = parseJsonArrayLoose(text);
     if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
-    const valid = validateCasesSentencesV2(raw, cases);
-    if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
+    const valid = validateCasesSentencesV2(raw, cases)
+      .map(q => ({ ...q, unknown: unknownWords(q.gr, [q.noun_form, q.noun_base]) }))
+      .filter(q => q.unknown.length <= 1);
+    if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку (формат или слова вне словаря)");
     return valid;
   } catch(e) { console.error("fetchCasesSentences error:", e); setGrammarErr("network", e.message); }
   return null;
@@ -4844,10 +4919,10 @@ function ArticlesTab({ mastery, rec }) {
     const wantCount = parseInt(casesCnt) || 10;
     setCasesLoading(true); setNoNouns(false); __grammarFetchErr = null;
     let fetched = await fetchCasesSentences(pool, wantCount, caseTypes);
-    // Retry once if too few valid sentences came back
-    if (fetched && fetched.length < Math.min(4, wantCount)) {
+    // Top up (up to 2 extra rounds) when sentences were dropped by validation / unknown-word filter
+    for (let round = 0; round < 2 && fetched && fetched.length < wantCount; round++) {
       const extra = await fetchCasesSentences(pool, wantCount - fetched.length, caseTypes);
-      if (extra) fetched = [...fetched, ...extra].slice(0, wantCount);
+      if (extra && extra.length) fetched = [...fetched, ...extra].slice(0, wantCount);
     }
     setCasesLoading(false);
     if (!fetched || !fetched.length) { setFetchErr(__grammarFetchErr || { kind:"unknown" }); return; }
@@ -5423,8 +5498,9 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
               <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12 }}>
                 {explanation === "loading"
                   ? <span style={{ color:"#888" }}>⏳ Спрашиваю Клода…</span>
-                  : explanation.split("\n").filter(l=>l.trim()).map((line,i) => {
-                      const parts2 = line.split(/(\*\*[^*]+\*\*)/g).map((p,j)=>p.startsWith("**")&&p.endsWith("**")?<strong key={j} style={{color:"#534AB7"}}>{p.slice(2,-2)}</strong>:p);
+                  : explanation.split("\n").map(mdLine).filter(Boolean).map((ln,i) => {
+                      const parts2 = ln.text.split(/(\*\*[^*]+\*\*)/g).map((p,j)=>p.startsWith("**")&&p.endsWith("**")?<strong key={j} style={{color:"#534AB7"}}>{p.slice(2,-2)}</strong>:p);
+                      if (ln.kind === "head") return <div key={i} style={{ fontWeight:700, color:"#3C3489", marginTop: i ? 8 : 0, padding:"2px 0" }}>{parts2}</div>;
                       return <div key={i} style={{ lineHeight:1.6, padding:"2px 0" }}>{parts2}</div>;
                     })
                 }
@@ -5780,8 +5856,10 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
             <div style={{ background:"#F0EFFD", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"12px 14px", fontSize:13, color:"#2D2880", marginBottom:12 }}>
               {explanation === "loading"
                 ? <span style={{ color:"#888" }}>⏳ Спрашиваю Клода…</span>
-                : explanation.split("\n").filter(l=>l.trim()).map((line, i) => {
+                : explanation.split("\n").map(mdLine).filter(Boolean).map((ln, i) => {
+                    const line = ln.text;
                     const isTip = line.startsWith("💡");
+                    if (ln.kind === "head" && !isTip) return <div key={i} style={{ fontWeight:700, color:"#3C3489", marginTop: i ? 8 : 0, padding:"2px 0" }}>{line.replace(/\*\*/g,"")}</div>;
                     // render **word** as bold greek-colored span
                     const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) => {
                       if (p.startsWith("**") && p.endsWith("**")) {
@@ -8077,7 +8155,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.62-1433</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.63-1436</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
