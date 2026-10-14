@@ -2795,6 +2795,150 @@ const MCard = ({ title, on, onClick }) => (
     <span style={{ fontSize:13, fontWeight:500, color:on?"#3C3489":"#333" }}>{title}</span>
   </button>
 );
+// ── Shared topic selection (multiselect, like Grammar): { topics:["All"] | [..], off:["Topic|Sub", ..] }
+const SEL_ALL = { topics:["All"], off:[] };
+function selWords(sel, words = WORDS) {
+  if (!sel || sel.topics.includes("All")) return words;
+  return words.filter(w => sel.topics.includes(w[3]) && !sel.off.includes(w[3] + "|" + (w[4] || "")));
+}
+function wordCountsOf(words = WORDS) {
+  const byTopic = {}, bySub = {};
+  words.forEach(w => {
+    byTopic[w[3]] = (byTopic[w[3]] || 0) + 1;
+    if (w[4]) { (bySub[w[3]] = bySub[w[3]] || {})[w[4]] = (bySub[w[3]][w[4]] || 0) + 1; }
+  });
+  return { byTopic, bySub };
+}
+// Stable id of a selection — used as a cache key (single topic → same key as before, so old caches still work)
+function selKey(sel) {
+  if (!sel || sel.topics.includes("All")) return "All";
+  return [...sel.topics].sort().join("+") + (sel.off.length ? "~" + [...sel.off].sort().join("+") : "");
+}
+function selLabel(sel) {
+  if (!sel || sel.topics.includes("All")) return "All topics";
+  const { bySub } = wordCountsOf();
+  return sel.topics.map(t => {
+    const n = Object.keys(bySub[t] || {}).length;
+    const off = sel.off.filter(k => k.startsWith(t + "|")).length;
+    return off ? `${t} (${n - off}/${n})` : t;
+  }).join(", ");
+}
+function TopicPicker({ sel, setSel, collapsible = false, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const { byTopic, bySub } = wordCountsOf();
+  const topics = Object.keys(byTopic);
+  const total = selWords(sel).length;
+
+  function toggleTopic(t) {
+    setSel(prev => {
+      if (t === "All") return SEL_ALL;
+      const without = prev.topics.filter(x => x !== "All");
+      const next = without.includes(t) ? without.filter(x => x !== t) : [...without, t];
+      return { topics: next.length ? next : ["All"], off: prev.off.filter(k => !k.startsWith(t + "|")) };
+    });
+  }
+  function toggleSub(t, sub) {
+    const key = t + "|" + sub;
+    setSel(prev => {
+      if (prev.off.includes(key)) return { ...prev, off: prev.off.filter(k => k !== key) };
+      // keep at least one subtopic of the topic switched on
+      const subs = Object.keys(bySub[t] || {});
+      const offAfter = prev.off.filter(k => k.startsWith(t + "|")).length + 1;
+      return offAfter >= subs.length ? prev : { ...prev, off: [...prev.off, key] };
+    });
+  }
+
+  const header = (
+    <div onClick={collapsible ? () => setOpen(o => !o) : undefined} data-testid="tp-header"
+      style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom: open ? 6 : 0, cursor: collapsible ? "pointer" : "default" }}>
+      <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>
+        {collapsible ? (open ? "▾ " : "▸ ") : ""}Темы (мультивыбор){!open ? ": " + selLabel(sel) : ""}
+      </span>
+      <span data-testid="tp-total" style={{ fontSize:12, color:"#534AB7", fontWeight:700, whiteSpace:"nowrap" }}>{total} слов</span>
+    </div>
+  );
+  return (
+    <div style={{ marginBottom:"1rem" }}>
+      {header}
+      {open && (<>
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+          {["All", ...topics].map(t => {
+            const on = sel.topics.includes(t);
+            const count = t === "All" ? WORDS.length : byTopic[t];
+            return (
+              <button key={t} data-tp-topic={t} onClick={() => toggleTopic(t)} style={{
+                padding:"5px 11px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+                border: on ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                background: on ? "#EEEDFE" : "white",
+                color: on ? "#3C3489" : "#555",
+                fontSize:12, fontWeight: on ? 700 : 400, transition:"all .15s"
+              }}>{t} ({count})</button>
+            );
+          })}
+        </div>
+        {/* Subtopics of each selected topic: all on by default, tap to switch one off */}
+        {!sel.topics.includes("All") && sel.topics.filter(t => Object.keys(bySub[t] || {}).length > 1).map(t => {
+          const subs = Object.entries(bySub[t]).sort((a, b) => b[1] - a[1]);
+          const offCount = subs.filter(([sub]) => sel.off.includes(t + "|" + sub)).length;
+          return (
+            <div key={t} style={{ marginTop:10, padding:"8px 10px", background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:10 }}>
+              <div style={{ fontSize:11, color:"#7F79C8", fontWeight:600, marginBottom:6 }}>
+                {t} · подтемы {offCount ? `(${subs.length - offCount} из ${subs.length})` : "(все)"}
+              </div>
+              <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                {subs.map(([sub, c]) => {
+                  const on = !sel.off.includes(t + "|" + sub);
+                  return (
+                    <button key={sub} data-tp-sub={t + "|" + sub} onClick={() => toggleSub(t, sub)} style={{
+                      padding:"4px 10px", borderRadius:16, cursor:"pointer", fontFamily:"inherit",
+                      border: on ? "1px solid #8F88D9" : "0.5px dashed #ccc",
+                      background: on ? "#EEEDFE" : "white",
+                      color: on ? "#3C3489" : "#aaa",
+                      textDecoration: on ? "none" : "line-through",
+                      fontSize:11.5, fontWeight: on ? 600 : 400, transition:"all .15s"
+                    }}>{on ? "✓ " : ""}{sub} ({c})</button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </>)}
+    </div>
+  );
+}
+
+// ── Dictionary hub: 5 tiles, one shared topic selection for all of them
+const DICT_TILES = [
+  { id:"dict",   emoji:"📚", title:"Dictionary" },
+  { id:"quiz",   emoji:"❓", title:"Quiz" },
+  { id:"type",   emoji:"⌨️", title:"Type" },
+  { id:"flash",  emoji:"🃏", title:"Flashcards" },
+  { id:"fallee", emoji:"⚡", title:"Fallee" },
+];
+function DictHub({ mastery, rec, sub, setSub, tsel, setTsel }) {
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5, minmax(0,1fr))", gap:6, marginBottom:"1rem" }}>
+        {DICT_TILES.map(m => (
+          <div key={m.id} data-hub-tile={m.id} onClick={() => setSub(m.id)} style={{
+            border: sub===m.id ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+            borderRadius:12, padding:"9px 2px", cursor:"pointer", textAlign:"center",
+            background: sub===m.id ? "#EEEDFE" : "white", transition:"all .15s", minWidth:0
+          }}>
+            <div style={{ fontSize:20, marginBottom:3 }}>{m.emoji}</div>
+            <div style={{ fontSize:11.5, fontWeight:600, color: sub===m.id ? "#3C3489" : "#333", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.title}</div>
+          </div>
+        ))}
+      </div>
+      {sub==="dict"   && <DictTab  mastery={mastery} tsel={tsel} setTsel={setTsel}/>}
+      {sub==="quiz"   && <QuizTab  mastery={mastery} rec={rec} tsel={tsel} setTsel={setTsel}/>}
+      {sub==="type"   && <TypeTab  mastery={mastery} rec={rec} tsel={tsel} setTsel={setTsel}/>}
+      {sub==="flash"  && <FlashTab mastery={mastery} rec={rec} tsel={tsel} setTsel={setTsel}/>}
+      {sub==="fallee" && <FalleeTab mastery={mastery} tsel={tsel} setTsel={setTsel}/>}
+    </div>
+  );
+}
 const Bar = ({ pct, h=4, color="#7F77DD" }) => (
   <div style={{ height:h, background:"#eee", borderRadius:h/2, overflow:"hidden" }}>
     <div style={{ height:h, width:`${pct}%`, background:color, borderRadius:h/2, transition:"width .3s" }} />
@@ -3397,16 +3541,11 @@ Return ONLY a JSON array: [{"gr":"...","tr":"...","en":"...","topic":"...","subt
   );
 }
 
-function DictTab({ mastery }) {
+function DictTab({ mastery, tsel, setTsel }) {
   const [q, setQ]           = useState("");
-  const [topic, setTopic]   = useState("All");
-  const [subtopic, setSubtopic] = useState("All");
   const [selected, setSel]  = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [, forceUpdate]     = useState(0);
-
-  // Reset subtopic when topic changes
-  React.useEffect(() => { setSubtopic("All"); }, [topic]);
 
   // Load custom words on mount
   React.useEffect(() => {
@@ -3424,13 +3563,13 @@ function DictTab({ mastery }) {
   }
 
   const rows = useMemo(() =>
-    filterWords(WORDS, topic, subtopic).filter(w => !q||(w[0]+w[1]+w[2]).toLowerCase().includes(q.toLowerCase())),
-    [q, topic, subtopic]
+    selWords(tsel).filter(w => !q||(w[0]+w[1]+w[2]).toLowerCase().includes(q.toLowerCase())),
+    [q, tsel]
   );
 
   // Per-topic stats for the progress bar
   const topicStats = useMemo(() => {
-    const wordsInTopic = filterWords(WORDS, topic, subtopic);
+    const wordsInTopic = selWords(tsel);
     const total = wordsInTopic.length;
     const mastered = wordsInTopic.filter(w=>{
       const e = mastery[w[0]]; return e && (e.level>=5||e.frozen);
@@ -3440,7 +3579,7 @@ function DictTab({ mastery }) {
     }).length;
     const pct = total ? Math.round(mastered/total*100) : 0;
     return { total, mastered, learning, pct };
-  }, [topic, subtopic, mastery]);
+  }, [tsel, mastery]);
 
   return (
     <div style={{ position:"relative" }}>
@@ -3451,49 +3590,13 @@ function DictTab({ mastery }) {
         <button onClick={()=>setShowAdd(true)} style={{ padding:"7px 14px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:13, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>+ Add</button>
       </div>
 
-      {/* Topic chips with word counts */}
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
-        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {TOPICS.map(t => {
-          const cnt = t==="All" ? WORDS.length : WORDS.filter(w=>w[3]===t).length;
-          const mst = t==="All"
-            ? WORDS.filter(w=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); }).length
-            : WORDS.filter(w=>w[3]===t&&(()=>{ const e=mastery[w[0]]; return e&&(e.level>=5||e.frozen); })()).length;
-          return (
-            <button key={t} onClick={()=>setTopic(t)} style={{
-              padding:"4px 10px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit",
-              border: topic===t ? "0.5px solid #7F77DD" : "0.5px solid #ccc",
-              background: topic===t ? "#EEEDFE" : "transparent",
-              color: topic===t ? "#3C3489" : "#888",
-              display:"flex", alignItems:"center", gap:5,
-            }}>
-              <span>{t}</span>
-              <span style={{ fontSize:10, opacity:0.7 }}>{mst}/{cnt}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Subtopic chips - show when topic has subtopics */}
-      {SUBTOPICS[topic] && (
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"0.8rem" }}>
-          <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Subtopic:</span>
-          {SUBTOPICS[topic].map(s => (
-            <button key={s} onClick={()=>setSubtopic(s)} style={{
-              padding:"3px 10px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit",
-              border: subtopic===s ? "0.5px solid #534AB7" : "0.5px solid #ddd",
-              background: subtopic===s ? "#534AB7" : "transparent",
-              color: subtopic===s ? "white" : "#888",
-            }}>{s}</button>
-          ))}
-        </div>
-      )}
+      <TopicPicker sel={tsel} setSel={setTsel} />
 
       {/* Topic progress bar */}
       <div style={{ background:"#f8f8f8", borderRadius:10, padding:"10px 14px", marginBottom:"1rem", border:"0.5px solid #eee" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
           <span style={{ fontSize:12, fontWeight:500, color:"#333" }}>
-            {topic==="All" ? "All topics" : subtopic!=="All" ? `${topic}: ${subtopic}` : topic}
+            {selLabel(tsel)}
           </span>
           <div style={{ display:"flex", gap:12, fontSize:11, color:"#888" }}>
             <span>📚 {topicStats.total} words</span>
@@ -3938,12 +4041,10 @@ function WordStatsBadge({ mastery, greekWord, style, compact }) {
   );
 }
 
-function FlashTab({ mastery, rec }) {
+function FlashTab({ mastery, rec, tsel, setTsel }) {
   const [face, setFace]         = useState(0);
-  const [topic, setTopic]       = useState("All");
-  const [subtopic, setSubtopic] = useState("All");
   const [hardOnly, setHardOnly] = useState(false);
-  const [deck, setDeck]         = useState(() => shuf(WORDS));
+  const [deck, setDeck]         = useState(() => shuf(selWords(tsel)));
   const [idx, setIdx]           = useState(0);
   const [flipped, setFlipped]   = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -3975,8 +4076,12 @@ function FlashTab({ mastery, rec }) {
     sayOnce();
   }
 
-  function build(f, t, hard) {
-    let p = filterWords(WORDS, t, subtopic);
+  // rebuild the deck whenever the topic selection changes
+  const firstSel = React.useRef(true);
+  React.useEffect(() => { if (firstSel.current) { firstSel.current = false; return; } build(face, hardOnly); }, [tsel]);
+
+  function build(f, hard) {
+    let p = selWords(tsel);
     if (hard) { const h=p.filter(w=>{ const e=mastery[w[0]]; if(!e) return false; const mf=Object.values(e.modes).reduce((a,m)=>a+m.fail,0); const mo=Object.values(e.modes).reduce((a,m)=>a+m.ok,0); return mf>mo; }); if(h.length)p=h; }
     setDeck(shuf(p)); setIdx(0); setFlipped(false);
     window.speechSynthesis && window.speechSynthesis.cancel();
@@ -4010,28 +4115,18 @@ function FlashTab({ mastery, rec }) {
 
   return (
     <div>
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:".5rem" }}>
-        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>{setTopic(t);build(face,t,hardOnly);}}/>)}
-      {SUBTOPICS[topic] && (
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.6rem" }}>
-          {SUBTOPICS[topic].map(s => (
-            <Chip key={s} label={s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
-          ))}
-        </div>
-      )}
-      </div>
+      <TopicPicker sel={tsel} setSel={setTsel} collapsible defaultOpen={false} />
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:".8rem" }}>
         <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Front:</span>
-        {["Greek","English","Transcription"].map((l,i)=><Chip key={l} label={l} on={face===i} onClick={()=>{setFace(i);build(i,topic,hardOnly);}}/>)}
+        {["Greek","English","Transcription"].map((l,i)=><Chip key={l} label={l} on={face===i} onClick={()=>{setFace(i);build(i,hardOnly);}}/>)}
         <span style={{ fontSize:12, color:"#888", fontWeight:500, marginLeft:6 }}>Mode:</span>
-        <Chip label="All" on={!hardOnly} onClick={()=>{setHardOnly(false);build(face,topic,false);}}/>
-        <Chip label="Hard only" on={hardOnly} onClick={()=>{setHardOnly(true);build(face,topic,true);}}/>
+        <Chip label="All" on={!hardOnly} onClick={()=>{setHardOnly(false);build(face,false);}}/>
+        <Chip label="Hard only" on={hardOnly} onClick={()=>{setHardOnly(true);build(face,true);}}/>
       </div>
 
       {/* top row: restart / counter / audio toggle */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:".6rem" }}>
-        <button onClick={()=>build(face,topic,hardOnly)} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>↺ Restart</button>
+        <button onClick={()=>build(face,hardOnly)} style={{ fontSize:13, color:"#888", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", padding:0 }}>↺ Restart</button>
         <span style={{ fontSize:13, color:"#888" }}>{idx+1} / {deck.length}</span>
         <button onClick={()=>setAutoSpeak(a=>!a)} style={{
           fontSize:12, padding:"3px 10px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
@@ -4080,17 +4175,15 @@ function FlashTab({ mastery, rec }) {
         </button>
         <button onClick={()=>rate(1)} style={{ padding:"8px 16px", border:"0.5px solid #1D9E75", borderRadius:8, background:"#E1F5EE", color:"#085041", fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>✓ Know it</button>
       </div>
-      <div style={{ textAlign:"center" }}><Btn onClick={()=>build(face,topic,hardOnly)}>↺ Shuffle</Btn></div>
+      <div style={{ textAlign:"center" }}><Btn onClick={()=>build(face,hardOnly)}>↺ Shuffle</Btn></div>
     </div>
   );
 }
 
 // ─── Quiz ──────────────────────────────────────────────────────────
-function QuizTab({ mastery, rec }) {
+function QuizTab({ mastery, rec, tsel, setTsel }) {
   const [mi, setMi]       = useState(0);
   const [cnt, setCnt]     = useState("20");
-  const [topic, setTopic] = useState("All");
-  const [subtopic, setSubtopic] = useState("All");
   const [phase, setPhase] = useState("setup");
   const [qs, setQs]       = useState([]);
   const [qi, setQi]       = useState(0);
@@ -4163,7 +4256,7 @@ function QuizTab({ mastery, rec }) {
     setOpts(shuf([c, ...dis]));
   }
   function start() {
-    const pool0 = filterWords(WORDS, topic, subtopic);
+    const pool0 = selWords(tsel);
     const n = cnt==="all"?pool0.length:+cnt;
     const pool = shuf(pool0).slice(0,Math.min(n,pool0.length));
     setQs(pool); setQi(0); setScore(0); setLocked(false); setChosen(null); setShowHint(false);
@@ -4188,28 +4281,18 @@ function QuizTab({ mastery, rec }) {
 
   if (phase==="setup") return (
     <div>
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
-        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>setTopic(t)}/>)}
-      {SUBTOPICS[topic] && (
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.6rem" }}>
-          {SUBTOPICS[topic].map(s => (
-            <Chip key={s} label={s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
-          ))}
-        </div>
-      )}
-      </div>
+      <TopicPicker sel={tsel} setSel={setTsel} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
         {QM.map((m,i)=><MCard key={i} title={m.label} on={mi===i} onClick={()=>setMi(i)}/>)}
       </div>
       {/* Topic stats block */}
       {(()=>{
-        const words = filterWords(WORDS, topic, subtopic);
+        const words = selWords(tsel);
         const total = words.length;
-        const learning = words.filter(w=>{ const m=rec[w[0]]; return m&&m.level>0&&m.level<5; }).length;
-        const mastered = words.filter(w=>{ const m=rec[w[0]]; return m&&(m.level>=5||m.frozen); }).length;
-        const unseen = total - words.filter(w=>rec[w[0]]&&rec[w[0]].level>0).length;
-        const label = topic==="All" ? "All words" : subtopic!=="All" ? `${topic}: ${subtopic}` : topic;
+        const learning = words.filter(w=>{ const m=mastery[w[0]]; return m&&m.level>0&&m.level<5&&!m.frozen; }).length;
+        const mastered = words.filter(w=>{ const m=mastery[w[0]]; return m&&(m.level>=5||m.frozen); }).length;
+        const unseen = total - words.filter(w=>mastery[w[0]]&&(mastery[w[0]].level>0||mastery[w[0]].frozen)).length;
+        const label = selLabel(tsel);
         return (
           <div style={{ background:"#f7f7ff", border:"0.5px solid #AFA9EC", borderRadius:10, padding:"10px 16px", marginBottom:"1rem", fontSize:13 }}>
             <div style={{ fontWeight:600, color:"#26215C", marginBottom:6 }}>{label}</div>
@@ -4228,7 +4311,7 @@ function QuizTab({ mastery, rec }) {
         <span style={{ fontSize:13, color:"#888" }}>Questions:</span>
         <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
           {(()=>{
-            const total = filterWords(WORDS, topic, subtopic).length;
+            const total = selWords(tsel).length;
             const opts = ["10","20","30","50","75","100","150","all"];
             return opts.filter(v => v==="all" || Number(v) <= total)
               .map(v=><option key={v} value={v}>{v==="all" ? `all (${total})` : v}</option>);
@@ -4324,18 +4407,13 @@ function makeTiles(answer) {
 }
 
 // ─── Type (Tobo-style tile puzzle) ────────────────────────────────
-function TypeTab({ mastery, rec }) {
-  const [topic, setTopic] = useState("All");
-  const [subtopic, setSubtopic] = useState("All");
+function TypeTab({ mastery, rec, tsel, setTsel }) {
   const [cnt, setCnt]     = useState("20");
   const [mode, setMode]   = useState("gr"); // "gr"=show EN→type Greek, "tr"=show EN→type Transcription
   const [phase, setPhase] = useState("setup");
   const [qs, setQs]       = useState([]);
   const [qi, setQi]       = useState(0);
   const [score, setScore] = useState(0);
-
-  // Reset subtopic when topic changes
-  React.useEffect(() => { setSubtopic("All"); }, [topic]);
 
   // tile state
   const [tiles, setTiles]     = useState([]); // {id, ch, used}
@@ -4357,7 +4435,7 @@ function TypeTab({ mastery, rec }) {
   }
 
   function start() {
-    const pool0 = filterWords(WORDS, topic, subtopic);
+    const pool0 = selWords(tsel);
     const n = cnt==="all" ? pool0.length : +cnt;
     const pool = shuf(pool0).slice(0, Math.min(n, pool0.length));
     setQs(pool); setQi(0); setScore(0);
@@ -4433,17 +4511,7 @@ function TypeTab({ mastery, rec }) {
   // ── setup screen ──
   if (phase==="setup") return (
     <div>
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"1rem" }}>
-        <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
-        {TOPICS.map(t=><Chip key={t} label={t} on={topic===t} onClick={()=>setTopic(t)}/>)}
-      {SUBTOPICS[topic] && (
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:"0.6rem" }}>
-          {SUBTOPICS[topic].map(s => (
-            <Chip key={s} label={s} on={subtopic===s} onClick={()=>setSubtopic(s)} />
-          ))}
-        </div>
-      )}
-      </div>
+      <TopicPicker sel={tsel} setSel={setTsel} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
         <MCard title="English → Greek letters" on={mode==="gr"} onClick={()=>setMode("gr")}/>
         <MCard title="English → Transcription" on={mode==="tr"} onClick={()=>setMode("tr")}/>
@@ -4452,7 +4520,7 @@ function TypeTab({ mastery, rec }) {
         <span style={{ fontSize:13, color:"#888" }}>Words:</span>
         <select value={cnt} onChange={e=>setCnt(e.target.value)} style={{ padding:"4px 8px", border:"0.5px solid #ccc", borderRadius:8, background:"transparent", fontSize:13, fontFamily:"inherit" }}>
           {(()=>{
-            const total = filterWords(WORDS, topic, subtopic).length;
+            const total = selWords(tsel).length;
             const opts = ["10","20","30","50","75","100","150","all"];
             return opts.filter(v => v==="all" || Number(v) <= total)
               .map(v=><option key={v} value={v}>{v==="all" ? `all (${total})` : v}</option>);
@@ -6470,9 +6538,8 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
 // ─── Fallee Tab ─────────────────────────────────────────────────────
 const FALLEE_COLORS = ["#E8445A","#D4A017","#9B4DCA","#5BAEF5","#1D9E75","#E8734A"];
 
-function FalleeTab({ mastery }) {
+function FalleeTab({ mastery, tsel, setTsel }) {
   const [phase, setPhase]     = useState("setup");
-  const [topic, setTopic]     = useState("All");
   const [pool, setPool]       = useState([]);
   const [qi, setQi]           = useState(0);
   const [score, setScore]     = useState(0);
@@ -6483,7 +6550,6 @@ function FalleeTab({ mastery }) {
   const [tileY, setTileY]     = useState([0,0,0,0]); // 0=top, 1=bottom
   const [total, setTotal]     = useState(20);
   const [direction, setDirection] = useState("gr2en"); // "gr2en" | "en2gr"
-  const [subtopic, setSubtopic] = useState("All");
   const animRef  = React.useRef(null);
   const startRef = React.useRef(null);
   const DURATION = 10000;
@@ -6497,7 +6563,7 @@ function FalleeTab({ mastery }) {
   }
 
   function startGame() {
-    const src = filterWords(WORDS, topic, subtopic);
+    const src = selWords(tsel);
     const shuffled = shuf(src).slice(0, total);
     const { opts, ci } = buildOptions(shuffled[0], src);
     setPool(shuffled); setQi(0); setScore(0); setStreak(0);
@@ -6538,7 +6604,7 @@ function FalleeTab({ mastery }) {
   function nextQ() {
     const next = qi + 1;
     if (next >= pool.length) { setPhase("result"); return; }
-    const src = filterWords(WORDS, topic, subtopic);
+    const src = selWords(tsel);
     const { opts, ci } = buildOptions(pool[next], src);
     setQi(next); setOptions(opts); setCorrectIdx(ci);
     setAnswered(null); setTileY([0,0,0,0]);
@@ -6566,36 +6632,7 @@ function FalleeTab({ mastery }) {
         </div>
       </div>
 
-      {/* Topic */}
-      <div style={{marginBottom:"1rem"}}>
-        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Topic:</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {TOPICS.map(t=>(
-            <button key={t} onClick={()=>{setTopic(t);setSubtopic("All");}}
-              style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${topic===t?"#534AB7":"#ddd"}`,
-                background:topic===t?"#534AB7":"white",color:topic===t?"white":"#555",
-                fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:topic===t?600:400}}>
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {SUBTOPICS[topic] && (
-        <div style={{marginBottom:"1rem"}}>
-          <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Subtopic:</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {SUBTOPICS[topic].map(s=>(
-              <button key={s} onClick={()=>setSubtopic(s)}
-                style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${subtopic===s?"#534AB7":"#ddd"}`,
-                  background:subtopic===s?"#534AB7":"white",color:subtopic===s?"white":"#555",
-                  fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <TopicPicker sel={tsel} setSel={setTsel} />
 
       {/* Count */}
       <div style={{marginBottom:"1.5rem"}}>
@@ -6700,7 +6737,8 @@ function FalleeTab({ mastery }) {
 
 function SentencesTab({ rec }) {
   const [phase, setPhase]   = useState("setup");
-  const [selTopic, setSelTopic] = useState("All");
+  const [tsel, setTsel]     = useState(SEL_ALL);   // topic multiselect (AI mode)
+  const [src, setSrc]       = useState("ai");      // "ai" = generated from the selected words, "builtin" = built-in verb sentences
   const [qs, setQs]         = useState([]);
   const [qi, setQi]         = useState(0);
   const [picked, setPicked] = useState([]);
@@ -6713,13 +6751,14 @@ function SentencesTab({ rec }) {
 
   const SENT_CACHE_PREFIX = "sent_v2_";
 
-  async function getSentences(topic, count=12) {
+  async function getSentences(sel, count=12) {
+    const key = selKey(sel);
     // Check cache first
     try {
       const db = await openDB();
       const cached = await new Promise(resolve => {
         const tx = db.transaction(DB_STORE, "readonly");
-        const req = tx.objectStore(DB_STORE).get(SENT_CACHE_PREFIX + topic + "_" + count);
+        const req = tx.objectStore(DB_STORE).get(SENT_CACHE_PREFIX + key + "_" + count);
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
@@ -6730,17 +6769,17 @@ function SentencesTab({ rec }) {
     const apiKey = await getApiKey();
     if (!apiKey) return null;
 
-    const topicWords = topic === "All"
-      ? shuf(WORDS).slice(0, 30).map(w => w[0]).join(", ")
-      : WORDS.filter(w => w[3] === topic).map(w => w[0]).join(", ");
+    // words of the selected topics / subtopics (sampled if the selection is large)
+    const pool = selWords(sel);
+    const topicWords = shuf(pool).slice(0, sel.topics.includes("All") ? 40 : 150).map(w => w[0]).join(", ");
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
         model: "claude-haiku-4-5",
-        max_tokens: 1200,
-        messages: [{ role:"user", content:`Create ${count} short Greek sentences for A2 language learners using words from this topic: ${topic}.
+        max_tokens: Math.min(8000, 600 + count * 110),
+        messages: [{ role:"user", content:`Create ${count} short Greek sentences for A2 language learners using words from these topics: ${selLabel(sel)}.
 Words available: ${topicWords}
 
 Rules:
@@ -6764,7 +6803,7 @@ Return ONLY a JSON array:
     try {
       const db = await openDB();
       const tx = db.transaction(DB_STORE, "readwrite");
-      tx.objectStore(DB_STORE).put(sentences, SENT_CACHE_PREFIX + topic + "_" + count);
+      tx.objectStore(DB_STORE).put(sentences, SENT_CACHE_PREFIX + key + "_" + count);
     } catch(e) {}
 
     return sentences;
@@ -6780,10 +6819,10 @@ Return ONLY a JSON array:
     setGenerating(true); setGenError("");
     // Use static SENTENCES for "Verbs", generate for others
     let pool;
-    if (selTopic === "Verbs") {
+    if (src === "builtin") {
       pool = shuf(SENTENCES);
     } else {
-      pool = await getSentences(selTopic, parseInt(sentCount) || 12);
+      pool = await getSentences(tsel, parseInt(sentCount) || 12);
       if (!pool) { setGenError("Could not generate sentences. Check API key and connection."); setGenerating(false); return; }
       pool = shuf(pool);
     }
@@ -6839,27 +6878,19 @@ Return ONLY a JSON array:
         Read the English — tap Greek words in order.
       </div>
 
-      <div style={{marginBottom:"1rem"}}>
-        <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Choose topic:</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {["All","Verbs",...TOPICS.filter(t=>t!=="All"&&t!=="Verbs")].map(t => (
-            <button key={t} onClick={()=>setSelTopic(t)}
-              style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${selTopic===t?"#534AB7":"#ddd"}`,
-                background:selTopic===t?"#534AB7":"white",color:selTopic===t?"white":"#555",
-                fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:selTopic===t?600:400}}>
-              {t}
-            </button>
-          ))}
-        </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1rem" }}>
+        <MCard title="🤖 AI — по выбранным словам" on={src==="ai"} onClick={()=>setSrc("ai")}/>
+        <MCard title={`📘 Встроенные (${SENTENCES.length})`} on={src==="builtin"} onClick={()=>setSrc("builtin")}/>
       </div>
+      {src === "ai" && <TopicPicker sel={tsel} setSel={setTsel} />}
 
-      <div style={{marginBottom:"1rem"}}>
+      {src === "ai" && <div style={{marginBottom:"1rem"}}>
         <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Number of sentences:</div>
         <select value={sentCount} onChange={e=>setSentCount(e.target.value)}
           style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:"inherit",background:"white",width:"100%"}}>
           {["10","20","30","50","75","100"].map(v=><option key={v} value={v}>{v} sentences</option>)}
         </select>
-      </div>
+      </div>}
 
       {genError && <div style={{color:"#E24B4A",fontSize:13,marginBottom:10,textAlign:"center"}}>{genError}</div>}
 
@@ -6870,10 +6901,10 @@ Return ONLY a JSON array:
           <Btn onClick={start}>Start →</Btn>
         )}
       </div>
-      {selTopic !== "Verbs" && (
+      {src === "ai" && (
         <div style={{fontSize:11,color:"#bbb",textAlign:"center",marginTop:10}}>Sentences generated by Claude AI · cached after first use</div>
       )}
-      {selTopic === "Verbs" && (
+      {src === "builtin" && (
         <div style={{fontSize:11,color:"#bbb",textAlign:"center",marginTop:10}}>{SENTENCES.length} built-in sentences</div>
       )}
     </div>
@@ -6896,7 +6927,7 @@ Return ONLY a JSON array:
     <div style={{background:bgMain, borderRadius:16, padding:"1.2rem", transition:"background .3s", minHeight:400}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
         <button onClick={()=>setPhase("setup")} style={{fontSize:13,color:"#888",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>← Back</button>
-        <span style={{fontSize:12,color:"#aaa"}}>{selTopic} · {qi+1}/{qs.length}</span>
+        <span style={{fontSize:12,color:"#aaa"}}>{src === "builtin" ? "Built-in" : selLabel(tsel)} · {qi+1}/{qs.length}</span>
         <Pill>{score} correct</Pill>
       </div>
       <Bar pct={Math.round((qi+1)/qs.length*100)} h={4}/>
@@ -9012,6 +9043,8 @@ const STORAGE_KEY = "greek_vocab_mastery_v1";
 
 function App() {
   const [tab, setTab]         = useState("dict");
+  const [dictSub, setDictSub] = useState("dict");     // tile inside the Dictionary hub
+  const [dictSel, setDictSel] = useState(SEL_ALL);    // topic selection shared by Dictionary / Quiz / Type / Flashcards / Fallee
   const [mastery, setMastery] = useState(initMastery);
   const [loaded, setLoaded]   = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -9140,13 +9173,9 @@ function App() {
   const level5     = masteryArr.filter(e => e.level >= 5 || e.frozen).length;
   const mastPct    = Math.round(level5/WORDS.length*100);
   const TABS = [
-    { id:"dict",      label:"Dictionary" },
-    { id:"flash",     label:"Flashcards" },
-    { id:"quiz",      label:"Quiz" },
-    { id:"type",      label:"Type" },
+    { id:"dict",      label:"📚 Dictionary" },
     { id:"articles",  label:"Grammar" },
     { id:"sentences", label:"Sentences" },
-    { id:"fallee",    label:"Fallee" },
     { id:"verbs",     label:"Verbs" },
     { id:"theory",    label:"📖 Theory" },
     { id:"audit",     label:"🔍 Audit" },
@@ -9164,7 +9193,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.76-2110</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.77-2117</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
@@ -9286,13 +9315,9 @@ function App() {
         ))}
       </div>
 
-      {tab==="dict"  && <DictTab  mastery={mastery}/>}
-      {tab==="flash" && <FlashTab mastery={mastery} rec={rec}/>}
-      {tab==="quiz"  && <QuizTab  mastery={mastery} rec={rec}/>}
-      {tab==="type"  && <TypeTab  mastery={mastery} rec={rec}/>}
+      {tab==="dict"  && <DictHub mastery={mastery} rec={rec} sub={dictSub} setSub={setDictSub} tsel={dictSel} setTsel={setDictSel}/>}
       {tab==="articles" && <ArticlesTab mastery={mastery} rec={rec}/>}
       {tab==="sentences" && <SentencesTab rec={rec}/>}
-      {tab==="fallee"    && <FalleeTab mastery={mastery}/>}
       {tab==="stats"     && <StatsTab mastery={mastery}/>}
       {tab==="verbs"     && <VerbDrillTab/>}
       {tab==="theory"    && <TheoryTab/>}
