@@ -4590,6 +4590,7 @@ function ArticlesTab({ mastery, rec }) {
 
   // toggle a topic in multiselect (for cases mode)
   function toggleTopic(t) {
+    setNoNouns(false);
     if (t === "All") { setTopics(["All"]); return; }
     setTopics(prev => {
       const without = prev.filter(x => x !== "All");
@@ -4922,7 +4923,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
           <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Предложений:</div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
             {["10","20","30","50","100"].map(v => (
-              <button key={v} onClick={()=>setCasesCnt(v)} style={{
+              <button key={v} onClick={()=>{ setCasesCnt(v); setNoNouns(false); }} style={{
                 padding:"6px 14px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
                 border: casesCnt===v ? "1.5px solid #534AB7" : "0.5px solid #ddd",
                 background: casesCnt===v ? "#EEEDFE" : "white",
