@@ -4943,7 +4943,8 @@ function ArticlesTab({ mastery, rec }) {
   const [noNouns, setNoNouns] = useState(false);
   const [fetchErr, setFetchErr] = useState(null);
   const [caseTypes, setCaseTypes] = useState(["acc","gen"]); // which cases Cases mode practises
-  const [verbTenses, setVerbTenses] = useState(["pres","aor","fut"]); // which tenses Verbs mode practises // {kind, detail} — why Cases/Tenses generation failed
+  const [verbTenses, setVerbTenses] = useState(["pres","aor","fut"]); // which tenses Verbs mode practises
+  const [excludedSubs, setExcludedSubs] = useState([]); // ["Food|Drinks", ...] — subtopics switched off inside selected topics // {kind, detail} — why Cases/Tenses generation failed
   const [casesLoading, setCasesLoading] = useState(false);
   const [tensesLoading, setTensesLoading] = useState(false);
   const [blankIdx, setBlankIdx] = useState(0); // which blank within cur sentence
@@ -4975,6 +4976,25 @@ function ArticlesTab({ mastery, rec }) {
       }
       return [...without, t];
     });
+    setExcludedSubs(prev => prev.filter(k => !k.startsWith(t + "|")));
+  }
+
+  function toggleSub(t, sub) {
+    setNoNouns(false); setFetchErr(null);
+    const key = t + "|" + sub;
+    setExcludedSubs(prev => {
+      if (prev.includes(key)) return prev.filter(k => k !== key);
+      // keep at least one subtopic of the topic switched on
+      const subs = Object.keys(allWordCounts.bySubtopic[t] || {});
+      const offAfter = prev.filter(k => k.startsWith(t + "|")).length + 1;
+      return offAfter >= subs.length ? prev : [...prev, key];
+    });
+  }
+
+  // Words of the chosen topics minus switched-off subtopics (Cases & Verbs)
+  function selectedWords() {
+    if (topics.includes("All")) return WORDS;
+    return WORDS.filter(w => topics.includes(w[3]) && !excludedSubs.includes(w[3] + "|" + (w[4] || "")));
   }
 
   // Build articleMap instantly from the word list itself — no API needed.
@@ -5054,7 +5074,7 @@ function ArticlesTab({ mastery, rec }) {
     // gather nouns from selected topics (multiselect)
     const isNoun = w => articleMap && ARTICLES.includes(articleMap[w[0]]);
     const allNouns = WORDS.filter(isNoun);
-    const selected = topics.includes("All") ? WORDS : WORDS.filter(w => topics.includes(w[3]));
+    const selected = selectedWords();
     // Blanks are always nouns: take them from the chosen topics, or from the whole dictionary
     // when the chosen topics have none (e.g. only Verbs / Adjectives)
     const topicNouns = selected.filter(isNoun);
@@ -5084,7 +5104,7 @@ function ArticlesTab({ mastery, rec }) {
     // other words of the chosen topics are sentence context
     const drillable = w => w[3] === "Verbs" && VERB_FORMS[w[0]] && !VT_SKIP.has(w[0]);
     const allVerbs = WORDS.filter(drillable);
-    const selected = topics.includes("All") ? WORDS : WORDS.filter(w => topics.includes(w[3]));
+    const selected = selectedWords();
     const topicVerbs = selected.filter(drillable);
     const verbs = topicVerbs.length ? topicVerbs : allVerbs;
     const anchors = topics.includes("All") ? [] : selected.filter(w => w[3] !== "Verbs");
@@ -5353,6 +5373,33 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
               );
             })}
           </div>
+          {/* Subtopics of each selected topic: all on by default, tap to switch one off */}
+          {!topics.includes("All") && topics.filter(t => Object.keys(allWordCounts.bySubtopic[t] || {}).length > 1).map(t => {
+            const subs = Object.entries(allWordCounts.bySubtopic[t]).sort((a, b) => b[1] - a[1]);
+            const offCount = subs.filter(([sub]) => excludedSubs.includes(t + "|" + sub)).length;
+            return (
+              <div key={t} style={{ marginTop:10, padding:"8px 10px", background:"#FAFAFE", border:"0.5px solid #E0DEFC", borderRadius:10 }}>
+                <div style={{ fontSize:11, color:"#7F79C8", fontWeight:600, marginBottom:6 }}>
+                  {t} · подтемы {offCount ? `(${subs.length - offCount} из ${subs.length})` : "(все)"}
+                </div>
+                <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                  {subs.map(([sub, c]) => {
+                    const on = !excludedSubs.includes(t + "|" + sub);
+                    return (
+                      <button key={sub} onClick={()=>toggleSub(t, sub)} style={{
+                        padding:"4px 10px", borderRadius:16, cursor:"pointer", fontFamily:"inherit",
+                        border: on ? "1px solid #8F88D9" : "0.5px dashed #ccc",
+                        background: on ? "#EEEDFE" : "white",
+                        color: on ? "#3C3489" : "#aaa",
+                        textDecoration: on ? "none" : "line-through",
+                        fontSize:11.5, fontWeight: on ? 600 : 400, transition:"all .15s"
+                      }}>{on ? "✓ " : ""}{sub} ({c})</button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -8640,7 +8687,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.70-1750</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.71-1805</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
