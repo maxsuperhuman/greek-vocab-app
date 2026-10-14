@@ -4498,6 +4498,124 @@ function parseJsonArrayLoose(text) {
   return null;
 }
 
+// ─── Cases: planned coverage (case × number × gender) ─────────────
+// Correct article for each gender / case / number — used to check the model's answer key
+const CS_ARTICLE = {
+  "ο":  { acc:{ sg:["τον","το"], pl:["τους"] }, gen:{ sg:["του"], pl:["των"] } },
+  "η":  { acc:{ sg:["την","τη"], pl:["τις"] },  gen:{ sg:["της"], pl:["των"] } },
+  "το": { acc:{ sg:["το"],       pl:["τα"] },   gen:{ sg:["του"], pl:["των"] } },
+};
+const CS_LABEL = { acc:{ sg:"Вин. ед.", pl:"Вин. мн." }, gen:{ sg:"Род. ед.", pl:"Род. мн." } };
+
+// Each case × number combination appears once per cycle; nouns rotate ο → η → το so genders stay balanced
+function planCaseSlots(nouns, cases, n, articleOf) {
+  const byG = { "ο":[], "η":[], "το":[] };
+  nouns.forEach(w => { const a = articleOf(w); if (byG[a]) byG[a].push(w); });
+  const genders = ["ο","η","το"].filter(g => byG[g].length);
+  const queues = {}; genders.forEach(g => queues[g] = []);
+  const combos = [];
+  cases.forEach(c => ["sg","pl"].forEach(num => combos.push({ cs:c, num })));
+  const slots = []; let cycle = []; let gi = Math.floor(Math.random() * genders.length);
+  while (slots.length < n && genders.length) {
+    if (!cycle.length) cycle = shuf([...combos]);
+    const g = genders[gi++ % genders.length];
+    if (!queues[g].length) queues[g] = shuf([...byG[g]]);
+    slots.push({ ...cycle.shift(), gender: g, noun: queues[g].shift() });
+  }
+  return slots;
+}
+
+function validateCaseSlots(raw, slots) {
+  const out = [];
+  raw.forEach((q, i) => {
+    const slot = slots[(q && Number.isInteger(q.n) ? q.n - 1 : i)];
+    if (!slot || !q) return;
+    if (!validateCasesSentencesV2([q], [slot.cs]).length) return;       // format checks (one blank, options, …)
+    if (grNorm(q.noun_base || "") !== grNorm(slot.noun[0])) return;     // the requested noun
+    const allowed = CS_ARTICLE[slot.gender][slot.cs][slot.num];
+    if (!allowed.includes(String(q.article_answer).trim())) return;      // article matches gender + case + number
+    const unknown = unknownWords(q.gr, [q.noun_form, q.noun_base]);
+    if (unknown.length > 1) return;
+    out.push({ ...q, case_label: CS_LABEL[slot.cs][slot.num], gender: slot.gender==="ο"?"м":slot.gender==="η"?"ж":"ср",
+               cs: slot.cs, num: slot.num, unknown });
+  });
+  return out;
+}
+
+async function fetchCaseSlotBatch(slots, anchors) {
+  const apiKey = await getApiKey();
+  if (!apiKey) { setGrammarErr("nokey"); return null; }
+  const CASE_EN = { acc:"ACCUSATIVE", gen:"GENITIVE" };
+  const tasks = slots.map((sl, i) =>
+    `${i+1}. ${sl.noun[0]} (${sl.noun[2]}) — CASE: ${CASE_EN[sl.cs]} — NUMBER: ${sl.num === "pl" ? "PLURAL" : "SINGULAR"} — article: ${CS_ARTICLE[sl.gender][sl.cs][sl.num].join(" / ")}`
+  ).join("\n");
+  const vocab = contextVocab(slots.map(s => s.noun), 180, anchors);
+  const prompt =
+`You are a Greek language exercise generator. Write ONE sentence per task below, in the SAME order. Each sentence practises the given noun in EXACTLY the given case and number.
+
+TASKS (noun — case — number — the article the blank must take):
+${tasks}
+
+RULES:
+- Replace the article directly before the focus noun with ___ (blank). The answer is that plain article (use the one given in the task)
+- Do NOT put the preposition σε before the focus noun (it would merge with the article: στον/στη…). Use direct objects, possession ("X of Y"), or από / για / με + article
+- Accusative: e.g. object of a verb (βλέπω ___ φίλους μου) or after από/για/με. Genitive: possession or "X of Y" (το σπίτι ___ γιαγιάς, τα παιχνίδια ___ παιδιών)
+- PLURAL tasks must use the plural form of the noun (and plural article)
+- The focus noun appears right after the blank, in its declined form
+- Short everyday sentences (5–9 words), A2 level. Apart from the focus noun use ONLY words from the STUDENT VOCABULARY below plus pronouns, articles, prepositions and basic adverbs
+- The blank is not the last word of the sentence
+- English translation required
+
+STUDENT VOCABULARY: ${vocab}
+
+Return ONLY a JSON array, one object per task in order:
+[{"n":1,"gr":"Τα παιχνίδια ___ παιδιών είναι στο σαλόνι.","en":"The children's toys are in the living room.","noun_base":"το παιδί","noun_form":"παιδιών","noun_form_options":["παιδιών","παιδιά","παιδιού","παιδί"],"article_answer":"των","article_options":["των","τα","του","το"],"case_label":"Род. мн.","gender":"ср"}]
+
+- noun_form_options: correct form + 3 other case/number forms of the SAME noun
+- article_options: correct article + 3 plausible wrong ones (other case / number of the same gender)`;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens: Math.min(8000, 600 + 280 * slots.length), messages:[{ role:"user", content: prompt }] })
+    });
+    if (!res.ok) { setGrammarErr("http", await describeHttpError(res)); return null; }
+    const d = await res.json();
+    const text = (d.content && d.content[0] && d.content[0].text) || "";
+    const raw = parseJsonArrayLoose(text);
+    if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
+    const valid = validateCaseSlots(raw, slots);
+    if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
+    return valid;
+  } catch(e) { console.error("fetchCaseSlotBatch error:", e); setGrammarErr("network", e.message); }
+  return null;
+}
+
+// Batches of 10, 3 in parallel; failed case × number × gender slots are re-requested with other nouns (2 more rounds)
+async function fetchCaseSentencesPlanned(slots, anchors, nounsByGender) {
+  let out = [];
+  let pending = slots;
+  for (let round = 0; round < 3 && pending.length; round++) {
+    const batches = [];
+    for (let i = 0; i < pending.length; i += 10) batches.push(pending.slice(i, i + 10));
+    const got = [];
+    for (let i = 0; i < batches.length; i += 3) {
+      const res = await Promise.all(batches.slice(i, i + 3).map(b => fetchCaseSlotBatch(b, anchors)));
+      res.forEach(r => { if (r) got.push(...r); });
+      if (!got.length && !out.length && __grammarFetchErr && ["nokey","http"].includes(__grammarFetchErr.kind)) return null;
+    }
+    out = out.concat(got);
+    const done = {};
+    got.forEach(q => { const k = q.cs + q.num + q.gender; done[k] = (done[k] || 0) + 1; });
+    const gRu = g => g==="ο"?"м":g==="η"?"ж":"ср";
+    const missing = [];
+    pending.forEach(sl => { const k = sl.cs + sl.num + gRu(sl.gender); if (done[k]) done[k]--; else missing.push(sl); });
+    pending = missing.map(sl => { const pool = nounsByGender[sl.gender]; return { ...sl, noun: pool[Math.floor(Math.random() * pool.length)] }; });
+  }
+  if (out.length) __grammarFetchErr = null;
+  return out.length ? out : null;
+}
+
 // Large requests (20–100) are split into batches of 10, 3 in parallel
 async function fetchCasesSentences(nouns, count=10, cases=["acc","gen"], anchors=[]) {
   const BATCH = 10;
@@ -5085,15 +5203,15 @@ function ArticlesTab({ mastery, rec }) {
     if (!pool.length) { setNoNouns(true); return; }
     const wantCount = parseInt(casesCnt) || 10;
     setCasesLoading(true); setNoNouns(false); __grammarFetchErr = null;
-    let fetched = await fetchCasesSentences(pool, wantCount, caseTypes, anchors);
-    // Top up (up to 2 extra rounds) when sentences were dropped by validation / unknown-word filter
-    for (let round = 0; round < 2 && fetched && fetched.length < wantCount; round++) {
-      const extra = await fetchCasesSentences(pool, wantCount - fetched.length, caseTypes, anchors);
-      if (extra && extra.length) fetched = [...fetched, ...extra].slice(0, wantCount);
-    }
+    // Coverage is planned here, not left to the model: case × number cycles evenly, genders rotate ο / η / το
+    const articleOf = w => articleMap[w[0]];
+    const slots = planCaseSlots(pool, caseTypes, wantCount, articleOf);
+    const nounsByGender = { "ο":[], "η":[], "το":[] };
+    pool.forEach(w => { const a = articleOf(w); if (nounsByGender[a]) nounsByGender[a].push(w); });
+    const fetched = await fetchCaseSentencesPlanned(slots, anchors, nounsByGender);
     setCasesLoading(false);
     if (!fetched || !fetched.length) { setFetchErr(__grammarFetchErr || { kind:"unknown" }); return; }
-    setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
+    setQs(shuf(fetched)); setQi(0); setScore(0); setLocked(false); setChosen(null);
     setBlankIdx(0); setFilledBlanks([]); setPendingAdvance(false); setExplanation(null);
     setCasesStep("article"); setArticleChosen(null); setArticleLocked(false);
     setPhase("game");
@@ -8687,7 +8805,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.71-1805</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.72-1855</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
