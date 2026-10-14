@@ -5060,9 +5060,9 @@ const VT_PERSONS_EN = ["1st person singular (εγώ)","2nd person singular (εσ
 
 // Plan which verb / tense / person each sentence practises.
 // Every tense × person combination appears once per cycle, so N ≥ 6 × tenses covers all of them.
-function planVerbSlots(verbs, tenses, n) {
+function planVerbSlots(verbs, tenses, n, persons=[0,1,2,3,4,5]) {
   const combos = [];
-  tenses.forEach(t => [0,1,2,3,4,5].forEach(p => combos.push({ tense:t, person:p })));
+  tenses.forEach(t => persons.forEach(p => combos.push({ tense:t, person:p })));
   const slots = [];
   let cycle = [];
   let vq = [];
@@ -5280,6 +5280,7 @@ function ArticlesTab({ mastery, rec }) {
   const [fetchErr, setFetchErr] = useState(null);
   const [caseTypes, setCaseTypes] = useState(["acc","gen"]); // which cases Cases mode practises
   const [verbTenses, setVerbTenses] = useState(["pres","aor","fut"]); // which tenses Verbs mode practises
+  const [verbPersons, setVerbPersons] = useState([0,1,2,3,4,5]); // persons drilled in Verbs: 0–2 singular, 3–5 plural
   const [verbGroups, setVerbGroups] = useState(["A","B1","B2","AB","G1","G2","IEM","OUM","SP"]); // conjugation types drilled in Verbs
   const [excludedSubs, setExcludedSubs] = useState([]); // ["Food|Drinks", ...] — subtopics switched off inside selected topics // {kind, detail} — why Cases/Tenses generation failed
   const [casesLoading, setCasesLoading] = useState(false);
@@ -5452,7 +5453,7 @@ function ArticlesTab({ mastery, rec }) {
     if (!verbs.length) { setNoNouns(true); return; }
     const anchors = topics.includes("All") ? [] : selected.filter(w => w[3] !== "Verbs");
     const n = parseInt(casesCnt) || 10;
-    const slots = planVerbSlots(verbs, verbTenses, n);
+    const slots = planVerbSlots(verbs, verbTenses, n, verbPersons);
     setTensesLoading(true); setNoNouns(false); setFetchErr(null); __grammarFetchErr = null;
     const fetched = await fetchVerbSentences(slots, anchors, "A2"); // fixed: short everyday A2 sentences
     setTensesLoading(false);
@@ -5658,8 +5659,38 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
               );
             })}
           </div>
+          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Лица:</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:"1rem" }}>
+            {[{ label:"Ед. ч.", ids:[0,1,2] }, { label:"Мн. ч.", ids:[3,4,5] }].map(row => (
+              <div key={row.label} style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+                <button onClick={()=>{ setFetchErr(null); setVerbPersons(row.ids); }} title={"Только " + row.label}
+                  style={{ width:58, padding:"5px 0", borderRadius:8, border:"0.5px dashed #bbb", background:"white", color:"#666",
+                    fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>{row.label}</button>
+                {row.ids.map(pi => {
+                  const on = verbPersons.includes(pi);
+                  return (
+                    <button key={pi} onClick={()=>{
+                      setFetchErr(null);
+                      setVerbPersons(prev => prev.includes(pi) ? (prev.length > 1 ? prev.filter(x=>x!==pi) : prev) : [...prev, pi].sort());
+                    }} style={{
+                      padding:"6px 14px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+                      border: on ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                      background: on ? "#EEEDFE" : "white",
+                      color: on ? "#3C3489" : "#555",
+                      fontSize:14, fontWeight: on ? 700 : 400, transition:"all .15s"
+                    }}>{on ? "☑" : "☐"} {VT_PERSONS[pi]}</button>
+                  );
+                })}
+              </div>
+            ))}
+            {verbPersons.length < 6 && (
+              <button onClick={()=>setVerbPersons([0,1,2,3,4,5])} style={{ alignSelf:"flex-start", fontSize:11, color:"#7F79C8", background:"none", border:"none", cursor:"pointer", padding:0, fontFamily:"inherit" }}>
+                ↺ все лица
+              </button>
+            )}
+          </div>
           <div style={{ fontSize:11, color:"#999", marginTop:-8, marginBottom:"1rem" }}>
-            6 лиц × {verbTenses.length} = {6*verbTenses.length} сочетаний — {(parseInt(casesCnt)||10) >= 6*verbTenses.length ? "все будут покрыты" : "для полного покрытия выбери ≥ " + (6*verbTenses.length) + " предложений"}
+            {verbPersons.length} {verbPersons.length===1?"лицо":verbPersons.length<5?"лица":"лиц"} × {verbTenses.length} = {verbPersons.length*verbTenses.length} {(()=>{ const k=verbPersons.length*verbTenses.length, m=k%10, h=k%100; return (m===1&&h!==11)?"сочетание":(m>=2&&m<=4&&(h<12||h>14))?"сочетания":"сочетаний"; })()} — {(parseInt(casesCnt)||10) >= verbPersons.length*verbTenses.length ? "все будут покрыты" : "для полного покрытия выбери ≥ " + (verbPersons.length*verbTenses.length) + " предложений"}
           </div>
           {(() => {
             const pool = verbPool();
@@ -9133,7 +9164,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.75-2105</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.76-2110</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
