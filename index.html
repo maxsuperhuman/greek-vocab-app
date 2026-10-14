@@ -5049,11 +5049,12 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
           {fetchErr.detail && <div style={{ fontSize:12, marginBottom:6, wordBreak:"break-word" }}>{fetchErr.detail}</div>}
           <div style={{ fontSize:12 }}>
             {fetchErr.kind === "nokey" ? "Ключ хранится локально в IndexedDB, на каждом устройстве свой. Добавь его — и нажми Start ещё раз."
+             : (fetchErr.kind === "http" && /HTTP 40[13]/.test(fetchErr.detail)) ? "Сохранённый ключ отклонён Anthropic (отозван, удалён или скопирован не полностью). Создай новый ключ в console.anthropic.com → API Keys и замени его здесь."
              : "Существительные в выбранных темах есть — проблема в генерации. Нажми Start ещё раз."}
           </div>
-          {fetchErr.kind === "nokey" && (
+          {(fetchErr.kind === "nokey" || (fetchErr.kind === "http" && /HTTP 40[13]/.test(fetchErr.detail))) && (
             <button onClick={()=>setShowKeyModal(true)} style={{ marginTop:8, padding:"6px 16px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-              Добавить API-ключ →
+              {fetchErr.kind === "nokey" ? "Добавить API-ключ →" : "Заменить API-ключ →"}
             </button>
           )}
         </div>
@@ -8028,7 +8029,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.60-1404</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.61-1408</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
