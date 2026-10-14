@@ -4372,9 +4372,47 @@ const ALL_ARTICLES = ["ο","η","το","τον","την","τους","τις","τ
 // The exercise has TWO steps per sentence:
 //   step 1 — pick the correct article (blank in sentence)
 //   step 2 — pick the correct noun form (shown in parens in sentence, choose whole word)
-async function fetchCasesSentences(nouns, count=10) {
+// Last failure reason from Grammar fetchers — shown in the setup banner instead of a generic message
+let __grammarFetchErr = null;
+function setGrammarErr(kind, detail) { __grammarFetchErr = { kind, detail: detail || "" }; }
+async function describeHttpError(res) {
+  let msg = "";
+  try { const j = await res.json(); msg = (j && j.error && j.error.message) || ""; } catch(e) {}
+  return "HTTP " + res.status + (msg ? " — " + msg : "");
+}
+// Parse a JSON array from model text; salvages complete items if the response was cut off
+function parseJsonArrayLoose(text) {
+  const start = text.indexOf("[");
+  if (start < 0) return null;
+  const s = text.slice(start);
+  const end = s.lastIndexOf("]");
+  if (end > 0) { try { const a = JSON.parse(s.slice(0, end + 1)); if (Array.isArray(a)) return a; } catch(e) {} }
+  for (let cut = s.length - 1; cut > 0; cut--) {
+    if (s[cut] !== "}") continue;
+    try { const a = JSON.parse(s.slice(0, cut + 1) + "]"); if (Array.isArray(a)) return a; } catch(e) {}
+  }
+  return null;
+}
+
+// Large requests (20–100) are split into batches of 10, 3 in parallel
+async function fetchCasesSentences(nouns, count=10, cases=["acc","gen"]) {
+  const BATCH = 10;
+  if (count <= BATCH) return fetchCasesBatch(nouns, count, cases);
+  const sizes = [];
+  for (let i = 0; i < count; i += BATCH) sizes.push(Math.min(BATCH, count - i));
+  let out = [];
+  for (let i = 0; i < sizes.length; i += 3) {
+    const res = await Promise.all(sizes.slice(i, i + 3).map(n => fetchCasesBatch(nouns, n, cases)));
+    res.forEach(r => { if (r && r.length) out = out.concat(r); });
+    if (!out.length && __grammarFetchErr && ["nokey","http"].includes(__grammarFetchErr.kind)) break;
+  }
+  if (out.length) __grammarFetchErr = null;
+  return out.length ? out.slice(0, count) : null;
+}
+
+async function fetchCasesBatch(nouns, count=10, cases=["acc","gen"]) {
   const apiKey = await getApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) { setGrammarErr("nokey"); return null; }
   if (!nouns.length) return null;
   // pick up to count nouns, shuffled
   const pool = shuf(nouns).slice(0, count);
@@ -4385,8 +4423,18 @@ async function fetchCasesSentences(nouns, count=10) {
     return `${w[0]} (${w[2]}, ${art})`;
   }).join("; ");
 
+  const onlyAcc = cases.length === 1 && cases[0] === "acc";
+  const onlyGen = cases.length === 1 && cases[0] === "gen";
+  const caseRule = onlyAcc
+    ? "ONLY the ACCUSATIVE case (singular or plural) — e.g. after a direct-object verb or after σε/για/με/από. NEVER genitive, NEVER nominative"
+    : onlyGen
+    ? "ONLY the GENITIVE case (singular or plural) — possession (το σπίτι του πατέρα), 'X of Y', purpose labels (ποτήρια κρασιού). NEVER accusative, NEVER nominative"
+    : "ACCUSATIVE or GENITIVE only (singular or plural), roughly half of each. NEVER nominative";
+  const mixRule = onlyAcc ? "- Every sentence must be accusative: case_label is Вин. ед. or Вин. мн."
+    : onlyGen ? "- Every sentence must be genitive: case_label is Род. ед. or Род. мн."
+    : "- Mix cases across sentences: about half accusative (Вин.), half genitive (Род.)";
   const prompt =
-`You are a Greek language exercise generator. For each noun below, create ONE natural Greek sentence that practices a declined form of that noun (not nominative — use accusative, genitive, or plural).
+`You are a Greek language exercise generator. For each noun below, create ONE natural Greek sentence that practices a declined form of that noun: ${caseRule}.
 
 NOUNS: ${list}
 
@@ -4395,7 +4443,7 @@ RULES:
 - Replace the article before the focus noun with ___ (blank)
 - Show the focus noun in its declined form — this is what the student sees and must choose
 - The student will separately: (1) choose the article, (2) choose which noun form is correct
-- Mix cases across sentences: accusative, genitive, plural nominative, plural accusative
+${mixRule}
 - Cover all genders: masculine (ο), feminine (η), neuter (το)
 - Cover singular and plural
 - Sentences should be natural, everyday Greek (A2 level)
@@ -4431,7 +4479,7 @@ Important:
 - noun_form_options: 4 options — the correct form + 3 plausible wrong forms (different case/number of the SAME noun)
 - article_answer: the correct article for the blank
 - article_options: 4 options — correct article + 3 plausible wrong ones
-- case_label in Russian: Ном./Вин./Род. + ед./мн.
+- case_label in Russian: Вин./Род. + ед./мн.
 - gender: м/ж/ср`;
 
   try {
@@ -4439,24 +4487,28 @@ Important:
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5", max_tokens: 3000,
+        model: "claude-haiku-4-5", max_tokens: Math.min(8000, 600 + 280 * pool.length),
         messages: [{ role:"user", content: prompt }]
       })
     });
-    if (res.ok) {
-      const d = await res.json();
-      const match = d.content[0].text.match(/\[[\s\S]*\]/);
-      if (match) {
-        const raw = JSON.parse(match[0]);
-        return validateCasesSentencesV2(raw);
-      }
-    }
-  } catch(e) { console.error("fetchCasesSentences error:", e); }
+    if (!res.ok) { setGrammarErr("http", await describeHttpError(res)); return null; }
+    const d = await res.json();
+    const text = (d.content && d.content[0] && d.content[0].text) || "";
+    const raw = parseJsonArrayLoose(text);
+    if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
+    const valid = validateCasesSentencesV2(raw, cases);
+    if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
+    return valid;
+  } catch(e) { console.error("fetchCasesSentences error:", e); setGrammarErr("network", e.message); }
   return null;
 }
 
-function validateCasesSentencesV2(sentences) {
+function validateCasesSentencesV2(sentences, cases=["acc","gen"]) {
   return sentences.filter(q => {
+    const lbl = (q && q.case_label) || "";
+    if (/Ном/i.test(lbl)) return false;
+    if (!cases.includes("acc") && /Вин/i.test(lbl)) return false;
+    if (!cases.includes("gen") && /Род/i.test(lbl)) return false;
     if (!q || !q.gr || !q.article_answer || !q.noun_form) return false;
     // must have exactly one blank in the sentence
     if ((q.gr.match(/___/g)||[]).length !== 1) return false;
@@ -4473,7 +4525,7 @@ function validateCasesSentencesV2(sentences) {
 
 async function fetchTensesSentences(words, level="A2") {
   const apiKey = await getApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) { setGrammarErr("nokey"); return null; }
   // words array always has verbs first (passed from startTenses); nouns/others are context
   const verbs = shuf(words.filter(w => w[3] === "Verbs")).slice(0, 10);
   const others = shuf(words.filter(w => w[3] !== "Verbs")).slice(0, 5);
@@ -4523,15 +4575,15 @@ Return ONLY a JSON array:
         }]
       })
     });
-    if (res.ok) {
-      const d = await res.json();
-      const match = d.content[0].text.match(/\[[\s\S]*\]/);
-      if (match) {
-        const raw = JSON.parse(match[0]);
-        return validateTensesSentences(raw);
-      }
-    }
-  } catch(e) {}
+    if (!res.ok) { setGrammarErr("http", await describeHttpError(res)); return null; }
+    const d = await res.json();
+    const text = (d.content && d.content[0] && d.content[0].text) || "";
+    const raw = parseJsonArrayLoose(text);
+    if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
+    const valid = validateTensesSentences(raw);
+    if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
+    return valid;
+  } catch(e) { console.error("fetchTensesSentences error:", e); setGrammarErr("network", e.message); }
   return null;
 }
 
@@ -4569,6 +4621,8 @@ function ArticlesTab({ mastery, rec }) {
   const [locked, setLocked] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [noNouns, setNoNouns] = useState(false);
+  const [fetchErr, setFetchErr] = useState(null);
+  const [caseTypes, setCaseTypes] = useState(["acc","gen"]); // which cases Cases mode practises // {kind, detail} — why Cases/Tenses generation failed
   const [casesLoading, setCasesLoading] = useState(false);
   const [tensesLoading, setTensesLoading] = useState(false);
   const [blankIdx, setBlankIdx] = useState(0); // which blank within cur sentence
@@ -4590,7 +4644,7 @@ function ArticlesTab({ mastery, rec }) {
 
   // toggle a topic in multiselect (for cases mode)
   function toggleTopic(t) {
-    setNoNouns(false);
+    setNoNouns(false); setFetchErr(null);
     if (t === "All") { setTopics(["All"]); return; }
     setTopics(prev => {
       const without = prev.filter(x => x !== "All");
@@ -4681,17 +4735,18 @@ function ArticlesTab({ mastery, rec }) {
     const pool = topics.includes("All")
       ? allNouns
       : allNouns.filter(w => topics.includes(w[3]));
+    setFetchErr(null);
     if (!pool.length) { setNoNouns(true); return; }
     const wantCount = parseInt(casesCnt) || 10;
-    setCasesLoading(true); setNoNouns(false);
-    let fetched = await fetchCasesSentences(pool, wantCount);
+    setCasesLoading(true); setNoNouns(false); __grammarFetchErr = null;
+    let fetched = await fetchCasesSentences(pool, wantCount, caseTypes);
     // Retry once if too few valid sentences came back
     if (fetched && fetched.length < Math.min(4, wantCount)) {
-      const extra = await fetchCasesSentences(pool, wantCount - fetched.length);
+      const extra = await fetchCasesSentences(pool, wantCount - fetched.length, caseTypes);
       if (extra) fetched = [...fetched, ...extra].slice(0, wantCount);
     }
     setCasesLoading(false);
-    if (!fetched || !fetched.length) { setNoNouns(true); return; }
+    if (!fetched || !fetched.length) { setFetchErr(__grammarFetchErr || { kind:"unknown" }); return; }
     setQs(fetched); setQi(0); setScore(0); setLocked(false); setChosen(null);
     setBlankIdx(0); setFilledBlanks([]); setPendingAdvance(false); setExplanation(null);
     setCasesStep("article"); setArticleChosen(null); setArticleLocked(false);
@@ -4704,7 +4759,7 @@ function ArticlesTab({ mastery, rec }) {
     const allVerbs = VERBS_CORE.map(v => [v[0], v[1], v[2], "Verbs"]);
     const topicWords = topic === "All" ? [] : filterWords(WORDS, topic, subtopic).filter(w => w[3] !== "Verbs");
     const pool = [...allVerbs, ...topicWords];
-    setTensesLoading(true); setNoNouns(false);
+    setTensesLoading(true); setNoNouns(false); setFetchErr(null); __grammarFetchErr = null;
     let fetched = await fetchTensesSentences(pool, langLevel);
     // Retry once if too few valid sentences came back
     if (fetched && fetched.length < 4) {
@@ -4712,7 +4767,7 @@ function ArticlesTab({ mastery, rec }) {
       if (extra) fetched = [...fetched, ...extra].slice(0, 9);
     }
     setTensesLoading(false);
-    if (!fetched || !fetched.length) { setNoNouns(true); return; }
+    if (!fetched || !fetched.length) { setFetchErr(__grammarFetchErr || { kind:"unknown" }); return; }
     const shuffled = fetched.map(q => ({
       ...q,
       blanks: (q.blanks || []).map(b => ({ ...b, options: shuf([...(b.options || [])]) }))
@@ -4870,7 +4925,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       <div style={{ display:"flex", gap:10, marginBottom:"1.2rem", opacity: (articleMap || !needsKey) ? 1 : 0.4, pointerEvents: (articleMap || !needsKey) ? "auto" : "none" }}>
         {[
           { id:"gender",  emoji:"🏷️", title:"Gender",  desc:"See a noun — pick ο / η / το" },
-          { id:"cases",   emoji:"📐", title:"Cases",   desc:"Fill in the article in a sentence (nom / gen / acc)" },
+          { id:"cases",   emoji:"📐", title:"Cases",   desc:"Fill in the article in a sentence (acc / gen)" },
           { id:"tenses",  emoji:"⏱️", title:"Tenses",  desc:"Fill in the verb — right tense & person" },
         ].map(m => (
           <div key={m.id} onClick={()=>setMode(m.id)} style={{
@@ -4920,10 +4975,31 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       {/* Cases: sentence count picker + multiselect topics */}
       {mode === "cases" && (
         <div style={{ marginBottom:"1rem" }}>
+          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Падежи:</div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
+            {[{id:"acc", label:"Accusative · Вин."},{id:"gen", label:"Genitive · Род."}].map(c => {
+              const on = caseTypes.includes(c.id);
+              return (
+                <button key={c.id} onClick={()=>{
+                  setFetchErr(null);
+                  setCaseTypes(prev => {
+                    if (prev.includes(c.id)) return prev.length > 1 ? prev.filter(x=>x!==c.id) : prev; // keep at least one
+                    return [...prev, c.id];
+                  });
+                }} style={{
+                  padding:"6px 14px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+                  border: on ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                  background: on ? "#EEEDFE" : "white",
+                  color: on ? "#3C3489" : "#555",
+                  fontSize:14, fontWeight: on ? 700 : 400, transition:"all .15s"
+                }}>{on ? "☑" : "☐"} {c.label}</button>
+              );
+            })}
+          </div>
           <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Предложений:</div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
             {["10","20","30","50","100"].map(v => (
-              <button key={v} onClick={()=>{ setCasesCnt(v); setNoNouns(false); }} style={{
+              <button key={v} onClick={()=>{ setCasesCnt(v); setNoNouns(false); setFetchErr(null); }} style={{
                 padding:"6px 14px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
                 border: casesCnt===v ? "1.5px solid #534AB7" : "0.5px solid #ddd",
                 background: casesCnt===v ? "#EEEDFE" : "white",
@@ -4958,6 +5034,28 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       {noNouns && (
         <div style={{ background:"#FFF3CD", border:"0.5px solid #BA7517", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#7A4F00", marginBottom:"1rem" }}>
           No nouns found in this selection — try a different topic.
+        </div>
+      )}
+      {fetchErr && (
+        <div style={{ background:"#FEECEB", border:"0.5px solid #E24B4A", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#8B1A19", marginBottom:"1rem" }}>
+          <div style={{ fontWeight:600, marginBottom:4 }}>
+            {fetchErr.kind === "nokey"   ? "🔑 Нет API-ключа в этом браузере"
+            : fetchErr.kind === "http"   ? "⚠️ Ошибка Claude API"
+            : fetchErr.kind === "parse"  ? "⚠️ Не удалось разобрать ответ модели"
+            : fetchErr.kind === "invalid"? "⚠️ Модель вернула некорректные предложения"
+            : fetchErr.kind === "network"? "⚠️ Сетевая ошибка"
+            : "⚠️ Не удалось сгенерировать предложения"}
+          </div>
+          {fetchErr.detail && <div style={{ fontSize:12, marginBottom:6, wordBreak:"break-word" }}>{fetchErr.detail}</div>}
+          <div style={{ fontSize:12 }}>
+            {fetchErr.kind === "nokey" ? "Ключ хранится локально в IndexedDB, на каждом устройстве свой. Добавь его — и нажми Start ещё раз."
+             : "Существительные в выбранных темах есть — проблема в генерации. Нажми Start ещё раз."}
+          </div>
+          {fetchErr.kind === "nokey" && (
+            <button onClick={()=>setShowKeyModal(true)} style={{ marginTop:8, padding:"6px 16px", borderRadius:8, border:"none", background:"#534AB7", color:"white", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              Добавить API-ключ →
+            </button>
+          )}
         </div>
       )}
 
@@ -7319,7 +7417,179 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color
   <footer>Compiled from lesson PDFs · Units 11–15 · October 2026</footer>
 </div>`;
 
+const GENDER_CHEATSHEET_HTML = `<style>
+:root{--bg:#faf9f6;--surface:#ffffff;--border:#e2ddd6;--fg:#1a1714;--muted:#6b6560;--m:#2f6fb3;--f:#c0397a;--n:#2e8b57;--rule:#f5f0e8;--rule-border:#d4c9a8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.6;padding:1rem 1rem 3rem}
+.page{max-width:860px;margin:0 auto}
+header{border-bottom:2px solid var(--border);padding-bottom:1.25rem;margin-bottom:2rem}
+.subtitle{color:var(--muted);font-size:0.85rem;letter-spacing:.05em;text-transform:uppercase;margin-bottom:0.4rem}
+h1{font-family:Georgia,serif;font-size:clamp(1.4rem,5vw,2.2rem);line-height:1.2;font-weight:700}
+.tagline{color:var(--muted);margin-top:0.4rem;font-size:0.9rem}
+h2{font-family:Georgia,serif;font-size:1.1rem;font-weight:700;margin-bottom:1rem;padding-bottom:0.4rem;border-bottom:1.5px solid var(--border)}
+.section{margin-bottom:2.5rem}
+.m{color:var(--m);font-weight:700}.f{color:var(--f);font-weight:700}.n{color:var(--n);font-weight:700}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+@media(max-width:620px){.g3{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:1rem 1.1rem}
+.card.cm{border-top:4px solid var(--m)}.card.cf{border-top:4px solid var(--f)}.card.cn{border-top:4px solid var(--n)}
+.card h3{font-family:Georgia,serif;font-size:1rem;margin-bottom:0.6rem}
+.card .row{display:flex;gap:0.6rem;font-size:0.92rem;padding:0.25rem 0;border-bottom:1px dashed var(--border)}
+.card .row:last-child{border-bottom:none}
+.card .end{font-family:Georgia,serif;font-weight:700;min-width:3.6rem}
+.card .ex{color:var(--muted);font-family:Georgia,serif}
+.rule-box{background:var(--rule);border:1.5px solid var(--rule-border);border-left:4px solid var(--m);border-radius:8px;padding:1rem 1.2rem;margin-top:1rem;font-size:0.95rem}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:0.9rem}
+th{background:var(--surface);border:1px solid var(--border);padding:0.5rem 0.7rem;text-align:left;font-weight:600;font-size:0.78rem;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+td{border:1px solid var(--border);padding:0.5rem 0.7rem;vertical-align:top}
+tr:nth-child(even) td{background:var(--surface)}
+td.gr{font-family:Georgia,serif}
+.note-box{background:var(--rule);border:1.5px solid var(--rule-border);border-left:4px solid var(--n);border-radius:8px;padding:0.9rem 1.1rem;font-size:0.88rem;margin-top:1rem}
+.note-box p+p{margin-top:0.4rem}
+.steps{display:flex;flex-direction:column;gap:0.5rem}
+.step{display:flex;gap:0.8rem;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.9rem;font-size:0.92rem}
+.step b.num{font-family:Georgia,serif;font-size:1.1rem;color:var(--m);min-width:1rem}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:0.8rem}
+</style>
+<div class="page">
+  <header>
+    <p class="subtitle">Ελληνικά · Greek Grammar</p>
+    <h1>Γένος ουσιαστικών<br><span style="font-weight:400;font-size:0.75em;color:var(--muted)">Род существительных — по окончанию</span></h1>
+    <p class="tagline">Смотри на окончание в именительном падеже ед. числа · <span class="m">ο мужской</span> · <span class="f">η женский</span> · <span class="n">το средний</span></p>
+  </header>
+
+  <section class="section">
+    <h2>1 · Главное правило</h2>
+    <div class="g3">
+      <div class="card cm"><h3><span class="m">ο</span> мужской</h3>
+        <div class="row"><span class="end m">-ος</span><span class="ex">ο δρόμος, ο φίλος</span></div>
+        <div class="row"><span class="end m">-ας</span><span class="ex">ο πατέρας, ο μήνας</span></div>
+        <div class="row"><span class="end m">-ης</span><span class="ex">ο μαθητής, ο καθρέφτης</span></div>
+        <div class="row"><span class="end m">-ές, -ούς</span><span class="ex">ο καφές, ο παππούς</span></div>
+      </div>
+      <div class="card cf"><h3><span class="f">η</span> женский</h3>
+        <div class="row"><span class="end f">-α</span><span class="ex">η κουζίνα, η μητέρα</span></div>
+        <div class="row"><span class="end f">-η</span><span class="ex">η βρύση, η πόλη</span></div>
+        <div class="row"><span class="end f">-ού</span><span class="ex">η αλεπού</span></div>
+      </div>
+      <div class="card cn"><h3><span class="n">το</span> средний</h3>
+        <div class="row"><span class="end n">-ο</span><span class="ex">το βιβλίο, το νερό</span></div>
+        <div class="row"><span class="end n">-ι</span><span class="ex">το σπίτι, το κρασί</span></div>
+        <div class="row"><span class="end n">-μα</span><span class="ex">το όνομα, το μάθημα</span></div>
+      </div>
+    </div>
+    <div class="rule-box"><strong>Коротко:</strong> <span class="m">на -ς → мужской</span>, <span class="f">на -α / -η → женский</span>, <span class="n">на -ο / -ι / -μα → средний</span>.</div>
+  </section>
+
+  <section class="section">
+    <h2>2 · Суффиксы-подсказки — почти 100%</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Суффикс</th><th>Род</th><th>Примеры</th></tr></thead>
+      <tbody>
+        <tr><td class="gr f">-ση, -ξη, -ψη</td><td class="f">η</td><td class="gr">η λύση, η τάξη, η σκέψη</td></tr>
+        <tr><td class="gr f">-ία, -εια</td><td class="f">η</td><td class="gr">η τραπεζαρία, η βοήθεια</td></tr>
+        <tr><td class="gr f">-τητα</td><td class="f">η</td><td class="gr">η ποιότητα, η ταχύτητα</td></tr>
+        <tr><td class="gr f">-ίδα, -άδα</td><td class="f">η</td><td class="gr">η ελπίδα, η εβδομάδα</td></tr>
+        <tr><td class="gr f">-τρια, -ισσα</td><td class="f">η</td><td class="gr">η μαθήτρια, η βασίλισσα</td></tr>
+        <tr><td class="gr n">-άκι</td><td class="n">το</td><td class="gr">το τραπεζάκι, το κουταλάκι</td></tr>
+        <tr><td class="gr n">-ήριο, -είο</td><td class="n">το</td><td class="gr">το πλυντήριο, το γραφείο</td></tr>
+        <tr><td class="gr n">-ικό</td><td class="n">το</td><td class="gr">το φωτιστικό, το καθιστικό</td></tr>
+        <tr><td class="gr n">-ιμο</td><td class="n">το</td><td class="gr">το τρέξιμο, το γράψιμο</td></tr>
+        <tr><td class="gr m">-τής, -ιστής</td><td class="m">ο</td><td class="gr">ο φοιτητής, ο λογιστής</td></tr>
+      </tbody></table></div>
+    <div class="note-box"><p>Уменьшительные на <strong>-άκι</strong> всегда средние, даже от мужских и женских слов: ο δρόμος → <span class="n">το</span> δρομάκι, η πόρτα → <span class="n">το</span> πορτάκι.</p></div>
+  </section>
+
+  <section class="section">
+    <h2>3 · Исключения — выучить списком</h2>
+    <div class="table-wrap"><table><tbody>
+      <tr><td class="f">-ος женские</td><td class="gr">η οδός, η είσοδος, η έξοδος, η μέθοδος, η περίοδος, η λεωφόρος, η άμμος; страны и острова: η Κύπρος, η Ρόδος</td></tr>
+      <tr><td class="n">-ος средние</td><td class="gr">το λάθος, το μέρος, το δάσος, το βάρος, το έτος — род. <b>-ους</b>, мн. <b>-η</b>: τα λάθη</td></tr>
+      <tr><td class="n">-ας средние</td><td class="gr">το κρέας, το τέρας</td></tr>
+      <tr><td class="n">-ως</td><td class="gr">το φως (свет)</td></tr>
+      <tr><td class="n">люди, но ср.</td><td class="gr">το παιδί, το κορίτσι, το αγόρι, το μωρό</td></tr>
+      <tr><td class="n">заимствования</td><td>почти всегда ср. и не склоняются: <span style="font-family:Georgia,serif">το μπαρ, το μπολ, το ασανσέρ, το ταξί, το μετρό</span></td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="section">
+    <h2>4 · Проверка по множественному</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Ед. ч.</th><th>Мн. ч.</th><th>Пример</th></tr></thead>
+      <tbody>
+        <tr><td class="gr m">ο -ος</td><td class="gr">οι -οι</td><td class="gr">οι δρόμοι</td></tr>
+        <tr><td class="gr m">ο -ας / -ης</td><td class="gr">οι -ες</td><td class="gr">οι πατέρες, οι μαθητές</td></tr>
+        <tr><td class="gr f">η -α / -η</td><td class="gr">οι -ες</td><td class="gr">οι κουζίνες, οι νίκες</td></tr>
+        <tr><td class="gr f">η -ση</td><td class="gr">οι -σεις</td><td class="gr">οι λύσεις, οι πόλεις</td></tr>
+        <tr><td class="gr n">το -ο</td><td class="gr">τα -α</td><td class="gr">τα πιάτα</td></tr>
+        <tr><td class="gr n">το -ι</td><td class="gr">τα -ια</td><td class="gr">τα σπίτια</td></tr>
+        <tr><td class="gr n">το -μα</td><td class="gr">τα -ματα</td><td class="gr">τα ονόματα</td></tr>
+        <tr><td class="gr n">το -ος</td><td class="gr">τα -η</td><td class="gr">τα λάθη</td></tr>
+      </tbody></table></div>
+    <div class="note-box"><p>Видишь <strong>τα</strong> или слово на <strong>-α</strong> во множественном — это средний род: τα ρούχα, τα πιάτα.</p></div>
+  </section>
+
+  <section class="section">
+    <h2>5 · -η или -ι? Ловушка на слух</h2>
+    <div class="table-wrap"><table><tbody>
+      <tr><td class="gr f">η βρύση</td><td>кран</td><td>жен., пишется <b>-η</b></td></tr>
+      <tr><td class="gr n">το σπίτι</td><td>дом</td><td>ср., пишется <b>-ι</b></td></tr>
+      <tr><td class="gr f">η πόλη</td><td>город</td><td>жен.</td></tr>
+      <tr><td class="gr n">το χαλί</td><td>ковёр</td><td>ср.</td></tr>
+    </tbody></table></div>
+    <div class="note-box"><p>Оба окончания звучат как [и]. На слух род подсказывает только артикль, на письме — буква: <span class="f">η → женский</span>, <span class="n">ι → средний</span>.</p></div>
+  </section>
+
+  <section class="section">
+    <h2>6 · Алгоритм (4 шага)</h2>
+    <div class="steps">
+      <div class="step"><b class="num">1</b><span>Есть суффикс из п. 2? → род известен</span></div>
+      <div class="step"><b class="num">2</b><span>Нет → по окончанию: <span class="m">-ς муж.</span>, <span class="f">-α/-η жен.</span>, <span class="n">-ο/-ι/-μα ср.</span></span></div>
+      <div class="step"><b class="num">3</b><span>Сверься с исключениями (п. 3)</span></div>
+      <div class="step"><b class="num">4</b><span>Учи слово всегда с артиклем: не «σπίτι», а «<span class="n">το</span> σπίτι»</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>7 · Не переноси род с русского</h2>
+    <div class="table-wrap"><table><tbody>
+      <tr><td class="gr f">η πόλη</td><td>город</td><td style="color:var(--muted)">в рус. муж.</td></tr>
+      <tr><td class="gr m">ο ήλιος</td><td>солнце</td><td style="color:var(--muted)">в рус. ср.</td></tr>
+      <tr><td class="gr n">το νερό</td><td>вода</td><td style="color:var(--muted)">в рус. жен.</td></tr>
+      <tr><td class="gr f">η καρδιά</td><td>сердце</td><td style="color:var(--muted)">в рус. ср.</td></tr>
+      <tr><td class="gr m">ο δρόμος</td><td>дорога, улица</td><td style="color:var(--muted)">в рус. жен.</td></tr>
+      <tr><td class="gr n">το κορίτσι</td><td>девочка</td><td style="color:var(--muted)">в рус. жен.</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="section">
+    <h2>8 · Проверь себя — слова из упр. 20</h2>
+    <div class="table-wrap"><table><tbody>
+      <tr><td class="gr f">η κουρτίνα</td><td>-α</td><td class="gr n">το γραφείο</td><td>-είο</td></tr>
+      <tr><td class="gr m">ο καθρέφτης</td><td>-ης</td><td class="gr n">το τραπεζάκι</td><td>-άκι</td></tr>
+      <tr><td class="gr f">η καρέκλα</td><td>-α</td><td class="gr n">το σαλόνι</td><td>-ι</td></tr>
+      <tr><td class="gr f">η τραπεζαρία</td><td>-ία</td><td class="gr n">το πλυντήριο</td><td>-ήριο</td></tr>
+      <tr><td class="gr f">η κρεβατοκάμαρα</td><td>-α</td><td class="gr n">το φωτιστικό</td><td>-ικό</td></tr>
+      <tr><td class="gr f">η σούπα</td><td>-α</td><td class="gr n">το παγωτό</td><td>-ο</td></tr>
+      <tr><td class="gr f">η μπύρα</td><td>-α</td><td class="gr n">το μπολ</td><td>заимств.</td></tr>
+    </tbody></table></div>
+  </section>
+  <footer>Род существительных · October 2026</footer>
+</div>`;
+
 const THEORY_RESOURCES = [
+  {
+    id: "gender-cheatsheet",
+    title: "Γένος ουσιαστικών",
+    subtitle: "Род существительных — по окончанию, суффиксы, исключения",
+    tag: "Gender",
+    color: "#2f6fb3",
+    bg: "#eef4fb",
+    border: "#b9d0ea",
+    icon: "🏷️",
+    html: GENDER_CHEATSHEET_HTML,
+  },
   {
     id: "cases-cheatsheet",
     title: "Αιτιατική & Γενική",
@@ -7758,7 +8028,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.59</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.60-1404</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
