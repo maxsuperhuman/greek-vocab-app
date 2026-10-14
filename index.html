@@ -4537,7 +4537,7 @@ const GR_FUNCTION_WORDS = new Set(("ο η το οι τα του της των τ
   "εχω εχεις εχει εχουμε εχετε εχουν ειχα ειχε " +
   "πολυ πολλα πολλοι πολλες λιγο λιγα πιο παντα ποτε ηδη ακομα ακομη μονο επισης ετσι " +
   "εδω εκει τωρα σημερα αυριο χθες χτες απογευμα βραδυ πρωι καθε ολα ολοι ολες ολο ολη αλλο αλλη αλλος αλλα " +
-  "ναι οχι καλα καλο καλη καλος πηγα πηγε πηγαμε ειδα ειδε φαγα ηπια ηρθα ηρθε ειπα ειπε").split(/\s+/));
+  "ναι οχι καλα καλο καλη καλος πηγα πηγε πηγαμε ειδα ειδε φαγα ηπια ηρθα ηρθε ειπα ειπε").split(/\s+/).map(w => w.replace(/ς/g, "σ")));
 function grNorm(x){ return (x||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/ς/g,"σ"); }
 let __knownStems = null;
 function getKnownStems() {
@@ -4708,6 +4708,141 @@ function validateCasesSentencesV2(sentences, cases=["acc","gen"]) {
   });
 }
 
+// Principal forms for every dictionary verb (hand-checked; same data as Theory → Ρήματα)
+// greek: [type, aorist 1sg, future 1sg]
+const VERB_FORMS = {"αγοράζω":["A","αγόρασα","θα αγοράσω"],"διαβάζω":["A","διάβασα","θα διαβάσω"],"αρχίζω":["A","άρχισα","θα αρχίσω"],"γνωρίζω":["A","γνώρισα","θα γνωρίσω"],"γυρίζω":["A","γύρισα","θα γυρίσω"],"τελειώνω":["A","τελείωσα","θα τελειώσω"],"αποφασίζω":["A","αποφάσισα","θα αποφασίσω"],"συνεχίζω":["A","συνέχισα","θα συνεχίσω"],"πληρώνω":["A","πλήρωσα","θα πληρώσω"],"θυμώνω":["A","θύμωσα","θα θυμώσω"],"ψωνίζω":["A","ψώνισα","θα ψωνίσω"],"ανακοινώνω":["A","ανακοίνωσα","θα ανακοινώσω"],"ανακυκλώνω":["A","ανακύκλωσα","θα ανακυκλώσω"],"βελτιώνω":["A","βελτίωσα","θα βελτιώσω"],"γεμίζω":["A","γέμισα","θα γεμίσω"],"γλυτώνω":["A","γλύτωσα","θα γλυτώσω"],"δανείζω":["A","δάνεισα","θα δανείσω"],"ενημερώνω":["A","ενημέρωσα","θα ενημερώσω"],"εξετάζω":["A","εξέτασα","θα εξετάσω"],"ετοιμάζω":["A","ετοίμασα","θα ετοιμάσω"],"καθαρίζω":["A","καθάρισα","θα καθαρίσω"],"κατορθώνω":["A","κατόρθωσα","θα κατορθώσω"],"κουράζω":["A","κούρασα","θα κουράσω"],"μεγαλώνω":["A","μεγάλωσα","θα μεγαλώσω"],"μετακομίζω":["A","μετακόμισα","θα μετακομίσω"],"μοιράζω":["A","μοίρασα","θα μοιράσω"],"ονομάζω":["A","ονόμασα","θα ονομάσω"],"οργανώνω":["A","οργάνωσα","θα οργανώσω"],"πλησιάζω":["A","πλησίασα","θα πλησιάσω"],"ποτίζω":["A","πότισα","θα ποτίσω"],"σηκώνω":["A","σήκωσα","θα σηκώσω"],"συγκεντρώνω":["A","συγκέντρωσα","θα συγκεντρώσω"],"φροντίζω":["A","φρόντισα","θα φροντίσω"],"ψηφίζω":["A","ψήφισα","θα ψηφίσω"],"αδειάζω":["A","άδειασα","θα αδειάσω"],"δοκιμάζω":["A","δοκίμασα","θα δοκιμάσω"],"ανεβάζω":["A","ανέβασα","θα ανεβάσω"],"κατεβάζω":["A","κατέβασα","θα κατεβάσω"],"μοιάζω":["A","έμοιασα","θα μοιάσω"],"εκφράζω":["A","εξέφρασα","θα εκφράσω"],"αρέσω":["A","άρεσα","θα αρέσω"],"νιώθω":["A","ένιωσα","θα νιώσω"],"χάνω":["A","έχασα","θα χάσω"],"φτάνω":["A","έφτασα","θα φτάσω"],"λύνω":["A","έλυσα","θα λύσω"],"κλείνω":["A","έκλεισα","θα κλείσω"],"σβήνω":["A","έσβησα","θα σβήσω"],"αφήνω":["A","άφησα","θα αφήσω"],"συστήνω":["A","σύστησα","θα συστήσω"],"συνδέω":["A","συνέδεσα","θα συνδέσω"],"απαγορεύω":["A","απαγόρευσα","θα απαγορεύσω"],"απογοητεύω":["A","απογοήτευσα","θα απογοητεύσω"],"ανοίγω":["A","άνοιξα","θα ανοίξω"],"αλλάζω":["A","άλλαξα","θα αλλάξω"],"δείχνω":["A","έδειξα","θα δείξω"],"διαλέγω":["A","διάλεξα","θα διαλέξω"],"επιλέγω":["A","επέλεξα","θα επιλέξω"],"ελέγχω":["A","έλεγξα","θα ελέγξω"],"κοιτάζω":["A","κοίταξα","θα κοιτάξω"],"παίζω":["A","έπαιξα","θα παίξω"],"ψάχνω":["A","έψαξα","θα ψάξω"],"τρέχω":["A","έτρεξα","θα τρέξω"],"ταιριάζω":["A","ταίριαξα","θα ταιριάξω"],"υποστηρίζω":["A","υποστήριξα","θα υποστηρίξω"],"αναπτύσσω":["A","ανέπτυξα","θα αναπτύξω"],"αντέχω":["A","άντεξα","θα αντέξω"],"προσέχω":["A","πρόσεξα","θα προσέξω"],"υπάρχω":["A","υπήρξα","θα υπάρξω"],"δουλεύω":["A","δούλεψα","θα δουλέψω"],"γράφω":["A","έγραψα","θα γράψω"],"μαγειρεύω":["A","μαγείρεψα","θα μαγειρέψω"],"ξοδεύω":["A","ξόδεψα","θα ξοδέψω"],"πιστεύω":["A","πίστεψα","θα πιστέψω"],"χορεύω":["A","χόρεψα","θα χορέψω"],"μαζεύω":["A","μάζεψα","θα μαζέψω"],"μπερδεύω":["A","μπέρδεψα","θα μπερδέψω"],"κρύβω":["A","έκρυψα","θα κρύψω"],"λείπω":["A","έλειψα","θα λείψω"],"βλάπτω":["A","έβλαψα","θα βλάψω"],"ανακαλύπτω":["A","ανακάλυψα","θα ανακαλύψω"],"διακόπτω":["A","διέκοψα","θα διακόψω"],"επιστρέφω":["A","επέστρεψα","θα επιστρέψω"],"αντιγράφω":["A","αντέγραψα","θα αντιγράψω"],"καταγράφω":["A","κατέγραψα","θα καταγράψω"],"έχω":["A","είχα","θα έχω"],"θέλω":["A","ήθελα","θα θέλω"],"ξέρω":["A","ήξερα","θα ξέρω"],"κάνω":["A","έκανα","θα κάνω"],"βλέπω":["A","είδα","θα δω"],"πίνω":["A","ήπια","θα πιω"],"μαθαίνω":["A","έμαθα","θα μάθω"],"καταλαβαίνω":["A","κατάλαβα","θα καταλάβω"],"φεύγω":["A","έφυγα","θα φύγω"],"αποφεύγω":["A","απέφυγα","θα αποφύγω"],"παίρνω":["A","πήρα","θα πάρω"],"δίνω":["A","έδωσα","θα δώσω"],"μένω":["A","έμεινα","θα μείνω"],"περιμένω":["A","περίμενα","θα περιμένω"],"βάζω":["A","έβαλα","θα βάλω"],"βρίσκω":["A","βρήκα","θα βρω"],"πλένω":["A","έπλυνα","θα πλύνω"],"φέρνω":["A","έφερα","θα φέρω"],"πηγαίνω":["A","πήγα","θα πάω"],"μπαίνω":["A","μπήκα","θα μπω"],"βγαίνω":["A","βγήκα","θα βγω"],"ανεβαίνω":["A","ανέβηκα","θα ανέβω"],"κατεβαίνω":["A","κατέβηκα","θα κατέβω"],"πεθαίνω":["A","πέθανα","θα πεθάνω"],"πετυχαίνω":["A","πέτυχα","θα πετύχω"],"τυχαίνω":["A","έτυχα","θα τύχω"],"παραλαμβάνω":["A","παρέλαβα","θα παραλάβω"],"παραγγέλνω":["A","παρήγγειλα","θα παραγγείλω"],"αποστέλλω":["A","απέστειλα","θα αποστείλω"],"προσφέρω":["A","πρόσφερα","θα προσφέρω"],"διευθύνω":["A","διηύθυνα","θα διευθύνω"],"συμμετέχω":["A","συμμετείχα","θα συμμετέχω"],"αξίζω":["A","άξιζα","θα αξίζει"],"ενδιαφέρω":["A","ενδιέφερα","θα ενδιαφέρει"],"μιλάω":["B1","μίλησα","θα μιλήσω"],"αγαπάω":["B1","αγάπησα","θα αγαπήσω"],"βοηθάω":["B1","βοήθησα","θα βοηθήσω"],"ζητάω":["B1","ζήτησα","θα ζητήσω"],"κρατάω":["B1","κράτησα","θα κρατήσω"],"ξεκινάω":["B1","ξεκίνησα","θα ξεκινήσω"],"πουλάω":["B1","πούλησα","θα πουλήσω"],"ρωτάω":["B1","ρώτησα","θα ρωτήσω"],"σταματάω":["B1","σταμάτησα","θα σταματήσω"],"συναντάω":["B1","συνάντησα","θα συναντήσω"],"τραγουδάω":["B1","τραγούδησα","θα τραγουδήσω"],"απαντάω":["B1","απάντησα","θα απαντήσω"],"προτιμάω":["B1","προτίμησα","θα προτιμήσω"],"μετράω":["B1","μέτρησα","θα μετρήσω"],"νικώ":["B1","νίκησα","θα νικήσω"],"αποκτώ":["B1","απέκτησα","θα αποκτήσω"],"κατακτώ":["B1","κατέκτησα","θα κατακτήσω"],"παρατώ":["B1","παράτησα","θα παρατήσω"],"αφορώ":["B1","—","θα αφορά"],"γελάω":["B1","γέλασα","θα γελάσω"],"ξεχνάω":["B1","ξέχασα","θα ξεχάσω"],"περνάω":["B1","πέρασα","θα περάσω"],"χαμογελάω":["B1","χαμογέλασα","θα χαμογελάσω"],"χαλάω":["B1","χάλασα","θα χαλάσω"],"πετάω":["B1","πέταξα","θα πετάξω"],"πηδώ":["B1","πήδηξα","θα πηδήξω"],"οδηγώ":["B2","οδήγησα","θα οδηγήσω"],"τηλεφωνώ":["B2","τηλεφώνησα","θα τηλεφωνήσω"],"ζω":["B2","έζησα","θα ζήσω"],"παρακολουθώ":["B2","παρακολούθησα","θα παρακολουθήσω"],"προσπαθώ":["B2","προσπάθησα","θα προσπαθήσω"],"χρησιμοποιώ":["B2","χρησιμοποίησα","θα χρησιμοποιήσω"],"κατοικώ":["B2","κατοίκησα","θα κατοικήσω"],"κατανοώ":["B2","κατανόησα","θα κατανοήσω"],"ασκώ":["B2","άσκησα","θα ασκήσω"],"διατηρώ":["B2","διατήρησα","θα διατηρήσω"],"ενοχλώ":["B2","ενόχλησα","θα ενοχλήσω"],"εξηγώ":["B2","εξήγησα","θα εξηγήσω"],"ηρεμώ":["B2","ηρέμησα","θα ηρεμήσω"],"παρατηρώ":["B2","παρατήρησα","θα παρατηρήσω"],"προειδοποιώ":["B2","προειδοποίησα","θα προειδοποιήσω"],"συμφωνώ":["B2","συμφώνησα","θα συμφωνήσω"],"ωφελώ":["B2","ωφέλησα","θα ωφελήσω"],"λειτουργώ":["B2","λειτούργησα","θα λειτουργήσω"],"μπορώ":["B2","μπόρεσα","θα μπορέσω"],"καλώ":["B2","κάλεσα","θα καλέσω"],"προσκαλώ":["B2","προσκάλεσα","θα προσκαλέσω"],"συγχωρώ":["B2","συγχώρεσα","θα συγχωρέσω"],"αρκώ":["B2","άρκεσα","θα αρκέσει"],"λέω":["AB","είπα","θα πω"],"τρώω":["AB","έφαγα","θα φάω"],"ακούω":["AB","άκουσα","θα ακούσω"],"κλαίω":["AB","έκλαψα","θα κλάψω"],"σκέφτομαι":["G1","σκέφτηκα","θα σκεφτώ"],"χρειάζομαι":["G1","χρειάστηκα","θα χρειαστώ"],"φαντάζομαι":["G1","φαντάστηκα","θα φανταστώ"],"επισκέπτομαι":["G1","επισκέφτηκα","θα επισκεφτώ"],"εμπιστεύομαι":["G1","εμπιστεύτηκα","θα εμπιστευτώ"],"αναπαύομαι":["G1","αναπαύτηκα","θα αναπαυτώ"],"βιάζομαι":["G1","βιάστηκα","θα βιαστώ"],"εργάζομαι":["G1","εργάστηκα","θα εργαστώ"],"ζαλίζομαι":["G1","ζαλίστηκα","θα ζαλιστώ"],"αντιλαμβάνομαι":["G1","αντιλήφθηκα","θα αντιληφθώ"],"ενδιαφέρομαι":["G1","ενδιαφέρθηκα","θα ενδιαφερθώ"],"συμπεριφέρομαι":["G1","συμπεριφέρθηκα","θα συμπεριφερθώ"],"έρχομαι":["G1","ήρθα","θα έρθω"],"γίνομαι":["G1","έγινα","θα γίνω"],"φαίνομαι":["G1","φάνηκα","θα φανώ"],"χαίρομαι":["G1","χάρηκα","θα χαρώ"],"κάθομαι":["G1","κάθισα","θα καθίσω"],"θυμάμαι":["G2","θυμήθηκα","θα θυμηθώ"],"φοβάμαι":["G2","φοβήθηκα","θα φοβηθώ"],"κοιμάμαι":["G2","κοιμήθηκα","θα κοιμηθώ"],"γεννιέμαι":["IEM","γεννήθηκα","θα γεννηθώ"],"βαριέμαι":["IEM","βαρέθηκα","θα βαρεθώ"],"αναρωτιέμαι":["IEM","αναρωτήθηκα","θα αναρωτηθώ"],"αρνούμαι":["OUM","αρνήθηκα","θα αρνηθώ"],"ασχολούμαι":["OUM","ασχολήθηκα","θα ασχοληθώ"],"παραιτούμαι":["OUM","παραιτήθηκα","θα παραιτηθώ"],"είμαι":["SP","ήμουν","θα είμαι"],"πάω":["SP","πήγα","θα πάω"],"καθομαι":["G1","κάθισα","θα καθίσω"]};
+
+const VT_SKIP = new Set(["αφορώ","αξίζω","ενδιαφέρω","αρκώ","αρέσω","τυχαίνω"]);
+const VT_TYPE_LABEL = { A:"Τύπος Α", B1:"Τύπος Β1", B2:"Τύπος Β2", AB:"Τύπος ΑΒ", G1:"Τύπος Γ1", G2:"Τύπος Γ2", IEM:"-ιέμαι", OUM:"-ούμαι", SP:"особый" };
+const VT_TENSES = {
+  pres: { gr:"Ενεστώτας", ru:"настоящее", en:"PRESENT (ενεστώτας)", cue:"κάθε μέρα, συνήθως, τώρα, σήμερα, πάντα" },
+  aor:  { gr:"Αόριστος", ru:"прошедшее", en:"SIMPLE PAST (αόριστος)", cue:"χτες, πέρσι, την περασμένη εβδομάδα, πριν από δύο μέρες, το 2020" },
+  fut:  { gr:"Απλός μέλλοντας", ru:"будущее", en:"SIMPLE FUTURE (θα + aorist stem)", cue:"αύριο, μεθαύριο, την επόμενη εβδομάδα, του χρόνου" },
+};
+const VT_PERSONS = ["εγώ","εσύ","αυτός / αυτή","εμείς","εσείς","αυτοί / αυτές"];
+const VT_PERSONS_EN = ["1st person singular (εγώ)","2nd person singular (εσύ)","3rd person singular (αυτός/αυτή or a named person)","1st person plural (εμείς)","2nd person plural (εσείς)","3rd person plural (αυτοί/αυτές or named people)"];
+
+// Plan which verb / tense / person each sentence practises.
+// Every tense × person combination appears once per cycle, so N ≥ 6 × tenses covers all of them.
+function planVerbSlots(verbs, tenses, n) {
+  const combos = [];
+  tenses.forEach(t => [0,1,2,3,4,5].forEach(p => combos.push({ tense:t, person:p })));
+  const slots = [];
+  let cycle = [];
+  let vq = [];
+  while (slots.length < n) {
+    if (!cycle.length) cycle = shuf([...combos]);
+    if (!vq.length) vq = shuf([...verbs]);
+    let v = vq.shift();
+    if (slots.length && slots[slots.length-1].verb[0] === v[0] && vq.length) { vq.push(v); v = vq.shift(); }
+    slots.push({ ...cycle.shift(), verb: v });
+  }
+  return slots;
+}
+
+function validateVerbSentences(raw, slots) {
+  const out = [];
+  raw.forEach((q, i) => {
+    const slot = slots[(q && Number.isInteger(q.n) ? q.n - 1 : i)];
+    if (!slot || !q || !q.gr || !q.answer) return;
+    const verb = slot.verb[0];
+    const parts = q.gr.split("___");
+    if (parts.length !== 2) return;
+    const after = parts[1];
+    const hm = after.match(/^\s*\(([^)]+)\)\s*/);
+    if (!hm || grNorm(hm[1]) !== grNorm(verb)) return;               // "(present form)" right after the blank
+    const rest = after.slice(hm[0].length).trim();
+    if (!rest || /^[.;!?]$/.test(rest)) return;                      // blank not at sentence end
+    const ans = String(q.answer).trim();
+    const opts = [...new Set((q.options || []).map(o => String(o).trim()).filter(Boolean))];
+    if (!opts.includes(ans) || opts.length < 4) return;
+    const isFut = /^θα\s/.test(ans);
+    if ((slot.tense === "fut") !== isFut) return;                     // future <=> answer starts with θα
+    if (slot.tense === "aor" && grNorm(ans) === grNorm(verb)) return;
+    const unknown = unknownWords(parts[0] + " " + rest, [verb, ans]);
+    if (unknown.length > 1) return;
+    out.push({
+      gr: q.gr, en: q.en || "",
+      blanks: [{ answer: ans, options: opts.slice(0, 6) }],
+      tense: slot.tense, person: slot.person, verb, unknown,
+    });
+  });
+  return out;
+}
+
+async function fetchVerbBatch(slots, anchors, level) {
+  const apiKey = await getApiKey();
+  if (!apiKey) { setGrammarErr("nokey"); return null; }
+  const tasks = slots.map((sl, i) => {
+    const f = VERB_FORMS[sl.verb[0]] || [];
+    const forms = f.length ? ` — forms: ${sl.verb[0]} / ${f[1]} / ${f[2]}` : "";
+    return `${i+1}. ${sl.verb[0]} (${sl.verb[2]})${forms} — TENSE: ${VT_TENSES[sl.tense].en} — PERSON: ${VT_PERSONS_EN[sl.person]}`;
+  }).join("\n");
+  const vocab = contextVocab(anchors.length ? anchors : slots.map(s => s.verb), 160, anchors);
+  const lvl = level === "A1" ? "A1: very short sentences (4–6 words)" : level === "B1" ? "B1: natural sentences (8–12 words)" : "A2: short everyday sentences (6–9 words)";
+  const prompt =
+`You are a Greek teacher writing fill-in-the-verb exercises. Write ONE sentence per task below, in the SAME order.
+
+TASKS (verb — the exact tense and grammatical person to practise):
+${tasks}
+
+RULES:
+- Exactly one blank "___" replacing the verb form, IMMEDIATELY followed by the verb's present 1st-person form in brackets: "___ (μιλάω)"
+- For the FUTURE the blank replaces "θα + verb" — the answer includes θα (e.g. "θα μιλήσουμε")
+- The sentence must make the PERSON unambiguous: always state the subject explicitly (εγώ, εσύ, αυτός, αυτή, εμείς, εσείς, αυτοί, αυτές, or a name / noun subject). The verb ending is hidden, so the subject must carry the person
+- The sentence must make the TENSE unambiguous with a time expression: present → ${VT_TENSES.pres.cue}; past → ${VT_TENSES.aor.cue}; future → ${VT_TENSES.fut.cue}
+- Use the given forms list for the aorist/future stems — do not invent stems
+- The blank is not the last word of the sentence
+- ${lvl}; apart from the task verb use ONLY words from the STUDENT VOCABULARY below plus pronouns, articles, prepositions and basic time words
+- 6 options: the correct form + 5 forms of the SAME verb: 2 in the same tense but other persons, 2 in the same person but other tenses, 1 more. Only ONE option may fit the sentence
+- English translation required
+
+STUDENT VOCABULARY: ${vocab}
+
+Return ONLY a JSON array, one object per task in order:
+[{"n":1,"gr":"Χτες εμείς ___ (μιλάω) με τη Μαρία στο τηλέφωνο.","en":"Yesterday we talked to Maria on the phone.","answer":"μιλήσαμε","options":["μιλήσαμε","μίλησα","μίλησαν","μιλάμε","θα μιλήσουμε","μιλήσατε"]}]`;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens: Math.min(8000, 600 + 260 * slots.length), messages:[{ role:"user", content: prompt }] })
+    });
+    if (!res.ok) { setGrammarErr("http", await describeHttpError(res)); return null; }
+    const d = await res.json();
+    const text = (d.content && d.content[0] && d.content[0].text) || "";
+    const raw = parseJsonArrayLoose(text);
+    if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
+    const valid = validateVerbSentences(raw, slots);
+    if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
+    return valid;
+  } catch(e) { console.error("fetchVerbBatch error:", e); setGrammarErr("network", e.message); }
+  return null;
+}
+
+// Batches of 10, 3 in parallel; tense × person slots that fail validation are re-requested (up to 2 more rounds)
+async function fetchVerbSentences(slots, anchors, level) {
+  let out = [];
+  let pending = slots;
+  for (let round = 0; round < 3 && pending.length; round++) {
+    const batches = [];
+    for (let i = 0; i < pending.length; i += 10) batches.push(pending.slice(i, i + 10));
+    const got = [];
+    for (let i = 0; i < batches.length; i += 3) {
+      const res = await Promise.all(batches.slice(i, i + 3).map(b => fetchVerbBatch(b, anchors, level)));
+      res.forEach(r => { if (r) got.push(...r); });
+      if (!got.length && !out.length && __grammarFetchErr && ["nokey","http"].includes(__grammarFetchErr.kind)) return null;
+    }
+    out = out.concat(got);
+    const done = {};
+    got.forEach(q => { const k = q.tense + q.person; done[k] = (done[k] || 0) + 1; });
+    const missing = [];
+    pending.forEach(sl => { const k = sl.tense + sl.person; if (done[k]) done[k]--; else missing.push(sl); });
+    pending = missing.map(sl => ({ ...sl, verb: slots[Math.floor(Math.random() * slots.length)].verb }));
+  }
+  if (out.length) __grammarFetchErr = null;
+  return out.length ? out : null;
+}
+
 async function fetchTensesSentences(words, level="A2") {
   const apiKey = await getApiKey();
   if (!apiKey) { setGrammarErr("nokey"); return null; }
@@ -4807,7 +4942,8 @@ function ArticlesTab({ mastery, rec }) {
   const [showDetail, setShowDetail] = useState(false);
   const [noNouns, setNoNouns] = useState(false);
   const [fetchErr, setFetchErr] = useState(null);
-  const [caseTypes, setCaseTypes] = useState(["acc","gen"]); // which cases Cases mode practises // {kind, detail} — why Cases/Tenses generation failed
+  const [caseTypes, setCaseTypes] = useState(["acc","gen"]); // which cases Cases mode practises
+  const [verbTenses, setVerbTenses] = useState(["pres","aor","fut"]); // which tenses Verbs mode practises // {kind, detail} — why Cases/Tenses generation failed
   const [casesLoading, setCasesLoading] = useState(false);
   const [tensesLoading, setTensesLoading] = useState(false);
   const [blankIdx, setBlankIdx] = useState(0); // which blank within cur sentence
@@ -4944,21 +5080,21 @@ function ArticlesTab({ mastery, rec }) {
   }
 
   async function startTenses() {
-    // Use VERBS_CORE (lesson verbs, A1-A2 level) instead of the full WORDS dict
-    // Convert VERBS_CORE [greek, tr, english, group, block] → WORDS-compatible [greek, tr, english, "Verbs"]
-    const allVerbs = VERBS_CORE.map(v => [v[0], v[1], v[2], "Verbs"]);
-    const topicWords = topic === "All" ? [] : filterWords(WORDS, topic, subtopic).filter(w => w[3] !== "Verbs");
-    const pool = [...allVerbs, ...topicWords];
+    // Verbs mode: blanks are verbs from the chosen topics (or the whole dictionary if the topics have none);
+    // other words of the chosen topics are sentence context
+    const drillable = w => w[3] === "Verbs" && VERB_FORMS[w[0]] && !VT_SKIP.has(w[0]);
+    const allVerbs = WORDS.filter(drillable);
+    const selected = topics.includes("All") ? WORDS : WORDS.filter(w => topics.includes(w[3]));
+    const topicVerbs = selected.filter(drillable);
+    const verbs = topicVerbs.length ? topicVerbs : allVerbs;
+    const anchors = topics.includes("All") ? [] : selected.filter(w => w[3] !== "Verbs");
+    const n = parseInt(casesCnt) || 10;
+    const slots = planVerbSlots(verbs, verbTenses, n);
     setTensesLoading(true); setNoNouns(false); setFetchErr(null); __grammarFetchErr = null;
-    let fetched = await fetchTensesSentences(pool, langLevel);
-    // Retry once if too few valid sentences came back
-    if (fetched && fetched.length < 4) {
-      const extra = await fetchTensesSentences(pool, langLevel);
-      if (extra) fetched = [...fetched, ...extra].slice(0, 9);
-    }
+    const fetched = await fetchVerbSentences(slots, anchors, langLevel);
     setTensesLoading(false);
     if (!fetched || !fetched.length) { setFetchErr(__grammarFetchErr || { kind:"unknown" }); return; }
-    const shuffled = fetched.map(q => ({
+    const shuffled = shuf(fetched).map(q => ({
       ...q,
       blanks: (q.blanks || []).map(b => ({ ...b, options: shuf([...(b.options || [])]) }))
     }));
@@ -5116,7 +5252,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         {[
           { id:"gender",  emoji:"🏷️", title:"Gender",  desc:"See a noun — pick ο / η / το" },
           { id:"cases",   emoji:"📐", title:"Cases",   desc:"Fill in the article in a sentence (acc / gen)" },
-          { id:"tenses",  emoji:"⏱️", title:"Tenses",  desc:"Fill in the verb — right tense & person" },
+          { id:"tenses",  emoji:"⏱️", title:"Verbs",   desc:"Fill in the verb — tense & person" },
         ].map(m => (
           <div key={m.id} onClick={()=>setMode(m.id)} style={{
             flex:1, border: mode===m.id ? "1.5px solid #534AB7" : "0.5px solid #ddd",
@@ -5162,9 +5298,33 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         </div>
       )}
 
-      {/* Cases: sentence count picker + multiselect topics */}
-      {mode === "cases" && (
+      {/* Cases & Verbs: case/tense picker + sentence count + multiselect topics */}
+      {(mode === "cases" || mode === "tenses") && (
         <div style={{ marginBottom:"1rem" }}>
+          {mode === "tenses" && (<>
+          <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Времена:</div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
+            {[{id:"pres", label:"Ενεστώτας", sub:"настоящее"},{id:"aor", label:"Αόριστος", sub:"прошедшее"},{id:"fut", label:"Απλός μέλλοντας", sub:"будущее"}].map(c => {
+              const on = verbTenses.includes(c.id);
+              return (
+                <button key={c.id} onClick={()=>{
+                  setFetchErr(null);
+                  setVerbTenses(prev => prev.includes(c.id) ? (prev.length > 1 ? prev.filter(x=>x!==c.id) : prev) : ["pres","aor","fut"].filter(x => x===c.id || prev.includes(x)));
+                }} style={{
+                  padding:"6px 14px", borderRadius:20, cursor:"pointer", fontFamily:"inherit",
+                  border: on ? "1.5px solid #534AB7" : "0.5px solid #ddd",
+                  background: on ? "#EEEDFE" : "white",
+                  color: on ? "#3C3489" : "#555",
+                  fontSize:14, fontWeight: on ? 700 : 400, transition:"all .15s"
+                }}>{on ? "☑" : "☐"} {c.label} <span style={{ fontWeight:400, fontSize:12, opacity:.75 }}>· {c.sub}</span></button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize:11, color:"#999", marginTop:-8, marginBottom:"1rem" }}>
+            6 лиц × {verbTenses.length} = {6*verbTenses.length} сочетаний — {(parseInt(casesCnt)||10) >= 6*verbTenses.length ? "все будут покрыты" : "для полного покрытия выбери ≥ " + (6*verbTenses.length) + " предложений"}
+          </div>
+          </>)}
+          {mode === "cases" && (<>
           <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Падежи:</div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
             {[{id:"acc", label:"Accusative · Вин."},{id:"gen", label:"Genitive · Род."}].map(c => {
@@ -5186,6 +5346,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
               );
             })}
           </div>
+          </>)}
           <div style={{ fontSize:12, color:"#888", fontWeight:500, marginBottom:6 }}>Предложений:</div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:"1rem" }}>
             {["10","20","30","50","100"].map(v => (
@@ -5239,6 +5400,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
           <div style={{ fontSize:12 }}>
             {fetchErr.kind === "nokey" ? "Ключ хранится локально в IndexedDB, на каждом устройстве свой. Добавь его — и нажми Start ещё раз."
              : (fetchErr.kind === "http" && /HTTP 40[13]/.test(fetchErr.detail)) ? "Сохранённый ключ отклонён Anthropic (отозван, удалён или скопирован не полностью). Создай новый ключ в console.anthropic.com → API Keys и замени его здесь."
+             : mode === "tenses" ? "Слова в выбранных темах есть — проблема в генерации. Нажми Start ещё раз."
              : "Существительные в выбранных темах есть — проблема в генерации. Нажми Start ещё раз."}
           </div>
           {(fetchErr.kind === "nokey" || (fetchErr.kind === "http" && /HTTP 40[13]/.test(fetchErr.detail))) && (
@@ -5279,7 +5441,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
       )}
 
       {/* Topic filter — only for gender and tenses, not cases (cases has its own multiselect above) */}
-      {mode !== "cases" && (
+      {mode === "gender" && (
         <div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:"0.6rem" }}>
             <span style={{ fontSize:12, color:"#888", fontWeight:500 }}>Topic:</span>
@@ -5806,59 +5968,31 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
             );
           })()}
 
-          {/* Tense cheat-sheet for Tenses mode */}
+          {/* Verbs mode: exact tense / person + principal forms of this verb */}
           {mode === "tenses" && (() => {
             const q = qs[qi];
-            if (!q) return null;
-            const answers = (q.blanks||[]).map(b=>b.answer);
-            // Common tense endings cheat-sheet
-            const TENSE_TABLE = [
-              { tense:"Наст.", eg1:"…ω",  eg2:"…εις", eg3:"…ει",  egp:"…ουμε", label:"Ενεστώτας" },
-              { tense:"Прош.", eg1:"…α",  eg2:"…ες",  eg3:"…ε",   egp:"…αμε",  label:"Αόριστος" },
-              { tense:"Имп.",  eg1:"…α",  eg2:"…ες",  eg3:"…ε",   egp:"…αμε",  label:"Παρατατικός" },
-              { tense:"Буд.",  eg1:"θα…ω",eg2:"θα…εις",eg3:"θα…ει",egp:"θα…ουμε",label:"Μέλλοντας" },
-            ];
-            const persons = ["1 ед.","2 ед.","3 ед.","1 мн."];
-            // Detect which tense row matches any answer (rough heuristic)
-            const rowHit = (row) => {
-              if (answers.some(a => a.startsWith("θα"))) return row.tense === "Буд.";
-              if (answers.some(a => /[αε]$/.test(a) && !/θα/.test(a))) return row.tense === "Прош." || row.tense === "Имп.";
-              return false;
-            };
+            if (!q || !q.verb || !q.tense) return null;
+            const f = VERB_FORMS[q.verb] || [];
+            const cols = [["pres","τώρα", q.verb], ["aor","χτες", f[1]], ["fut","αύριο", f[2]]];
             return (
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontSize:11, color:"#888", marginBottom:5, fontWeight:500, textTransform:"uppercase", letterSpacing:".05em" }}>Шпаргалка по временам</div>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding:"4px 6px", textAlign:"left", color:"#999", fontWeight:500, borderBottom:"1px solid #eee" }}>Время</th>
-                      {persons.map((p,i)=><th key={i} style={{ padding:"4px 6px", textAlign:"center", color:"#999", fontWeight:500, borderBottom:"1px solid #eee" }}>{p}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TENSE_TABLE.map((row,ri)=>{
-                      const hit = rowHit(row);
-                      const bg = ri%2===0 ? "#fafafa":"white";
-                      return (
-                        <tr key={ri} style={{ background: hit ? "#E8E6FF" : bg }}>
-                          <td style={{ padding:"5px 6px", fontSize:11, fontWeight: hit?700:500, color: hit?"#3C3489":"#666", whiteSpace:"nowrap" }}>
-                            {row.tense}<br/><span style={{ fontSize:10, color:"#aaa", fontWeight:400 }}>{row.label}</span>
-                          </td>
-                          {[row.eg1,row.eg2,row.eg3,row.egp].map((e,i)=>(
-                            <td key={i} style={{ padding:"5px 6px", textAlign:"center", color: hit?"#3C3489":"#555", fontWeight: hit?600:400, fontSize:12 }}>{e}</td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {/* Cheat-sheet link */}
-                <div style={{ marginTop:8, textAlign:"right" }}>
-                  <a href="https://www.greekgrammar.eu/pdffiles/presenttense.pdf" target="_blank" rel="noopener"
-                    style={{ fontSize:11, color:"#7F79C8", textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>
-                    📄 Таблица спряжений →
-                  </a>
+              <div style={{ background:"#faf9f6", border:"1px solid #e2ddd6", borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, alignItems:"center", marginBottom:8 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#fff", background:"#534AB7", borderRadius:6, padding:"2px 8px" }}>{VT_TENSES[q.tense].gr}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#3C3489", background:"#EEEDFE", borderRadius:6, padding:"2px 8px" }}>{VT_PERSONS[q.person]}</span>
+                  {f[0] && <span style={{ fontSize:11, color:"#6b6560", marginLeft:"auto" }}>{VT_TYPE_LABEL[f[0]] || ""}</span>}
                 </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:6 }}>
+                  {cols.map(([k, lab, form]) => {
+                    const hit = k === q.tense;
+                    return (
+                      <div key={k} style={{ borderRadius:8, padding:"6px 8px", background: hit ? "#fff3c4" : "#fff", border: hit ? "1.5px solid #c45c2e" : "1px solid #ece7e0" }}>
+                        <div style={{ fontSize:10, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", color:"#6b6560" }}>{lab}</div>
+                        <div style={{ fontFamily:"Georgia,serif", fontSize:15, fontWeight: hit ? 700 : 400, color:"#1a1714", overflowWrap:"anywhere" }}>{form || "—"}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize:11, color:"#8a8a8a", marginTop:6 }}>Формы 1-го лица ед. числа · будущее = θα + основа аориста</div>
               </div>
             );
           })()}
@@ -8531,7 +8665,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.68-1722</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.69-1745</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
