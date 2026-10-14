@@ -8111,6 +8111,37 @@ html{scroll-padding-top:52px}
  tr.sub{display:block;border:none;border-left:3px solid var(--acc);border-radius:0 6px 6px 0;background:var(--rule)!important;padding:6px 10px;margin:14px 0 8px}
  tr.sub td{padding:0;background:transparent!important;font-size:.82rem}
 }
+
+.stress{margin-bottom:.9rem;background:var(--surface);border:1.5px solid #d9c9a8;border-radius:12px;padding:0 .9rem}
+.stress[open]{padding-bottom:.8rem}
+.stress summary{list-style:none;cursor:pointer;padding:.8rem 0;font-family:Georgia,serif;font-size:1.08rem;font-weight:700;position:relative;padding-right:1.6rem}
+.stress summary::-webkit-details-marker{display:none}
+.stress summary::after{content:'›';position:absolute;right:0;top:.55rem;font-size:1.5rem;color:var(--muted);transition:transform .15s}
+.stress[open] summary::after{transform:rotate(90deg)}
+.stress summary small{display:block;font-family:'Inter',system-ui,sans-serif;font-weight:400;font-size:.8rem;color:var(--muted);margin-top:2px}
+.stress h3{font-family:Georgia,serif;font-size:1rem;margin:1.1rem 0 .45rem}
+.stress p,.stress li{font-size:.9rem;line-height:1.55}
+.stress ul{padding-left:1.1rem;margin:.3rem 0}
+.rulebox{background:var(--rule);border:1.5px solid var(--rule-border);border-left:4px solid var(--acc);border-radius:8px;padding:.7rem .9rem;margin:.5rem 0;font-size:.92rem}
+.sy{font-family:Georgia,serif;white-space:nowrap}
+.sy b{color:var(--acc)}
+.sy i{font-style:normal;color:#c9c2b8;margin:0 1px}
+.pt{margin:.6rem 0 .9rem}
+.pt-t{font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.3rem}
+table.par{min-width:0!important;width:100%}
+table.par th{text-transform:none;font-size:.75rem}
+table.par td{font-size:.92rem;white-space:nowrap}
+table.par td.pl{color:var(--muted);font-size:.8rem;font-family:'Inter',system-ui,sans-serif}
+.cmp{display:grid;grid-template-columns:1fr auto 1fr;gap:.3rem .6rem;align-items:center;font-size:.95rem;margin:.4rem 0}
+.cmp .ar{color:var(--muted);font-size:.8rem;text-align:center}
+@media (max-width:640px){
+ table.par{display:table!important}
+ table.par thead,table.par tbody{display:table-row-group!important}
+ table.par tr{display:table-row!important;border:none!important;padding:0!important;margin:0!important;background:transparent!important}
+ table.par td,table.par th{display:table-cell!important;border:1px solid var(--border)!important;padding:.3rem .4rem!important;font-size:.82rem}
+ table.par td.pl{font-size:.72rem}
+}
+
 footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.8rem}
 </style>
 <div class="page"><header><p class="subtitle">Ελληνικά · Ρήματα</p>
@@ -8123,6 +8154,35 @@ footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--border);col
 <p><span class="case c-none">—</span> нет дополнения, падеж задаёт предлог · <span class="case c-nom">Им.</span> после είμαι / γίνομαι / φαίνομαι · <span class="case c-prep">σε / από / με / για + Вин.</span> — предлоги всегда с винительным.</p>
 <p><strong>Будущее = θα + основа аориста</strong>: μίλη<b>σα</b> → θα μιλή<b>σω</b>. Выучил аорист — знаешь будущее.</p>
 </div>
+<details class="stress"><summary>🔊 Ударение и приращение ε- <small>почему έγραψα, но γράψαμε · θα γράψω без ε</small></summary>
+<div class="rulebox"><strong>Главное правило аориста:</strong> ударение всегда на <b>3-м слоге от конца</b>. Считай слоги с конца слова: раз, два, <b>три</b>.</div>
+<h3>1 · Откуда берётся ε- (приращение, αύξηση)</h3>
+<p>Если в форме аориста всего <b>2 слога</b>, третьего слога «от конца» нет. Тогда спереди добавляется <b>ε-</b>, и ударение падает на него:</p>
+<div class="cmp"><span class="sy"><b>γρά</b><i>·</i>ψα</span><span class="ar">2 слога → нужен 3-й</span><span class="sy"><b>έ</b><i>·</i>γρα<i>·</i>ψα</span></div>
+<div class="cmp"><span class="sy"><b>φύ</b><i>·</i>γα</span><span class="ar">→</span><span class="sy"><b>έ</b><i>·</i>φυ<i>·</i>γα</span></div>
+<div class="cmp"><span class="sy"><b>κά</b><i>·</i>να</span><span class="ar">→</span><span class="sy"><b>έ</b><i>·</i>κα<i>·</i>να</span></div>
+<p>Если слогов и так 3 и больше, ε- <b>не нужно</b>: <span class="sy">α<i>·</i><b>γό</b><i>·</i>ρα<i>·</i>σα</span>, <span class="sy"><b>μί</b><i>·</i>λη<i>·</i>σα</span>, <span class="sy"><b>διά</b><i>·</i>βα<i>·</i>σα</span>.</p>
+<h3>2 · «Сильные» (длинные) окончания двигают ударение</h3>
+<p>У окончаний <b>-αμε</b> и <b>-ατε</b> по два слога. Правило «3-й от конца» остаётся тем же, поэтому ударение сдвигается вправо, к концу слова. А если ударение ушло с ε-, то <b>ε- исчезает</b>, потому что оно существует только под ударением:</p>
+<div class="pt"><div class="pt-t">γράφω → аорист (2-сложная основа: ε- только под ударением)</div><div class="table-wrap"><table class="par"><tr><th></th><th>Αόριστος</th></tr><tr><td class='pl'>εγώ</td><td><span class="sy"><b>έ</b><i>·</i>γρα<i>·</i>ψα</span></td></tr><tr><td class='pl'>εσύ</td><td><span class="sy"><b>έ</b><i>·</i>γρα<i>·</i>ψες</span></td></tr><tr><td class='pl'>αυτός</td><td><span class="sy"><b>έ</b><i>·</i>γρα<i>·</i>ψε</span></td></tr><tr><td class='pl'>εμείς</td><td><span class="sy"><b>γρά</b><i>·</i>ψα<i>·</i>με</span></td></tr><tr><td class='pl'>εσείς</td><td><span class="sy"><b>γρά</b><i>·</i>ψα<i>·</i>τε</span></td></tr><tr><td class='pl'>αυτοί</td><td><span class="sy"><b>έ</b><i>·</i>γρα<i>·</i>ψαν</span></td></tr></table></div></div>
+<div class="pt"><div class="pt-t">αγοράζω · μιλάω → аорист (длинная основа: ε- не нужно, ударение «ездит»)</div><div class="table-wrap"><table class="par"><tr><th></th><th>αγοράζω</th><th>μιλάω</th></tr><tr><td class='pl'>εγώ</td><td><span class="sy">α<i>·</i><b>γό</b><i>·</i>ρα<i>·</i>σα</span></td><td><span class="sy"><b>μί</b><i>·</i>λη<i>·</i>σα</span></td></tr><tr><td class='pl'>εσύ</td><td><span class="sy">α<i>·</i><b>γό</b><i>·</i>ρα<i>·</i>σες</span></td><td><span class="sy"><b>μί</b><i>·</i>λη<i>·</i>σες</span></td></tr><tr><td class='pl'>αυτός</td><td><span class="sy">α<i>·</i><b>γό</b><i>·</i>ρα<i>·</i>σε</span></td><td><span class="sy"><b>μί</b><i>·</i>λη<i>·</i>σε</span></td></tr><tr><td class='pl'>εμείς</td><td><span class="sy">α<i>·</i>γο<i>·</i><b>ρά</b><i>·</i>σα<i>·</i>με</span></td><td><span class="sy">μι<i>·</i><b>λή</b><i>·</i>σα<i>·</i>με</span></td></tr><tr><td class='pl'>εσείς</td><td><span class="sy">α<i>·</i>γο<i>·</i><b>ρά</b><i>·</i>σα<i>·</i>τε</span></td><td><span class="sy">μι<i>·</i><b>λή</b><i>·</i>σα<i>·</i>τε</span></td></tr><tr><td class='pl'>αυτοί</td><td><span class="sy">α<i>·</i><b>γό</b><i>·</i>ρα<i>·</i>σαν</span></td><td><span class="sy"><b>μί</b><i>·</i>λη<i>·</i>σαν</span></td></tr></table></div></div>
+<p>3-е лицо мн. числа имеет и второй вариант на <b>-ανε</b>, тоже без ε-: <span class="sy"><b>γρά</b><i>·</i>ψα<i>·</i>νε</span>, <span class="sy">α<i>·</i>γο<i>·</i><b>ρά</b><i>·</i>σα<i>·</i>νε</span>.</p>
+<h3>3 · Будущее и υποτακτική: ε- нет никогда</h3>
+<p>θα / να + основа аориста <b>без приращения</b>. Ударение здесь не «ездит», а стоит на одном месте во всех лицах:</p>
+<div class="pt"><div class="pt-t">θα + основа аориста</div><div class="table-wrap"><table class="par"><tr><th></th><th>γράφω</th><th>μιλάω</th></tr><tr><td class='pl'>εγώ</td><td><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψω</span></td><td><span class="sy"><span class="tha">θα</span> μι<i>·</i><b>λή</b><i>·</i>σω</span></td></tr><tr><td class='pl'>εσύ</td><td><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψεις</span></td><td><span class="sy"><span class="tha">θα</span> μι<i>·</i><b>λή</b><i>·</i>σεις</span></td></tr><tr><td class='pl'>αυτός</td><td><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψει</span></td><td><span class="sy"><span class="tha">θα</span> μι<i>·</i><b>λή</b><i>·</i>σει</span></td></tr><tr><td class='pl'>εμείς</td><td><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψου<i>·</i>με</span></td><td><span class="sy"><span class="tha">θα</span> μι<i>·</i><b>λή</b><i>·</i>σου<i>·</i>με</span></td></tr><tr><td class='pl'>εσείς</td><td><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψε<i>·</i>τε</span></td><td><span class="sy"><span class="tha">θα</span> μι<i>·</i><b>λή</b><i>·</i>σε<i>·</i>τε</span></td></tr><tr><td class='pl'>αυτοί</td><td><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψουν</span></td><td><span class="sy"><span class="tha">θα</span> μι<i>·</i><b>λή</b><i>·</i>σουν</span></td></tr></table></div></div>
+<div class="cmp"><span class="sy"><b>έ</b><i>·</i>γρα<i>·</i>ψα</span><span class="ar">χτες · αύριο</span><span class="sy"><span class="tha">θα</span> <b>γρά</b><i>·</i>ψω</span></div>
+<h3>4 · Особые случаи приращения</h3><ul>
+<li><b>ή- вместо έ-</b> у нескольких частых глаголов: <span class="sy"><b>ή</b><i>·</i>θε<i>·</i>λα</span> (θέλω), <span class="sy"><b>ή</b><i>·</i>ξε<i>·</i>ρα</span> (ξέρω), <span class="sy"><b>ή</b><i>·</i>πια</span> (πίνω). Во мн. числе ή- тоже уходит: <span class="sy"><b>θέ</b><i>·</i>λα<i>·</i>με</span>, <span class="sy"><b>ξέ</b><i>·</i>ρα<i>·</i>με</span>, но <span class="sy"><b>ή</b><i>·</i>πια<i>·</i>με</span> сохраняет.</li>
+<li><b>Неправильные</b> держат свою первую гласную во всех лицах: <span class="sy"><b>εί</b><i>·</i>χα</span> → <span class="sy"><b>εί</b><i>·</i>χα<i>·</i>με</span>, <span class="sy"><b>εί</b><i>·</i>δα</span> → <span class="sy"><b>εί</b><i>·</i>δα<i>·</i>με</span>, <span class="sy"><b>εί</b><i>·</i>πα</span> → <span class="sy"><b>εί</b><i>·</i>πα<i>·</i>με</span>.</li>
+<li><b>Внутреннее приращение</b> у «книжных» глаголов с приставкой: ε- встаёт после приставки: <span class="sy">ε<i>·</i><b>πέ</b><i>·</i>στρε<i>·</i>ψα</span> (επιστρέφω), <span class="sy">ε<i>·</i><b>ξέ</b><i>·</i>φρα<i>·</i>σα</span> (εκφράζω), <span class="sy">δι<i>·</i><b>έ</b><i>·</i>κο<i>·</i>ψα</span> (διακόπτω), <span class="sy">α<i>·</i><b>πέ</b><i>·</i>κτη<i>·</i>σα</span> (αποκτώ), <span class="sy">πα<i>·</i><b>ρήγ</b><i>·</i>γει<i>·</i>λα</span> (παραγγέλνω).</li>
+<li>В <b>повелительном</b> приращения тоже нет: <span class="sy"><b>γρά</b><i>·</i>ψε</span>, <span class="sy"><b>γρά</b><i>·</i>ψτε</span>.</li></ul>
+<h3>5 · Ударение в настоящем времени</h3><ul>
+<li><b>Τύπος Α</b>: ударение стоит на месте: <span class="sy"><b>γρά</b><i>·</i>φω</span>, <span class="sy"><b>γρά</b><i>·</i>φου<i>·</i>με</span>, <span class="sy"><b>γρά</b><i>·</i>φουν</span>.</li>
+<li><b>Β1 / Β2</b>: ударение на окончании: <span class="sy">μι<i>·</i><b>λά</b><i>·</i>ω</span>, <span class="sy">μι<i>·</i><b>λάς</b></span>, <span class="sy">μι<i>·</i><b>λά</b><i>·</i>με</span> · <span class="sy">μπο<i>·</i><b>ρώ</b></span>, <span class="sy">μπο<i>·</i><b>ρεί</b><i>·</i>τε</span>.</li>
+<li><b>Γ1 / Γ2</b>: то же правило 3-го слога. Длинные окончания -όμαστε, -όσαστε, -ούνται тянут ударение вправо: <span class="sy"><b>έρ</b><i>·</i>χο<i>·</i>μαι</span> → <span class="sy">ερ<i>·</i><b>χό</b><i>·</i>μα<i>·</i>στε</span> · <span class="sy">θυ<i>·</i><b>μά</b><i>·</i>μαι</span> → <span class="sy">θυ<i>·</i><b>μό</b><i>·</i>μα<i>·</i>στε</span>, <span class="sy">θυ<i>·</i><b>μού</b><i>·</i>νται</span>.</li></ul>
+<div class="pt"><div class="pt-t">Аорист на -θηκα (Γ1/Γ2): тоже 3-й слог от конца</div><div class="table-wrap"><table class="par"><tr><th></th><th>γεννιέμαι</th></tr><tr><td class='pl'>εγώ</td><td><span class="sy">γεν<i>·</i><b>νή</b><i>·</i>θη<i>·</i>κα</span></td></tr><tr><td class='pl'>εσύ</td><td><span class="sy">γεν<i>·</i><b>νή</b><i>·</i>θη<i>·</i>κες</span></td></tr><tr><td class='pl'>αυτός</td><td><span class="sy">γεν<i>·</i><b>νή</b><i>·</i>θη<i>·</i>κε</span></td></tr><tr><td class='pl'>εμείς</td><td><span class="sy">γεν<i>·</i>νη<i>·</i><b>θή</b><i>·</i>κα<i>·</i>με</span></td></tr><tr><td class='pl'>εσείς</td><td><span class="sy">γεν<i>·</i>νη<i>·</i><b>θή</b><i>·</i>κα<i>·</i>τε</span></td></tr><tr><td class='pl'>αυτοί</td><td><span class="sy">γεν<i>·</i><b>νή</b><i>·</i>θη<i>·</i>καν</span></td></tr></table></div></div>
+<div class="rulebox" style="border-left-color:var(--n,#2e8b57)"><strong>Как проверить себя:</strong> аорист → считай 3 слога с конца. Если не хватает, добавь ε-. Если окончание длинное (-αμε, -ατε, -ήκαμε), ударение сдвигается, и ε- пропадает. В будущем (θα) ε- никогда нет.</div>
+</details>
 <p class="hint" style="margin:0 0 .6rem">Нажми на группу, чтобы раскрыть список глаголов.</p>
 <details class="grp" id="g-A"><summary><h2>Τύπος Α <span class="cnt">118</span> <span class="what">-ω, ударение на основе</span><span class="unit">Ενότητα 2</span></h2></summary>
 <div class="para">γράφω · γράφεις · γράφει · γράφουμε · γράφετε · γράφουν(ε)</div>
@@ -8857,7 +8917,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.73-1905</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.74-1935</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
