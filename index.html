@@ -4840,29 +4840,41 @@ function CaseRefTable({ answer, caseLabel, gender, nounBase }) {
           </tbody>
         </table>
       </div>
-      {ni >= 0 && (
-        <div style={{ marginTop:10 }}>
-          <div style={{ fontSize:11, color:"#6b6560", fontWeight:600, letterSpacing:".05em", textTransform:"uppercase", marginBottom:6 }}>
-            Окончания · тип «{CR_NOUNS[ni].t}»{nounBase ? <span style={{ textTransform:"none", fontWeight:400 }}> — как {nounBase}</span> : null}
-          </div>
-          <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr>
-                {["Им. ед.","Род. ед.","Вин. ед.","Им. мн.","Род. мн.","Вин. мн."].map((h,i)=>
-                  <th key={i} style={{ ...th, color: CR_COLORS[CR_COLKEYS[i]] }}>{h}</th>)}
-              </tr></thead>
-              <tbody><tr>
-                {CR_NOUNS[ni].f.map(([stem,end],i) => {
-                  const c = CR_COLORS[CR_COLKEYS[i]]; const hit = i===nounCol;
-                  return <td key={i} style={{ ...td, fontSize:13, background: hit ? "#fff3c4" : "#fff", outline: hit ? "2px solid "+c : "none" }}>
-                    <span style={{ color:"#9a948e" }}>{stem}</span><span style={{ color:c, fontWeight:700 }}>{end}</span>
-                  </td>;
-                })}
-              </tr></tbody>
-            </table>
-          </div>
+      <div style={{ marginTop:10 }}>
+        <div style={{ fontSize:11, color:"#6b6560", fontWeight:600, letterSpacing:".05em", textTransform:"uppercase", marginBottom:6 }}>
+          Окончания · все типы{ni >= 0 && nounBase ? <span style={{ textTransform:"none", fontWeight:400 }}> — {nounBase} = «{CR_NOUNS[ni].t}»</span> : null}
         </div>
-      )}
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr>
+              <th style={{ ...th, padding:"4px 3px" }}>Тип</th>
+              {["Им.ед","Род.ед","Вин.ед","Им.мн","Род.мн","Вин.мн"].map((h,i)=>
+                <th key={i} style={{ ...th, padding:"4px 2px", fontSize:9.5, letterSpacing:0, color: CR_COLORS[CR_COLKEYS[i]], background: i===nounCol ? "#fff3c4" : "#fff" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {CR_NOUNS.map((row, ri) => {
+                const mine = ri === ni;
+                const gBg = row.g==="м" ? "#f3f6fb" : row.g==="ж" ? "#fbf3f6" : "#f4f8f3";
+                const ex = row.f[0][0].replace(/^(ο|η|το)\s+/, "") + row.f[0][1];
+                return (
+                  <tr key={ri} style={{ outline: mine ? "2px solid #534AB7" : "none" }}>
+                    <td title={ex} style={{ ...td, padding:"4px 4px", fontFamily:"inherit", fontSize:11, textAlign:"left", background: mine ? "#EEEDFE" : gBg, fontWeight: mine ? 800 : 600, color: mine ? "#3C3489" : "#555" }}>
+                      {row.t}
+                    </td>
+                    {row.f.map(([stem, end], i) => {
+                      const c = CR_COLORS[CR_COLKEYS[i]]; const hit = mine && i===nounCol;
+                      return <td key={i} style={{ ...td, padding:"4px 2px", fontSize:12, background: hit ? "#fff3c4" : mine ? "#faf9ff" : "#fff", outline: hit ? "2px solid "+c : "none" }}>
+                        {mine ? <><span style={{ color:"#9a948e" }}>{stem.replace(/^(ο|η|το|του|της|τον|τη|οι|των|τους|τις|τα)\s+/, "")}</span><span style={{ color:c, fontWeight:700 }}>{end}</span></>
+                              : <span style={{ color:c, fontWeight:600 }}>-{end}</span>}
+                      </td>;
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4916,6 +4928,23 @@ function planCaseSlots(nouns, cases, n, articleOf) {
   return slots;
 }
 
+// Does a declined noun form fit gender (ο/η/το) + case + number? Ending-based, accent-insensitive (ς→σ).
+// Catches e.g. "των αστρολογίας" (article plural, noun still singular).
+function caseFormFits(form, gender, cs, num) {
+  const f = grNorm(String(form || "").trim().split(/\s+/).pop());
+  if (!f) return false;
+  if (cs === "gen" && num === "pl") return /ων$/.test(f);                       // every gender: -ων / -ών
+  if (/ων$/.test(f)) return false;                                               // -ων is only genitive plural
+  if (cs === "gen") return gender === "ο" ? /(ου|α|η|ε)$/.test(f)               // φίλου, άντρα, μαθητή
+                         : gender === "η" ? /σ$/.test(f)                         // γυναίκας, φίλης, πόλης
+                         : /(ου|οσ|ουσ)$/.test(f);                               // βιβλίου, παιδιού, μαθήματος, λάθους
+  if (num === "pl") return gender === "το" ? (/(α|η)$/.test(f) && (!/μα$/.test(f) || /ματα$/.test(f)))
+                                           : /(ουσ|εσ|εισ|αδεσ|ηδεσ)$/.test(f);
+  // accusative singular
+  return gender === "το" ? !/ματα$/.test(f) && !/(ια|εσ|ουσ)$/.test(f)
+                         : !/σ$/.test(f);
+}
+
 function validateCaseSlots(raw, slots) {
   const out = [];
   raw.forEach((q, i) => {
@@ -4925,6 +4954,9 @@ function validateCaseSlots(raw, slots) {
     if (grNorm(q.noun_base || "") !== grNorm(slot.noun[0])) return;     // the requested noun
     const allowed = CS_ARTICLE[slot.gender][slot.cs][slot.num];
     if (!allowed.includes(String(q.article_answer).trim())) return;      // article matches gender + case + number
+    if (!caseFormFits(q.noun_form, slot.gender, slot.cs, slot.num)) return; // noun form matches case + number too
+    const opts = (q.noun_form_options || []).map(o => grNorm(o));
+    if (new Set(opts).size !== opts.length) return;                       // no duplicate answer options
     const unknown = unknownWords(q.gr, [q.noun_form, q.noun_base]);
     if (unknown.length > 1) return;
     out.push({ ...q, case_label: CS_LABEL[slot.cs][slot.num], gender: slot.gender==="ο"?"м":slot.gender==="η"?"ж":"ср",
@@ -4951,7 +4983,8 @@ RULES:
 - Replace the article directly before the focus noun with ___ (blank). The answer is that plain article (use the one given in the task)
 - Do NOT put the preposition σε before the focus noun (it would merge with the article: στον/στη…). Use direct objects, possession ("X of Y"), or από / για / με + article
 - Accusative: e.g. object of a verb (βλέπω ___ φίλους μου) or after από/για/με. Genitive: possession or "X of Y" (το σπίτι ___ γιαγιάς, τα παιχνίδια ___ παιδιών)
-- PLURAL tasks must use the plural form of the noun (and plural article)
+- PLURAL tasks must use the plural form of the noun (and plural article); SINGULAR tasks the singular form. Article and noun must agree: των + -ων form (των φίλων), never των + a singular form
+- If a noun sounds odd in the plural (abstract or mass nouns), still write a natural plural sentence or rephrase — never leave the noun singular
 - The focus noun appears right after the blank, in its declined form
 - Short everyday sentences (5–9 words), A2 level. Apart from the focus noun use ONLY words from the STUDENT VOCABULARY below plus pronouns, articles, prepositions and basic adverbs
 - The blank is not the last word of the sentence
@@ -9309,7 +9342,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.78-2228</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.79-0015</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
