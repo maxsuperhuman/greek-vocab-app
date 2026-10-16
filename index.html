@@ -4773,14 +4773,17 @@ const CR_ARTICLES = [
 ];
 // [type, stem/endings per column: nomSg, genSg, accSg, nomPl, genPl, accPl]
 const CR_NOUNS = [
-  { t:"м. -ος", g:"м", re:/ος$/,  f:[["ο φίλ","ος"],["του φίλ","ου"],["τον φίλ","ο"],["οι φίλ","οι"],["των φίλ","ων"],["τους φίλ","ους"]] },
-  { t:"м. -ας", g:"м", re:/ας$/,  f:[["ο άντρ","ας"],["του άντρ","α"],["τον άντρ","α"],["οι άντρ","ες"],["των αντρ","ών"],["τους άντρ","ες"]] },
-  { t:"м. -ης", g:"м", re:/ης$/,  f:[["ο μαθητ","ής"],["του μαθητ","ή"],["τον μαθητ","ή"],["οι μαθητ","ές"],["των μαθητ","ών"],["τους μαθητ","ές"]] },
+  { t:"м. -ος", g:"м", re:/οσ$/,  f:[["ο φίλ","ος"],["του φίλ","ου"],["τον φίλ","ο"],["οι φίλ","οι"],["των φίλ","ων"],["τους φίλ","ους"]] },
+  { t:"м. -ας", g:"м", re:/ασ$/,  f:[["ο άντρ","ας"],["του άντρ","α"],["τον άντρ","α"],["οι άντρ","ες"],["των αντρ","ών"],["τους άντρ","ες"]] },
+  { t:"м. -ης", g:"м", re:/ησ$/,  f:[["ο μαθητ","ής"],["του μαθητ","ή"],["τον μαθητ","ή"],["οι μαθητ","ές"],["των μαθητ","ών"],["τους μαθητ","ές"]] },
   { t:"ж. -α",  g:"ж", re:/α$/,   f:[["η γυναίκ","α"],["της γυναίκ","ας"],["τη γυναίκ","α"],["οι γυναίκ","ες"],["των γυναικ","ών"],["τις γυναίκ","ες"]] },
+  { t:"м. -έας", g:"м", re:/εασ$/, p:1, f:[["ο γραμματ","έας"],["του γραμματ","έα"],["τον γραμματ","έα"],["οι γραμματ","είς"],["των γραμματ","έων"],["τους γραμματ","είς"]] },
+  { t:"ж. -ση/-ξη", g:"ж", re:/(ση|ξη|ψη|^πολη)$/, p:1, f:[["η πόλ","η"],["της πόλ","ης"],["τη πόλ","η"],["οι πόλ","εις"],["των πόλ","εων"],["τις πόλ","εις"]] },
   { t:"ж. -η",  g:"ж", re:/η$/,   f:[["η φίλ","η"],["της φίλ","ης"],["τη φίλ","η"],["οι φίλ","ες"],["των φίλ","ων"],["τις φίλ","ες"]] },
   { t:"ср. -ο", g:"ср", re:/ο$/,  f:[["το βιβλί","ο"],["του βιβλί","ου"],["το βιβλί","ο"],["τα βιβλί","α"],["των βιβλί","ων"],["τα βιβλί","α"]] },
   { t:"ср. -ι", g:"ср", re:/ι$/,  f:[["το παιδ","ί"],["του παιδ","ιού"],["το παιδ","ί"],["τα παιδ","ιά"],["των παιδ","ιών"],["τα παιδ","ιά"]] },
-  { t:"ср. -μα",g:"ср", re:/μα$/, f:[["το μάθη","μα"],["του μαθή","ματος"],["το μάθη","μα"],["τα μαθή","ματα"],["των μαθη","μάτων"],["τα μαθή","ματα"]] },
+  { t:"ср. -ος", g:"ср", re:/οσ$/, f:[["το λάθ","ος"],["του λάθ","ους"],["το λάθ","ος"],["τα λάθ","η"],["των λαθ","ών"],["τα λάθ","η"]] },
+  { t:"ср. -μα",g:"ср", re:/μα$/, p:1, f:[["το μάθη","μα"],["του μαθή","ματος"],["το μάθη","μα"],["τα μαθή","ματα"],["των μαθη","μάτων"],["τα μαθή","ματα"]] },
 ];
 const CR_COLKEYS = ["nom","gen","acc","nom","gen","acc"];
 function crStripAccents(x){ return (x||"").normalize("NFD").replace(/[̀-ͯ]/g,""); }
@@ -4791,11 +4794,11 @@ function crInfo(caseLabel, gender, nounBase) {
   const art = ((nounBase||"").match(/^(ο|η|το)\s/)||[])[1];
   const g = gender || (art==="ο"?"м":art==="η"?"ж":art==="το"?"ср":null);
   const gi = g==="м"?0 : g==="ж"?1 : g==="ср"?2 : null;
-  const word = crStripAccents((nounBase||"").replace(/^(ο|η|το)\s+/,"").trim());
+  const word = crStripAccents((nounBase||"").replace(/^(ο|η|το)\s+/,"").trim()).replace(/ς$/,"σ");
   let ni = -1;
   if (word) {
     // -μα before -α; only rows of the same gender (so neuter -ος / feminine -ος don't land on "м. -ος")
-    const order = [7,0,1,2,3,4,5,6];
+    const order = CR_NOUNS.map((r,i)=>i).sort((a,b)=>(CR_NOUNS[b].p||0)-(CR_NOUNS[a].p||0));
     for (const i of order) { const r = CR_NOUNS[i]; if ((!g || r.g===g) && r.re.test(word)) { ni = i; break; } }
   }
   return { ck, pl, gi, ni };
@@ -4945,6 +4948,29 @@ function caseFormFits(form, gender, cs, num) {
                          : !/σ$/.test(f);
 }
 
+// Prepositions that take the ACCUSATIVE — a genitive article right after them is always wrong ("από των …")
+const CS_ACC_PREPS = new Set(["απο","για","με","σε","χωρισ","μεχρι","προσ","μετα","πριν","κατα","παρα","ωσ","σαν","αντι","εκτοσ","δια"]);
+function wordBeforeBlank(gr) {
+  const toks = String(gr || "").split(/\s+/);
+  const i = toks.findIndex(t => t.includes("___"));
+  if (i <= 0) return "";
+  return grNorm(toks[i - 1].replace(/[.,;:!?«»"'·()]/g, ""));
+}
+// Case must be justified: genitive = possession ("X of Y") or λόγω/εξαιτίας; accusative = object of a verb or after a preposition
+function caseGovernorOk(q, cs) {
+  const prev = wordBeforeBlank(q.gr);
+  const gov = q.governor || {};
+  const type = String(gov.type || "").toLowerCase();
+  if (cs === "gen") {
+    if (CS_ACC_PREPS.has(prev)) return false;                             // από / για / με … + genitive
+    if (type && !["possession", "preposition_gen"].includes(type)) return false;
+    if (type === "preposition_gen" && !/^(λογω|εξαιτιασ|κατα τη διαρκεια|εναντιον|υπερ)$/.test(grNorm(gov.word || ""))) return false;
+  } else {
+    if (type === "possession") return false;                              // "X of Y" needs the genitive
+  }
+  return true;
+}
+
 function validateCaseSlots(raw, slots) {
   const out = [];
   raw.forEach((q, i) => {
@@ -4955,6 +4981,7 @@ function validateCaseSlots(raw, slots) {
     const allowed = CS_ARTICLE[slot.gender][slot.cs][slot.num];
     if (!allowed.includes(String(q.article_answer).trim())) return;      // article matches gender + case + number
     if (!caseFormFits(q.noun_form, slot.gender, slot.cs, slot.num)) return; // noun form matches case + number too
+    if (!caseGovernorOk(q, slot.cs)) return;                              // the case is actually required here
     const opts = (q.noun_form_options || []).map(o => grNorm(o));
     if (new Set(opts).size !== opts.length) return;                       // no duplicate answer options
     const unknown = unknownWords(q.gr, [q.noun_form, q.noun_base]);
@@ -4981,8 +5008,10 @@ ${tasks}
 
 RULES:
 - Replace the article directly before the focus noun with ___ (blank). The answer is that plain article (use the one given in the task)
-- Do NOT put the preposition σε before the focus noun (it would merge with the article: στον/στη…). Use direct objects, possession ("X of Y"), or από / για / με + article
-- Accusative: e.g. object of a verb (βλέπω ___ φίλους μου) or after από/για/με. Genitive: possession or "X of Y" (το σπίτι ___ γιαγιάς, τα παιχνίδια ___ παιδιών)
+- Do NOT put the preposition σε before the focus noun (it would merge with the article: στον/στη…)
+- ACCUSATIVE tasks: the blank is the direct object of a verb (Βλέπω ___ φίλους μου) or follows από / για / με / χωρίς (Ζητάω βοήθεια από ___ γραμματείς)
+- GENITIVE tasks: ONLY possession / "X of Y" — the blank comes RIGHT AFTER another noun that owns it (το σπίτι ___ γιαγιάς, η βοήθεια ___ γραμματέων). NEVER put a genitive after a preposition: από / για / με / σε / χωρίς / μέχρι / μετά / πριν always take the ACCUSATIVE (από τους, not από των)
+- Before writing each sentence, check: which word requires this case? Report it in "governor"
 - PLURAL tasks must use the plural form of the noun (and plural article); SINGULAR tasks the singular form. Article and noun must agree: των + -ων form (των φίλων), never των + a singular form
 - If a noun sounds odd in the plural (abstract or mass nouns), still write a natural plural sentence or rephrase — never leave the noun singular
 - The focus noun appears right after the blank, in its declined form
@@ -4993,7 +5022,9 @@ RULES:
 STUDENT VOCABULARY: ${vocab}
 
 Return ONLY a JSON array, one object per task in order:
-[{"n":1,"gr":"Τα παιχνίδια ___ παιδιών είναι στο σαλόνι.","en":"The children's toys are in the living room.","noun_base":"το παιδί","noun_form":"παιδιών","noun_form_options":["παιδιών","παιδιά","παιδιού","παιδί"],"article_answer":"των","article_options":["των","τα","του","το"],"case_label":"Род. мн.","gender":"ср"}]
+[{"n":1,"gr":"Τα παιχνίδια ___ παιδιών είναι στο σαλόνι.","en":"The children's toys are in the living room.","noun_base":"το παιδί","noun_form":"παιδιών","noun_form_options":["παιδιών","παιδιά","παιδιού","παιδί"],"article_answer":"των","article_options":["των","τα","του","το"],"case_label":"Род. мн.","gender":"ср","governor":{"word":"παιχνίδια","type":"possession"}}]
+
+- governor: the word that requires the case. type = "possession" (genitive after a noun), "verb" (accusative object), "preposition" (accusative after από/για/με…), or "preposition_gen" (only λόγω / εξαιτίας + genitive)
 
 - noun_form_options: correct form + 3 other case/number forms of the SAME noun
 - article_options: correct article + 3 plausible wrong ones (other case / number of the same gender)`;
@@ -9342,7 +9373,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.79-0015</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.80-0018</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
