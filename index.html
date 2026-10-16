@@ -4957,6 +4957,17 @@ function wordBeforeBlank(gr) {
   return grNorm(toks[i - 1].replace(/[.,;:!?«»"'·()]/g, ""));
 }
 // Case must be justified: genitive = possession ("X of Y") or λόγω/εξαιτίας; accusative = object of a verb or after a preposition
+// Stems of all dictionary nouns — the "owner" word before a genitive blank must be one of them
+let __csNounStems = null;
+function csNounStems() {
+  if (__csNounStems) return __csNounStems;
+  __csNounStems = WORDS.filter(w => /^(ο|η|το)\s/.test(w[0])).map(w => {
+    const b = grNorm(w[0].replace(/^(ο|η|το)\s+/, "").split(/\s+/).pop());
+    return b.length > 4 ? b.slice(0, b.length - 2) : b.slice(0, Math.max(3, b.length - 1));
+  }).filter(x => x.length >= 3);
+  return __csNounStems;
+}
+const CS_NOT_OWNERS = new Set(["δυο","δυο","τρια","τρεισ","τεσσερα","τεσσερισ","πεντε","εξι","επτα","εφτα","οχτω","οκτω","εννεα","εννια","δεκα","πολλοι","πολλα","πολλεσ","λιγοι","λιγα","λιγεσ","μερικοι","μερικα","μερικεσ","ολοι","ολα","ολεσ","και","η"]);
 function caseGovernorOk(q, cs) {
   const prev = wordBeforeBlank(q.gr);
   const gov = q.governor || {};
@@ -4965,6 +4976,11 @@ function caseGovernorOk(q, cs) {
     if (CS_ACC_PREPS.has(prev)) return false;                             // από / για / με … + genitive
     if (type && !["possession", "preposition_gen"].includes(type)) return false;
     if (type === "preposition_gen" && !/^(λογω|εξαιτιασ|κατα τη διαρκεια|εναντιον|υπερ)$/.test(grNorm(gov.word || ""))) return false;
+    if (/^(λογω|εξαιτιασ|διαρκεια|εναντιον|υπερ)$/.test(prev)) return true;
+    // possession: the word right before the blank must be the owner noun (not a numeral, verb, quantifier…)
+    if (CS_NOT_OWNERS.has(prev)) return false;                            // "δύο των υδραυλικών" ✗
+    if (gov.word && grNorm(String(gov.word).split(/\s+/).pop()) !== prev) return false;
+    if (!csNounStems().some(st => prev.startsWith(st))) return false;     // not a known noun → probably a verb
   } else {
     if (type === "possession") return false;                              // "X of Y" needs the genitive
   }
@@ -5010,7 +5026,7 @@ RULES:
 - Replace the article directly before the focus noun with ___ (blank). The answer is that plain article (use the one given in the task)
 - Do NOT put the preposition σε before the focus noun (it would merge with the article: στον/στη…)
 - ACCUSATIVE tasks: the blank is the direct object of a verb (Βλέπω ___ φίλους μου) or follows από / για / με / χωρίς (Ζητάω βοήθεια από ___ γραμματείς)
-- GENITIVE tasks: ONLY possession / "X of Y" — the blank comes RIGHT AFTER another noun that owns it (το σπίτι ___ γιαγιάς, η βοήθεια ___ γραμματέων). NEVER put a genitive after a preposition: από / για / με / σε / χωρίς / μέχρι / μετά / πριν always take the ACCUSATIVE (από τους, not από των)
+- GENITIVE tasks: ONLY possession / "X of Y" — the blank comes RIGHT AFTER another noun (from the vocabulary) that owns it; never after a verb or a number (Καλώ δύο υδραυλικούς is accusative, no genitive) (το σπίτι ___ γιαγιάς, η βοήθεια ___ γραμματέων). NEVER put a genitive after a preposition: από / για / με / σε / χωρίς / μέχρι / μετά / πριν always take the ACCUSATIVE (από τους, not από των)
 - Before writing each sentence, check: which word requires this case? Report it in "governor"
 - PLURAL tasks must use the plural form of the noun (and plural article); SINGULAR tasks the singular form. Article and noun must agree: των + -ων form (των φίλων), never των + a singular form
 - If a noun sounds odd in the plural (abstract or mass nouns), still write a natural plural sentence or rephrase — never leave the noun singular
@@ -9373,7 +9389,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.80-0018</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.81-0020</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
