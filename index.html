@@ -4808,7 +4808,7 @@ function CaseRefTable({ answer, caseLabel, gender, nounBase }) {
   const exactCol = (gi!==null) ? (pl ? gi+3 : gi) : null;
   const ans = (answer||"").trim();
   const isHit = (rowK, ci, val) => {
-    if (exactCol!==null && ck) return rowK===ck && ci===exactCol;
+    if (exactCol!==null && ck) return rowK===(/^στ/.test(ans) ? "se" : ck) && ci===exactCol;
     const v = val.replace("(ν)","");
     return ans && (val===ans || v===ans || v+"ν"===ans);
   };
@@ -4911,6 +4911,9 @@ const CS_ARTICLE = {
   "η":  { acc:{ sg:["την","τη"], pl:["τις"] },  gen:{ sg:["της"], pl:["των"] } },
   "το": { acc:{ sg:["το"],       pl:["τα"] },   gen:{ sg:["του"], pl:["των"] } },
 };
+// σε + accusative article merge into one word — the blank may stand for the merged form
+const CS_SE_FORM = { "τον":"στον", "την":"στην", "τη":"στη", "το":"στο", "τους":"στους", "τις":"στις", "τα":"στα" };
+const CS_SE_ALL = ["στον","στην","στο","στους","στις","στα"];
 const CS_LABEL = { acc:{ sg:"Вин. ед.", pl:"Вин. мн." }, gen:{ sg:"Род. ед.", pl:"Род. мн." } };
 
 // Each case × number combination appears once per cycle; nouns rotate ο → η → το so genders stay balanced
@@ -4972,6 +4975,7 @@ const CS_ARTICLE_WORDS = new Set(["ο","η","το","οι","τα","του","τη�
 function caseGovernorOk(q, cs) {
   const prev = wordBeforeBlank(q.gr);
   if (CS_ARTICLE_WORDS.has(prev)) return false;                          // "στις ___ ακρόπολη" — double article
+  if (prev === "σε" || prev === "σ") return false;                       // "σε ___": σε must be merged into the blank (στον, στην…)
   const gov = q.governor || {};
   const type = String(gov.type || "").toLowerCase();
   if (cs === "gen") {
@@ -4985,6 +4989,7 @@ function caseGovernorOk(q, cs) {
     if (!csNounStems().some(st => prev.startsWith(st))) return false;     // not a known noun → probably a verb
   } else {
     if (type === "possession") return false;                              // "X of Y" needs the genitive
+    if (String(q.article_answer || "").trim().startsWith("στ") && !["preposition","verb"].includes(type || "preposition")) return false;
   }
   return true;
 }
@@ -4996,8 +5001,16 @@ function validateCaseSlots(raw, slots) {
     if (!slot || !q || q.skip) return;                                   // model: unnatural in this number → refilled with another noun
     if (!validateCasesSentencesV2([q], [slot.cs]).length) return;       // format checks (one blank, options, …)
     if (grNorm(q.noun_base || "") !== grNorm(slot.noun[0])) return;     // the requested noun
-    const allowed = CS_ARTICLE[slot.gender][slot.cs][slot.num];
-    if (!allowed.includes(String(q.article_answer).trim())) return;      // article matches gender + case + number
+    const plain = CS_ARTICLE[slot.gender][slot.cs][slot.num];
+    const allowed = slot.cs === "acc" ? [...plain, ...plain.map(a => CS_SE_FORM[a])] : plain;
+    const ans = String(q.article_answer).trim();
+    if (!allowed.includes(ans)) return;                                   // article matches gender + case + number
+    const isSe = ans.startsWith("στ");
+    if (isSe) {
+      // options are rebuilt in code: the answer + 3 other σε-forms (στην/στη count as one)
+      const same = a => a === ans || (["στη","στην"].includes(a) && ["στη","στην"].includes(ans));
+      q = { ...q, article_options: shuf([ans, ...shuf(CS_SE_ALL.filter(a => !same(a))).slice(0, 3)]) };
+    } else if ((q.article_options || []).some(a => String(a).startsWith("στ"))) return; // mixed plain / σε options
     if (!caseFormFits(q.noun_form, slot.gender, slot.cs, slot.num)) return; // noun form matches case + number too
     if (!caseGovernorOk(q, slot.cs)) return;                              // the case is actually required here
     const opts = (q.noun_form_options || []).map(o => grNorm(o));
@@ -5015,7 +5028,7 @@ async function fetchCaseSlotBatch(slots, anchors) {
   if (!apiKey) { setGrammarErr("nokey"); return null; }
   const CASE_EN = { acc:"ACCUSATIVE", gen:"GENITIVE" };
   const tasks = slots.map((sl, i) =>
-    `${i+1}. ${sl.noun[0]} (${sl.noun[2]}) — CASE: ${CASE_EN[sl.cs]} — NUMBER: ${sl.num === "pl" ? "PLURAL" : "SINGULAR"} — article: ${CS_ARTICLE[sl.gender][sl.cs][sl.num].join(" / ")}`
+    `${i+1}. ${sl.noun[0]} (${sl.noun[2]}) — CASE: ${CASE_EN[sl.cs]} — NUMBER: ${sl.num === "pl" ? "PLURAL" : "SINGULAR"} — article: ${CS_ARTICLE[sl.gender][sl.cs][sl.num].join(" / ")}${sl.cs === "acc" ? " (or merged with σε: " + CS_ARTICLE[sl.gender][sl.cs][sl.num].map(a => CS_SE_FORM[a]).join(" / ") + ")" : ""}`
   ).join("\n");
   const vocab = contextVocab(slots.map(s => s.noun), 180, anchors);
   const prompt =
@@ -5026,8 +5039,8 @@ ${tasks}
 
 RULES:
 - Replace the article directly before the focus noun with ___ (blank). The answer is that plain article (use the one given in the task)
-- Do NOT put the preposition σε before the focus noun (it would merge with the article: στον/στη…)
-- ACCUSATIVE tasks: the blank is the direct object of a verb (Βλέπω ___ φίλους μου) or follows από / για / με / χωρίς (Ζητάω βοήθεια από ___ γραμματείς)
+- PREPOSITION σε (ACCUSATIVE only): σε merges with the article (σε+τον=στον, σε+την=στην, σε+το=στο, σε+τους=στους, σε+τις=στις, σε+τα=στα). Then the BLANK replaces the whole merged word: "Πάω ___ σχολείο." → article_answer "στο", article_options ["στο","στον","στην","στα"]. Never write σε / στις / στο etc. before the blank. Use σε in about a third of the ACCUSATIVE tasks where natural (places, directions, times: πάω, μένω, δουλεύω, είμαι + σε)
+- ACCUSATIVE tasks: the blank is the direct object of a verb (Βλέπω ___ φίλους μου), follows από / για / με / χωρίς (Ζητάω βοήθεια από ___ γραμματείς), or is a merged σε-form (Μένω ___ Αθήνα → στην)
 - GENITIVE tasks: ONLY possession / "X of Y" — the blank comes RIGHT AFTER another noun (from the vocabulary) that owns it; never after a verb or a number (Καλώ δύο υδραυλικούς is accusative, no genitive) (το σπίτι ___ γιαγιάς, η βοήθεια ___ γραμματέων). NEVER put a genitive after a preposition: από / για / με / σε / χωρίς / μέχρι / μετά / πριν always take the ACCUSATIVE (από τους, not από των)
 - Before writing each sentence, check: which word requires this case? Report it in "governor"
 - The word right before the blank is NEVER an article or στον/στη/στις/στα… (the blank IS the article)
@@ -9400,7 +9413,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.82-1344</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.83-1348</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
