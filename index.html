@@ -4968,8 +4968,10 @@ function csNounStems() {
   return __csNounStems;
 }
 const CS_NOT_OWNERS = new Set(["δυο","δυο","τρια","τρεισ","τεσσερα","τεσσερισ","πεντε","εξι","επτα","εφτα","οχτω","οκτω","εννεα","εννια","δεκα","πολλοι","πολλα","πολλεσ","λιγοι","λιγα","λιγεσ","μερικοι","μερικα","μερικεσ","ολοι","ολα","ολεσ","και","η"]);
+const CS_ARTICLE_WORDS = new Set(["ο","η","το","οι","τα","του","τησ","των","τον","την","τη","τουσ","τισ","στον","στη","στην","στο","στουσ","στισ","στα","στου","στησ","ενα","εναν","μια","μιασ","ενοσ"]);
 function caseGovernorOk(q, cs) {
   const prev = wordBeforeBlank(q.gr);
+  if (CS_ARTICLE_WORDS.has(prev)) return false;                          // "στις ___ ακρόπολη" — double article
   const gov = q.governor || {};
   const type = String(gov.type || "").toLowerCase();
   if (cs === "gen") {
@@ -4991,7 +4993,7 @@ function validateCaseSlots(raw, slots) {
   const out = [];
   raw.forEach((q, i) => {
     const slot = slots[(q && Number.isInteger(q.n) ? q.n - 1 : i)];
-    if (!slot || !q) return;
+    if (!slot || !q || q.skip) return;                                   // model: unnatural in this number → refilled with another noun
     if (!validateCasesSentencesV2([q], [slot.cs]).length) return;       // format checks (one blank, options, …)
     if (grNorm(q.noun_base || "") !== grNorm(slot.noun[0])) return;     // the requested noun
     const allowed = CS_ARTICLE[slot.gender][slot.cs][slot.num];
@@ -5028,6 +5030,9 @@ RULES:
 - ACCUSATIVE tasks: the blank is the direct object of a verb (Βλέπω ___ φίλους μου) or follows από / για / με / χωρίς (Ζητάω βοήθεια από ___ γραμματείς)
 - GENITIVE tasks: ONLY possession / "X of Y" — the blank comes RIGHT AFTER another noun (from the vocabulary) that owns it; never after a verb or a number (Καλώ δύο υδραυλικούς is accusative, no genitive) (το σπίτι ___ γιαγιάς, η βοήθεια ___ γραμματέων). NEVER put a genitive after a preposition: από / για / με / σε / χωρίς / μέχρι / μετά / πριν always take the ACCUSATIVE (από τους, not από των)
 - Before writing each sentence, check: which word requires this case? Report it in "governor"
+- The word right before the blank is NEVER an article or στον/στη/στις/στα… (the blank IS the article)
+- The sentence must sound natural in the requested NUMBER. If the noun is unnatural in that number (unique things like η Ακρόπολη, mass / abstract nouns, body parts normally singular such as η κοιλιά), do not force it — return {"n":<task>,"skip":true} for that task
+- The English translation must show the number clearly (singular vs plural noun in English)
 - PLURAL tasks must use the plural form of the noun (and plural article); SINGULAR tasks the singular form. Article and noun must agree: των + -ων form (των φίλων), never των + a singular form
 - If a noun sounds odd in the plural (abstract or mass nouns), still write a natural plural sentence or rephrase — never leave the noun singular
 - The focus noun appears right after the blank, in its declined form
@@ -5066,7 +5071,7 @@ Return ONLY a JSON array, one object per task in order:
 async function fetchCaseSentencesPlanned(slots, anchors, nounsByGender) {
   let out = [];
   let pending = slots;
-  for (let round = 0; round < 3 && pending.length; round++) {
+  for (let round = 0; round < 4 && pending.length; round++) {
     const batches = [];
     for (let i = 0; i < pending.length; i += 10) batches.push(pending.slice(i, i + 10));
     const got = [];
@@ -5423,7 +5428,7 @@ Return ONLY a JSON array, one object per task in order:
 async function fetchVerbSentences(slots, anchors, level) {
   let out = [];
   let pending = slots;
-  for (let round = 0; round < 3 && pending.length; round++) {
+  for (let round = 0; round < 4 && pending.length; round++) {
     const batches = [];
     for (let i = 0; i < pending.length; i += 10) batches.push(pending.slice(i, i + 10));
     const got = [];
@@ -6302,6 +6307,12 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
             {beforeBlank}{blankDisplay}{afterNode}
           </div>
           <div style={{ fontSize:13, color:"#aaa", fontStyle:"italic", marginTop:6 }}>{cur.en}</div>
+          {cur.num && !bothDone && (
+            <div style={{ display:"inline-block", fontSize:11.5, fontWeight:600, marginTop:8, padding:"3px 10px", borderRadius:10,
+              background: cur.num==="pl" ? "#FFF3E0" : "#EEF6FF", color: cur.num==="pl" ? "#9A5B00" : "#2E5E8E" }}>
+              {cur.num==="pl" ? "👥 множественное число" : "👤 единственное число"}
+            </div>
+          )}
           {cur.case_label && bothDone && (
             <div style={{ fontSize:11, color:"#9D96D8", marginTop:4 }}>{cur.case_label} · {cur.gender==="м"?"муж.":cur.gender==="ж"?"жен.":"ср."}</div>
           )}
@@ -9389,7 +9400,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.81-0020</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.82-1344</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
