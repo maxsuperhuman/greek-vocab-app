@@ -378,8 +378,10 @@ const WORDS = [
   ["προηγούμενος", "proigúmenos", "previous", "Time", "Time Expressions"],
   ["φέτος", "fétos", "this year", "Time", "Time Expressions"],
   ["ημερήσιος", "imerísios", "daily", "Time", "Days & Weeks"],
+  ["το Σαββατοκύριακο", "savvatokíriako", "weekend", "Time", "Days & Weeks"],
   ["η συνέχεια", "sinéchia", "continuation", "Time", "Time Expressions"],
   ["κανονικά", "kanoniká", "normally", "Time", "Time Expressions"],
+  ["απόψε", "apópse", "tonight, this evening", "Time", "Time Expressions"],
   ["ο Αύγουστος", "Ávgustos", "August", "Time", "Months & Seasons"],
   ["ο Σεπτέμβριος", "Septémvrios", "September", "Time", "Months & Seasons"],
   // Connectors
@@ -703,6 +705,7 @@ const WORDS = [
   ["πράσινος", "prásinos", "green", "Adjectives", "Other"],
   ["ανοιχτός", "anichtós", "open", "Adjectives", "Other"],
   ["κλειστός", "klistós", "closed", "Adjectives", "Other"],
+  ["πολύς", "polís", "much, many (πολύς, πολλή, πολύ)", "Adjectives", "Other"],
   ["το βάθος", "váthos", "depth", "Adjectives", "Size & Shape"],
   // Verbs
   ["είμαι", "íme", "I am / to be", "Verbs", "State"],
@@ -1085,6 +1088,7 @@ const WORDS = [
   ["ο ημιώροφος", "imiórofos", "mezzanine floor", "Home", "Rooms"],
   ["το πάτωμα", "pátoma", "floor", "Home", "Rooms"],
   ["η γκαρσονιέρα", "garsoniéra", "studio flat", "Home", "Rooms"],
+  ["η κουζίνα", "kuzína", "kitchen", "Home", "Rooms"],
   ["το γκάζι", "gázi", "gas", "Home", "Household"],
   ["το κουδούνι", "kudúni", "doorbell", "Home", "Household"],
   ["το σαμπουάν", "sambuán", "shampoo", "Home", "Household"],
@@ -1345,6 +1349,7 @@ const WORDS = [
   ["η ζωή", "zoí", "life", "Society", "Community"],
   ["ο άνθρωπος", "ánthropos", "person, human", "Society", "People & Groups"],
   ["το γεγονός", "yegonós", "event, fact", "Society", "Events"],
+  ["το πάρτι", "párti", "party", "Society", "Events"],
   ["το πρόβλημα", "próvlima", "problem", "Society", "Community"],
   ["ο κόσμος", "kózmos", "world, people", "Society", "People & Groups"],
   ["το άτομο", "átomo", "person", "Society", "People & Groups"],
@@ -9432,7 +9437,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.85-0051</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.86-0106</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
