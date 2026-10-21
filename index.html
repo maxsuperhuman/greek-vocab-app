@@ -469,6 +469,7 @@ const WORDS = [
   ["στην αρχή", "stin archí", "at first, in the beginning", "Connectors", "Time & Order"],
   ["στο τέλος", "sto télos", "in the end, at the end", "Connectors", "Time & Order"],
   ["αργά", "argá", "late; slowly", "Connectors", "Time & Order"],
+  ["έπειτα", "épita", "then, afterwards (= μετά)", "Connectors", "Time & Order"],
   ["μαζί", "mazí", "together (μαζί με = with)", "Connectors", "Place"],
   ["έξω", "éxo", "outside (έξω από)", "Connectors", "Place"],
   ["μέσα", "mésa", "inside (μέσα σε)", "Connectors", "Place"],
@@ -527,6 +528,7 @@ const WORDS = [
   ["οποιοσδήποτε", "opiozdípote", "anyone (at all), any", "Connectors", "Indefinites"],
   ["οτιδήποτε", "otidípote", "anything (at all)", "Connectors", "Indefinites"],
   ["οπουδήποτε", "opudípote", "anywhere (at all)", "Connectors", "Indefinites"],
+  ["εκείνος", "ekínos", "that (one) — εκείνος, -η, -ο", "Connectors", "Indefinites"],
   ["ίσως", "ísos", "maybe, perhaps", "Connectors", "Discourse"],
   ["φυσικά", "fisiká", "of course", "Connectors", "Discourse"],
   ["σίγουρα", "sígura", "certainly, surely", "Connectors", "Discourse"],
@@ -695,8 +697,12 @@ const WORDS = [
   ["μοναδικός", "monadikós", "unique", "Adjectives", "Quality & Value"],
   ["μοντέρνος", "mondérnos", "modern", "Adjectives", "Quality & Value"],
   ["υπέροχος", "ipérochos", "wonderful, superb (υπέροχα = wonderfully)", "Adjectives", "Quality & Value"],
+  ["υψηλός", "ipsilós", "high (prices, level) — formal for ψηλός", "Adjectives", "Quality & Value"],
+  ["κύριος", "kírios", "main, principal (η κύρια είσοδος)", "Adjectives", "Quality & Value"],
   ["μπλε", "ble", "blue", "Adjectives", "Other"],
   ["πράσινος", "prásinos", "green", "Adjectives", "Other"],
+  ["ανοιχτός", "anichtós", "open", "Adjectives", "Other"],
+  ["κλειστός", "klistós", "closed", "Adjectives", "Other"],
   ["το βάθος", "váthos", "depth", "Adjectives", "Size & Shape"],
   // Verbs
   ["είμαι", "íme", "I am / to be", "Verbs", "State"],
@@ -862,6 +868,7 @@ const WORDS = [
   ["αφορώ", "aforó", "I concern / relate to", "Verbs", "State"],
   ["βλάπτω", "vlápto", "I harm", "Verbs", "Social"],
   ["ενδιαφέρω", "endiaféro", "I interest", "Verbs", "Emotions"],
+  ["ελπίζω", "elpízo", "hope (ελπίζω να… = I hope that…)", "Verbs", "Emotions"],
   ["κατακτώ", "katactó", "I conquer / achieve", "Verbs", "Work"],
   ["λειτουργώ", "liturgó", "I function / work", "Verbs", "State"],
   ["μαζεύω", "mazévo", "I collect / gather", "Verbs", "Everyday"],
@@ -906,6 +913,7 @@ const WORDS = [
   ["συγκρίνω", "singríno", "compare", "Verbs", "Mind"],
   ["χάνομαι", "chánome", "get lost", "Verbs", "Movement"],
   ["χαιρετώ", "cheretó", "greet", "Verbs", "Social"],
+  ["γράφομαι", "gráfome", "enrol, sign up (γράφτηκα σε μαθήματα); be written", "Verbs", "Social"],
   // Subjects
   ["η ιστορία", "istoría", "history", "Subjects", "Academic"],
   ["η γεωγραφία", "yeografía", "geography", "Subjects", "Academic"],
@@ -938,6 +946,11 @@ const WORDS = [
   ["τα γαλλικά", "galliká", "French (language)", "Subjects", "Languages & Culture"],
   ["τα ιταλικά", "italiká", "Italian (language)", "Subjects", "Languages & Culture"],
   ["τα ρωσικά", "rosiká", "Russian (language)", "Subjects", "Languages & Culture"],
+  ["τα ελληνικά", "elliniká", "Greek (language)", "Subjects", "Languages & Culture"],
+  ["τα αγγλικά", "angliká", "English (language)", "Subjects", "Languages & Culture"],
+  ["τα γερμανικά", "yermaniká", "German (language)", "Subjects", "Languages & Culture"],
+  ["τα ισπανικά", "ispaniká", "Spanish (language)", "Subjects", "Languages & Culture"],
+  ["τα τουρκικά", "turkiká", "Turkish (language)", "Subjects", "Languages & Culture"],
   // Alphabet
   ["η άλφα", "álfa", "alpha (Α)", "Alphabet", "Letters"],
   ["η βήτα", "víta", "beta (Β)", "Alphabet", "Letters"],
@@ -1020,7 +1033,7 @@ const WORDS = [
   ["ο καναπές", "kanapés", "sofa", "Home", "Furniture & Objects"],
   ["η καρέκλα", "karékla", "chair", "Home", "Furniture & Objects"],
   ["το ψυγείο", "psigío", "fridge", "Home", "Furniture & Objects"],
-  ["ο φούρνος", "fúrnos", "oven", "Home", "Furniture & Objects"],
+  ["ο φούρνος", "fúrnos", "oven; bakery", "Home", "Furniture & Objects"],
   ["το πλυντήριο", "plintírio", "washing machine", "Home", "Furniture & Objects"],
   ["η τηλεόραση", "tileórasi", "television", "Home", "Furniture & Objects"],
   ["η λάμπα", "lámpa", "lamp", "Home", "Furniture & Objects"],
@@ -1070,6 +1083,8 @@ const WORDS = [
   ["η κατσαρόλα", "katsaróla", "saucepan", "Home", "Furniture & Objects"],
   ["η πολυθρόνα", "polithróna", "armchair", "Home", "Furniture & Objects"],
   ["ο ημιώροφος", "imiórofos", "mezzanine floor", "Home", "Rooms"],
+  ["το πάτωμα", "pátoma", "floor", "Home", "Rooms"],
+  ["η γκαρσονιέρα", "garsoniéra", "studio flat", "Home", "Rooms"],
   ["το γκάζι", "gázi", "gas", "Home", "Household"],
   ["το κουδούνι", "kudúni", "doorbell", "Home", "Household"],
   ["το σαμπουάν", "sambuán", "shampoo", "Home", "Household"],
@@ -1186,6 +1201,7 @@ const WORDS = [
   ["η ιδέα", "idéa", "idea", "Education", "Study"],
   ["η ερώτηση", "erótisi", "question", "Education", "Study"],
   ["οι σπουδές", "spudés", "studies", "Education", "School & University"],
+  ["το πτυχίο", "ptichío", "university degree, diploma (παίρνω πτυχίο = graduate)", "Education", "School & University"],
   ["η απάντηση", "apándisi", "answer", "Education", "Study"],
   ["η μαθήτρια", "mathítria", "pupil (f.)", "Education", "People"],
   ["η πρόταση", "prótasi", "sentence; proposal", "Education", "Study"],
@@ -1339,6 +1355,8 @@ const WORDS = [
   ["τα σύνορα", "sínora", "border", "Society", "Politics & Law"],
   ["η Ελληνίδα", "Ellinída", "Greek woman", "Society", "People & Groups"],
   ["ο Έλληνας", "Éllinas", "Greek man", "Society", "People & Groups"],
+  ["η παρέα", "paréa", "company, group of friends (κάνω παρέα = hang out)", "Society", "People & Groups"],
+  ["ο γείτονας", "yítonas", "neighbour", "Society", "People & Groups"],
   ["η αλήθεια", "alíthia", "truth", "Society", "Community"],
   ["η βασίλισσα", "vasílissa", "queen", "Society", "Politics & Law"],
   ["η συμβουλή", "simvulí", "advice", "Society", "Community"],
@@ -9414,7 +9432,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.84-2042</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.85-0051</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
