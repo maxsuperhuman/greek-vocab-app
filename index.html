@@ -390,6 +390,7 @@ const WORDS = [
   ["κανονικά", "kanoniká", "normally", "Time", "Time Expressions"],
   ["απόψε", "apópse", "tonight, this evening", "Time", "Time Expressions"],
   ["αυριανός", "avrianós", "tomorrow's", "Time", "Time Expressions"],
+  ["η φορά", "forá", "time, occasion (πρώτη φορά, δύο φορές)", "Time", "Time Expressions"],
   ["ο Αύγουστος", "Ávgustos", "August", "Time", "Months & Seasons"],
   ["ο Σεπτέμβριος", "Septémvrios", "September", "Time", "Months & Seasons"],
   // Connectors
@@ -892,6 +893,7 @@ const WORDS = [
   ["ενδιαφέρω", "endiaféro", "I interest", "Verbs", "Emotions"],
   ["ελπίζω", "elpízo", "hope (ελπίζω να… = I hope that…)", "Verbs", "Emotions"],
   ["στενοχωριέμαι", "stenochoriéme", "get upset (στενοχωρήθηκα)", "Verbs", "Emotions"],
+  ["ανησυχώ", "anisichó", "worry (Μην ανησυχείς = don't worry)", "Verbs", "Emotions"],
   ["κατακτώ", "katactó", "I conquer / achieve", "Verbs", "Work"],
   ["λειτουργώ", "liturgó", "I function / work", "Verbs", "State"],
   ["μαζεύω", "mazévo", "I collect / gather", "Verbs", "Everyday"],
@@ -939,6 +941,7 @@ const WORDS = [
   ["χάνομαι", "chánome", "get lost", "Verbs", "Movement"],
   ["χαιρετώ", "cheretó", "greet", "Verbs", "Social"],
   ["γράφομαι", "gráfome", "enrol, sign up (γράφτηκα σε μαθήματα); be written", "Verbs", "Social"],
+  ["λέγομαι", "légome", "be called (Πώς λέγεσαι; = What's your name?)", "Verbs", "Social"],
   // Subjects
   ["η ιστορία", "istoría", "history", "Subjects", "Academic"],
   ["η γεωγραφία", "yeografía", "geography", "Subjects", "Academic"],
@@ -9577,7 +9580,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.87-1310</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.87-1407</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
