@@ -1596,6 +1596,292 @@ const WORDS = [
   ["η σελίδα", "selída", "page", "Instructions", "Exercise words"],
   ["το τεστ", "test", "test", "Instructions", "Exam"],
   ["η ανάγνωση", "anágnosi", "reading", "Instructions", "Exam"],
+  // v1.89 — Must-have A1–A2 vocabulary + Reading Practice words
+  ["οι άνθρωποι", "ánthropi", "people", "Society", "People & Groups"],
+  ["η ταυτότητα", "taftótita", "ID card", "Society", "Community"],
+  ["η εθνικότητα", "ethnikótita", "nationality", "Society", "People & Groups"],
+  ["η γνωριμία", "gnorimía", "acquaintance; getting to know", "Society", "Community"],
+  ["ο επισκέπτης", "episképtis", "visitor, guest", "Society", "People & Groups"],
+  ["η επίσκεψη", "epískepsi", "visit", "Society", "Events"],
+  ["ο χαρακτήρας", "charaktíras", "character", "Emotions", "Expressions"],
+  ["ο μπαμπάς", "bambás", "dad", "Family", "Immediate Family"],
+  ["τα αδέλφια", "adélfia", "siblings", "Family", "Immediate Family"],
+  ["ο εγγονός", "engonós", "grandson", "Family", "Extended Family"],
+  ["η εγγονή", "engoní", "granddaughter", "Family", "Extended Family"],
+  ["ο ξάδερφος", "xáderfos", "cousin (m)", "Family", "Extended Family"],
+  ["η ξαδέρφη", "xadérfi", "cousin (f)", "Family", "Extended Family"],
+  ["ο ανιψιός", "anipsiós", "nephew", "Family", "Extended Family"],
+  ["η ανιψιά", "anipsiá", "niece", "Family", "Extended Family"],
+  ["ο γάμος", "gámos", "wedding; marriage", "Family", "Relationships"],
+  ["ο κουμπάρος", "kumbáros", "best man; godfather", "Family", "Relationships"],
+  ["η κουμπάρα", "kumbára", "maid of honour; godmother", "Family", "Relationships"],
+  ["η χήρα", "chíra", "widow", "Family", "Relationships"],
+  ["ο χήρος", "chíros", "widower", "Family", "Relationships"],
+  ["ο εργαζόμενος", "ergazómenos", "employee, worker", "Work", "Workplace"],
+  ["η υπερωρία", "iperoría", "overtime", "Work", "Workplace"],
+  ["το ρεπό", "repó", "day off (from work)", "Work", "Workplace"],
+  ["ο άνεργος", "ánergos", "unemployed (m)", "Work", "Workplace"],
+  ["η ανεργία", "aneryía", "unemployment", "Work", "Business"],
+  ["η αίτηση", "étisi", "application (form)", "Work", "Business"],
+  ["η σύμβαση", "símvasi", "contract", "Work", "Business"],
+  ["ο αστυνομικός", "astinomikós", "police officer", "Work", "Professions"],
+  ["ο φωτογράφος", "fotográfos", "photographer", "Work", "Professions"],
+  ["ο κομμωτής", "kommotís", "hairdresser (m)", "Work", "Professions"],
+  ["η κομμώτρια", "kommótria", "hairdresser (f)", "Work", "Professions"],
+  ["ο λογιστής", "loyistís", "accountant (m)", "Work", "Professions"],
+  ["η λογίστρια", "loyístria", "accountant (f)", "Work", "Professions"],
+  ["ο ταχυδρόμος", "tachidrómos", "postman", "Work", "Professions"],
+  ["ο αγρότης", "agrótis", "farmer", "Work", "Professions"],
+  ["ο ψαράς", "psarás", "fisherman", "Work", "Professions"],
+  ["ο γυμναστής", "gimnastís", "PE teacher; coach (m)", "Work", "Professions"],
+  ["η γυμνάστρια", "gimnástria", "PE teacher; coach (f)", "Work", "Professions"],
+  ["ο νοσηλευτής", "nosileftís", "nurse (m)", "Work", "Professions"],
+  ["η νοσηλεύτρια", "nosiléftria", "nurse (f)", "Work", "Professions"],
+  ["η απεργία", "aperyía", "strike", "Work", "Business"],
+  ["η επιχείρηση", "epichírisi", "business, company", "Work", "Business"],
+  ["η συνδρομή", "sindromí", "subscription, membership", "Work", "Business"],
+  ["η τουαλέτα", "tualéta", "toilet", "Home", "Rooms"],
+  ["το τραπέζι", "trapézi", "table", "Home", "Furniture & Objects"],
+  ["το φως", "fos", "light", "Home", "Household"],
+  ["το κλιματιστικό", "klimatistikó", "air conditioner", "Home", "Furniture & Objects"],
+  ["το τζάκι", "tzáki", "fireplace", "Home", "Furniture & Objects"],
+  ["το σαπούνι", "sapúni", "soap", "Home", "Household"],
+  ["η κούτα", "kúta", "cardboard box", "Home", "Household"],
+  ["το ταχυφαγείο", "tachifayío", "fast-food place", "Food", "Places to Eat"],
+  ["η λαϊκή", "laikí", "street market", "Shopping", "Shops"],
+  ["το ζαχαροπλαστείο", "zacharoplastío", "patisserie", "Shopping", "Shops"],
+  ["το μανάβικο", "manáviko", "greengrocer's", "Shopping", "Shops"],
+  ["το κομμωτήριο", "kommotírio", "hair salon", "City", "Places"],
+  ["το γήπεδο", "yípedo", "stadium; sports ground", "Sports", "Equipment & Places"],
+  ["το συνεργείο", "sineryío", "car repair shop", "City", "Transport & Services"],
+  ["η απόσταση", "apóstasi", "distance", "City", "Directions"],
+  ["το χιλιόμετρο", "chiliómetro", "kilometre", "Numbers", "Time & Quantity"],
+  ["το δημαρχείο", "dimarchío", "town hall", "City", "Buildings"],
+  ["το υπουργείο", "ipuryío", "ministry", "City", "Buildings"],
+  ["ο ταχυδρομικός κώδικας", "tachidromikós kódikas", "postcode", "City", "Transport & Services"],
+  ["η ιστοσελίδα", "istoselída", "website", "Technology", "Internet & Software"],
+  ["το προφίλ", "profíl", "profile", "Technology", "Internet & Software"],
+  ["το γεύμα", "yévma", "meal", "Food", "Dishes"],
+  ["η μαρμελάδα", "marmeláda", "jam", "Food", "Bread & Dairy"],
+  ["ο κιμάς", "kimás", "minced meat", "Food", "Meat & Fish"],
+  ["η πιπεριά", "piperiá", "pepper (vegetable)", "Food", "Vegetables & Fruit"],
+  ["τα φρούτα", "frúta", "fruit", "Food", "Vegetables & Fruit"],
+  ["το αχλάδι", "achládi", "pear", "Food", "Vegetables & Fruit"],
+  ["το καρπούζι", "karpúzi", "watermelon", "Food", "Vegetables & Fruit"],
+  ["το πεπόνι", "pepóni", "melon", "Food", "Vegetables & Fruit"],
+  ["η φράουλα", "fráula", "strawberry", "Food", "Vegetables & Fruit"],
+  ["το μπισκότο", "biskóto", "biscuit", "Food", "Bread & Dairy"],
+  ["η πορτοκαλάδα", "portokaláda", "orangeade", "Food", "Drinks"],
+  ["το ποτό", "potó", "drink (alcoholic)", "Food", "Drinks"],
+  ["το μαχαίρι", "machéri", "knife", "Home", "Furniture & Objects"],
+  ["το πιρούνι", "pirúni", "fork", "Home", "Furniture & Objects"],
+  ["το κουτάλι", "kutáli", "spoon", "Home", "Furniture & Objects"],
+  ["η κουταλιά", "kutaliá", "spoonful", "Food", "Condiments & Ingredients"],
+  ["τα τρόφιμα", "trófima", "groceries, foodstuffs", "Shopping", "Actions"],
+  ["η προσφορά", "prosforá", "special offer", "Shopping", "Money & Prices"],
+  ["το γραμμάριο", "grammário", "gram", "Shopping", "Money & Prices"],
+  ["το λίτρο", "lítro", "litre", "Shopping", "Money & Prices"],
+  ["το κομμάτι", "kommáti", "piece", "Shopping", "Money & Prices"],
+  ["το πακέτο", "pakéto", "packet; parcel", "Shopping", "Money & Prices"],
+  ["το κουτί", "kutí", "box; can", "Shopping", "Money & Prices"],
+  ["η σακούλα", "sakúla", "bag (plastic)", "Shopping", "Actions"],
+  ["η λίστα", "lísta", "list", "Shopping", "Actions"],
+  ["η μάρκα", "márka", "brand", "Shopping", "Money & Prices"],
+  ["το προϊόν", "proión", "product", "Shopping", "Money & Prices"],
+  ["η βιτρίνα", "vitrína", "shop window", "Shopping", "Shops"],
+  ["το σακάκι", "sakáki", "jacket (blazer)", "Clothes", "Clothing"],
+  ["το κοστούμι", "kostúmi", "suit", "Clothes", "Clothing"],
+  ["η γραβάτα", "graváta", "tie", "Clothes", "Accessories"],
+  ["το πουλόβερ", "pulóver", "sweater", "Clothes", "Clothing"],
+  ["τα πέδιλα", "pédila", "sandals", "Clothes", "Footwear"],
+  ["ο σκούφος", "skúfos", "woolly hat", "Clothes", "Accessories"],
+  ["το κασκόλ", "kaskól", "scarf", "Clothes", "Accessories"],
+  ["τα γάντια", "gándia", "gloves", "Clothes", "Accessories"],
+  ["τα γυαλιά", "gialiá", "glasses", "Clothes", "Accessories"],
+  ["το μαγιό", "mayió", "swimsuit", "Clothes", "Clothing"],
+  ["η φόρμα", "fórma", "tracksuit", "Clothes", "Clothing"],
+  ["το νούμερο", "número", "size; number", "Clothes", "Clothing"],
+  ["το δοκιμαστήριο", "dokimastírio", "fitting room", "Clothes", "Clothing"],
+  ["η μόδα", "móda", "fashion", "Clothes", "Clothing"],
+  ["γαλάζιος", "galázios", "light blue", "Adjectives", "Other"],
+  ["κίτρινος", "kítrinos", "yellow", "Adjectives", "Other"],
+  ["γκρίζος", "grízos", "grey", "Adjectives", "Other"],
+  ["καφέ", "kafé", "brown", "Adjectives", "Other"],
+  ["ροζ", "roz", "pink", "Adjectives", "Other"],
+  ["μοβ", "mov", "purple", "Adjectives", "Other"],
+  ["χρυσός", "chrisós", "golden", "Adjectives", "Other"],
+  ["το έτος", "étos", "year (formal)", "Time", "Months & Seasons"],
+  ["μισή ώρα", "misí óra", "half an hour", "Time", "Clock & Hours"],
+  ["ο Ιανουάριος", "Ianuários", "January", "Time", "Months & Seasons"],
+  ["ο Φεβρουάριος", "Fevruários", "February", "Time", "Months & Seasons"],
+  ["ο Μάρτιος", "Mártios", "March", "Time", "Months & Seasons"],
+  ["ο Απρίλιος", "Aprílios", "April", "Time", "Months & Seasons"],
+  ["ο Μάιος", "Máios", "May", "Time", "Months & Seasons"],
+  ["ο Ιούνιος", "Iúnios", "June", "Time", "Months & Seasons"],
+  ["ο Ιούλιος", "Iúlios", "July", "Time", "Months & Seasons"],
+  ["ο Οκτώβριος", "Októvrios", "October", "Time", "Months & Seasons"],
+  ["ο Νοέμβριος", "Noémvrios", "November", "Time", "Months & Seasons"],
+  ["ο Δεκέμβριος", "Dekémvrios", "December", "Time", "Months & Seasons"],
+  ["ο άνεμος", "ánemos", "wind", "Nature", "Weather"],
+  ["το σύννεφο", "sínnefo", "cloud", "Nature", "Weather"],
+  ["η συννεφιά", "sinnefiá", "cloudiness, overcast", "Nature", "Weather"],
+  ["η θερμοκρασία", "thermokrasía", "temperature", "Nature", "Weather"],
+  ["η ζέστη", "zésti", "heat", "Nature", "Weather"],
+  ["το κρύο", "krío", "cold", "Nature", "Weather"],
+  ["το φεγγάρι", "fengári", "moon", "Nature", "Landscape"],
+  ["το ζώο", "zóo", "animal", "Animals", "Other"],
+  ["η εξοχή", "exochí", "countryside", "Nature", "Landscape"],
+  ["το σώμα", "sóma", "body", "Health", "Body Parts"],
+  ["το στομάχι", "stomáchi", "stomach", "Health", "Body Parts"],
+  ["η μέση", "mési", "waist; lower back", "Health", "Body Parts"],
+  ["ο πονοκέφαλος", "ponokéfalos", "headache", "Health", "Symptoms & Conditions"],
+  ["το κρυολόγημα", "kriolóyima", "cold (illness)", "Health", "Symptoms & Conditions"],
+  ["η γρίπη", "grípi", "flu", "Health", "Symptoms & Conditions"],
+  ["ο παθολόγος", "pathológos", "GP, internist", "Health", "Medical Care"],
+  ["υγιής", "iyiís", "healthy", "Adjectives", "Quality & Value"],
+  ["το κάπνισμα", "kápnisma", "smoking", "Health", "Wellness"],
+  ["ο ελεύθερος χρόνος", "eléftheros chrónos", "free time", "Culture", "Arts & Entertainment"],
+  ["το βόλεϊ", "vólei", "volleyball", "Sports", "Sports & Games"],
+  ["το κολύμπι", "kolímbi", "swimming", "Sports", "Sports & Games"],
+  ["ο αγώνας", "agónas", "match, competition", "Sports", "Sports & Games"],
+  ["η παράσταση", "parástasi", "performance, show", "Culture", "Arts & Entertainment"],
+  ["η εκπομπή", "ekpombí", "TV/radio programme", "Media", "Content"],
+  ["το μονόκλινο", "monóklino", "single room", "City", "Places"],
+  ["το δίκλινο", "díklino", "double room", "City", "Places"],
+  ["η διασκέδαση", "diaskédasi", "entertainment, fun", "Culture", "Arts & Entertainment"],
+  ["η κατασκήνωση", "kataskínosi", "camping; summer camp", "Culture", "Arts & Entertainment"],
+  ["ο τουρίστας", "turístas", "tourist (m)", "Culture", "Arts & Entertainment"],
+  ["η τουρίστρια", "turístria", "tourist (f)", "Culture", "Arts & Entertainment"],
+  ["το πιάνο", "piáno", "piano", "Culture", "Arts & Entertainment"],
+  ["το μπουζούκι", "buzúki", "bouzouki", "Culture", "Traditions"],
+  ["το δημοτικό", "dimotikó", "primary school", "Education", "School & University"],
+  ["το γυμνάσιο", "gimnásio", "lower secondary school", "Education", "School & University"],
+  ["η σχολή", "scholí", "faculty; school (courses)", "Education", "School & University"],
+  ["το διάλειμμα", "diálimma", "break (at school)", "Education", "School & University"],
+  ["ο αρχάριος", "archários", "beginner", "Education", "People"],
+  ["το στυλό", "stiló", "pen", "Education", "Study"],
+  ["ο φάκελος", "fákelos", "envelope; folder", "Work", "Workplace"],
+  ["το γραμματόσημο", "grammatósimo", "stamp", "City", "Transport & Services"],
+  ["η επικοινωνία", "epikinonía", "communication", "Society", "Community"],
+  ["το δίπλωμα", "díploma", "diploma; driving licence", "Education", "Study"],
+  ["η γνώμη", "gnómi", "opinion", "Emotions", "Expressions"],
+  ["το ερώτημα", "erótima", "question (exam task)", "Instructions", "Exam"],
+  ["ο ρόλος", "rólos", "role", "Culture", "Arts & Entertainment"],
+  ["το σημείωμα", "simíoma", "note (message)", "Instructions", "Exercise words"],
+  ["η ανταλλαγή", "andallayí", "exchange", "Society", "Community"],
+  ["η ευκαιρία", "efkería", "opportunity, chance", "Society", "Community"],
+  ["παρακάτω", "parakáto", "below, further down", "Connectors", "Place"],
+  ["αδύνατος", "adínatos", "thin; weak; impossible", "Adjectives", "Size & Shape"],
+  ["άσχημος", "áschimos", "ugly; bad", "Adjectives", "Quality & Value"],
+  ["άδειος", "ádios", "empty", "Adjectives", "Quality & Value"],
+  ["καθαρός", "katharós", "clean", "Adjectives", "Quality & Value"],
+  ["ελαφρύς", "elafrís", "light (weight)", "Adjectives", "Size & Shape"],
+  ["φτωχός", "ftochós", "poor", "Adjectives", "Quality & Value"],
+  ["επόμενος", "epómenos", "next", "Adjectives", "Other"],
+  ["αστείος", "astíos", "funny", "Adjectives", "Emotions & Character"],
+  ["ελεύθερος", "eléftheros", "free; single", "Adjectives", "Other"],
+  ["θυμωμένος", "thimoménos", "angry", "Adjectives", "Emotions & Character"],
+  ["στενοχωρημένος", "stenochoriménos", "upset, sad", "Adjectives", "Emotions & Character"],
+  ["ήρεμος", "íremos", "calm", "Adjectives", "Emotions & Character"],
+  ["ευγενικός", "evyenikós", "polite", "Adjectives", "Emotions & Character"],
+  ["σίγουρος", "síguros", "sure, certain", "Adjectives", "Other"],
+  ["τέλειος", "télios", "perfect", "Adjectives", "Quality & Value"],
+  ["δημόσιος", "dimósios", "public", "Adjectives", "Other"],
+  ["ιδιωτικός", "idiotikós", "private", "Adjectives", "Other"],
+  ["αγαπημένος", "agapiménos", "favourite, beloved", "Adjectives", "Other"],
+  ["παραδοσιακός", "paradosiakós", "traditional", "Adjectives", "Other"],
+  ["ειδικός", "idikós", "special; specialist", "Adjectives", "Other"],
+  ["μόνιμος", "mónimos", "permanent", "Adjectives", "Other"],
+  ["γενικός", "yenikós", "general", "Adjectives", "Other"],
+  ["οικονομικός", "ikonomikós", "economical; financial", "Adjectives", "Quality & Value"],
+  ["χρήσιμος", "chrísimos", "useful", "Adjectives", "Quality & Value"],
+  ["χωρισμένος", "chorisménos", "divorced, separated", "Adjectives", "Other"],
+  ["ετήσιος", "etísios", "annual", "Adjectives", "Other"],
+  ["έντεκα", "éndeka", "eleven", "Numbers", "Cardinal"],
+  ["δεκατρία", "dekatría", "thirteen", "Numbers", "Cardinal"],
+  ["δεκαπέντε", "dekapénde", "fifteen", "Numbers", "Cardinal"],
+  ["πέμπτος", "pémbtos", "fifth", "Numbers", "Ordinal"],
+  ["το μισό", "misó", "half", "Numbers", "Time & Quantity"],
+  ["λίγος", "lígos", "little, few", "Connectors", "Degree & Quantity"],
+  ["όλος", "ólos", "all, whole", "Connectors", "Degree & Quantity"],
+  ["πόσος", "pósos", "how much / how many", "Connectors", "Question words"],
+  ["κυρίως", "kiríos", "mainly", "Connectors", "Discourse"],
+  ["χτες", "chtes", "yesterday", "Time", "Time Expressions"],
+  ["πέρσι", "pérsi", "last year", "Time", "Time Expressions"],
+  ["βεβαίως", "vevéos", "certainly", "Greetings", "Politeness"],
+  ["ευχαριστώ πολύ", "efcharistó polí", "thank you very much", "Greetings", "Politeness"],
+  ["καλώς ήρθες", "kalós írthes", "welcome (inf.)", "Greetings", "Basic Greetings"],
+  ["καλώς ήρθατε", "kalós írthate", "welcome (formal / pl.)", "Greetings", "Basic Greetings"],
+  ["τι ώρα είναι", "ti óra íne", "what time is it", "Greetings", "Questions"],
+  ["πόσο κάνει", "póso káni", "how much is it", "Greetings", "Questions"],
+  ["δεν καταλαβαίνω", "den katalavéno", "I don't understand", "Greetings", "Politeness"],
+  ["μπορείτε να το επαναλάβετε", "boríte na to epanalávete", "could you repeat that", "Greetings", "Politeness"],
+  ["κάνει ζέστη", "káni zésti", "it's hot", "Nature", "Weather"],
+  ["κάνει κρύο", "káni krío", "it's cold", "Nature", "Weather"],
+  ["μου αρέσει", "mu arési", "I like (it)", "Emotions", "Expressions"],
+  ["θα ήθελα", "tha íthela", "I would like", "Greetings", "Politeness"],
+  ["έχω δίκιο", "écho díkio", "I'm right", "Emotions", "Expressions"],
+  ["καλή όρεξη", "kalí órexi", "enjoy your meal", "Greetings", "Politeness"],
+  ["στην υγειά σου", "stin iyiá su", "cheers! (to your health)", "Greetings", "Politeness"],
+  ["καλή διασκέδαση", "kalí diaskédasi", "have fun", "Greetings", "Farewells"],
+  ["καλή συνέχεια", "kalí sinéchia", "have a good rest of the day", "Greetings", "Farewells"],
+  ["διασκεδάζω", "diaskedázo", "I have fun", "Verbs", "Social"],
+  ["καπνίζω", "kapnízo", "I smoke", "Verbs", "Everyday"],
+  ["κερδίζω", "kerdízo", "I win; I earn", "Verbs", "Work"],
+  ["χωρίζω", "chorízo", "I break up; I separate", "Verbs", "Social"],
+  ["κλέβω", "klévo", "I steal", "Verbs", "Everyday"],
+  ["λατρεύω", "latrévo", "I adore", "Verbs", "Emotions"],
+  ["χαιρετάω", "cheretáo", "I greet", "Verbs", "Social"],
+  ["φοράω", "foráo", "I wear", "Verbs", "Everyday"],
+  ["προτιμώ", "protimó", "I prefer", "Verbs", "Mind"],
+  ["προλαβαίνω", "prolavéno", "I make it in time", "Verbs", "Everyday"],
+  ["παρκάρω", "parkáro", "I park", "Verbs", "Movement"],
+  ["συναντιέμαι", "sinandiéme", "I meet (each other)", "Verbs", "Social"],
+  ["ντρέπομαι", "drépome", "I am shy / ashamed", "Verbs", "Emotions"],
+  ["διδάσκω", "didásko", "I teach", "Verbs", "Work"],
+  ["συνηθίζω", "sinithízo", "I get used to", "Verbs", "Mind"],
+  ["φωνάζω", "fonázo", "I shout; I call", "Verbs", "Communication"],
+  ["χαρίζω", "charízo", "I give (as a gift)", "Verbs", "Social"],
+  ["λύνω", "líno", "I solve; I untie", "Verbs", "Mind"],
+  ["ψήνω", "psíno", "I bake, grill", "Verbs", "Everyday"],
+  ["κόβω", "kóvo", "I cut", "Verbs", "Everyday"],
+  ["πιάνω", "piáno", "I catch, grab", "Verbs", "Everyday"],
+  ["τραβάω", "traváo", "I pull", "Verbs", "Everyday"],
+  ["μεταφέρω", "metaféro", "I carry, transport", "Verbs", "Work"],
+  ["γνωρίζομαι", "gnorízome", "I get to know (each other)", "Verbs", "Social"],
+  ["φιλοξενώ", "filoxenó", "I host (guests)", "Verbs", "Social"],
+  ["παρουσιάζω", "parusiázo", "I present", "Verbs", "Work"],
+  ["συζητάω", "sizitáo", "I discuss", "Verbs", "Communication"],
+  ["δέχομαι", "déchome", "I accept; I receive", "Verbs", "Social"],
+  ["προσθέτω", "prosthéto", "I add", "Verbs", "Everyday"],
+  ["αισθάνομαι", "esthánome", "I feel", "Verbs", "Emotions"],
+  ["θεωρώ", "theoró", "I consider", "Verbs", "Mind"],
+  ["επικοινωνώ", "epikinonó", "I communicate, contact", "Verbs", "Communication"],
+  ["σερβίρω", "servíro", "I serve (food)", "Verbs", "Everyday"],
+  ["βράζω", "vrázo", "I boil", "Verbs", "Everyday"],
+  ["κρεμάω", "kremáo", "I hang", "Verbs", "Everyday"],
+  ["κρυώνω", "krióno", "I feel cold; I catch a cold", "Verbs", "State"],
+  ["ζεσταίνομαι", "zesténome", "I feel hot", "Verbs", "State"],
+  ["κουράζομαι", "kurázome", "I get tired", "Verbs", "State"],
+  ["βαριέμαι", "variéme", "I am bored", "Verbs", "Emotions"],
+  ["νικάω", "nikáo", "I win, defeat", "Verbs", "Social"],
+  ["ζωγραφίζω", "zografízo", "I paint, draw", "Verbs", "Everyday"],
+  ["βάφω", "váfo", "I paint (walls); I dye", "Verbs", "Everyday"],
+  ["σημειώνω", "simióno", "I note down", "Verbs", "Work"],
+  ["περιγράφω", "perigráfo", "I describe", "Verbs", "Communication"],
+  ["ρίχνω", "ríchno", "I throw", "Verbs", "Everyday"],
+  ["ντύνομαι", "dínome", "I get dressed", "Verbs", "Everyday"],
+  ["πλένομαι", "plénome", "I wash (myself)", "Verbs", "Everyday"],
+  ["ετοιμάζομαι", "etimázome", "I get ready", "Verbs", "Everyday"],
+  ["γεννάω", "yennáo", "I give birth", "Verbs", "State"],
+  ["μεταφράζω", "metafrázo", "I translate", "Verbs", "Communication"],
+  ["υπογραμμίζω", "ipogrammízo", "I underline", "Verbs", "Work"],
+  ["αντιστοιχίζω", "andistichízo", "I match", "Verbs", "Work"],
+  ["ξαπλώνω", "xaplóno", "I lie down", "Verbs", "Everyday"],
+  ["διαφωνώ", "diafonó", "I disagree", "Verbs", "Communication"],
+  ["ανακατεύω", "anakatévo", "I stir, mix", "Verbs", "Everyday"],
+  ["απαγορεύεται", "apagorévete", "it is forbidden", "Verbs", "State"],
+  ["εξασκώ", "exaskó", "I practise", "Verbs", "Work"],
 ];
 const BASE_WORDS_COUNT = WORDS.length; // built-in dictionary size (before words added in the app)
 
@@ -1603,6 +1889,8 @@ const BASE_WORDS_COUNT = WORDS.length; // built-in dictionary size (before words
 const CARD_CACHE_PREFIX = "card_v3_";
 const API_KEY_STORE = "api_key";
 
+// v1.89: one model for all AI features (was claude-haiku-4-5 — too careless for exercise sentences)
+const AI_MODEL = "claude-sonnet-5-5";
 async function getApiKey() {
   try {
     const db = await openDB();
@@ -1702,7 +1990,7 @@ Rules:
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: AI_MODEL,
         max_tokens: 1800,
         messages: [{ role: "user", content: prompt }]
       })
@@ -1798,7 +2086,7 @@ Keep each line short: person/form + Greek + transliteration in parentheses.`;
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: AI_MODEL,
         max_tokens: 400,
         messages: [{ role: "user", content: prompt }]
       })
@@ -1873,7 +2161,7 @@ Return ONLY valid JSON, keys must be exactly as given:
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: AI_MODEL,
         max_tokens: 2000,
         messages: [{ role: "user", content: prompt }]
       })
@@ -3343,7 +3631,7 @@ Exactly 3 sentences:
     fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ model:"claude-haiku-4-5", max_tokens:900, messages:[{role:"user",content:prompt}] }),
+      body:JSON.stringify({ model:AI_MODEL, max_tokens:900, messages:[{role:"user",content:prompt}] }),
     })
       .then(r => {
         if (!r.ok && r.status !== 401) throw new Error("blocked");
@@ -3578,7 +3866,7 @@ async function enrichWord(greek, english) {
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: AI_MODEL,
         max_tokens: 100,
         messages: [{ role: "user", content: `For the Greek word/phrase "${greek}" meaning "${english}":
 1. Provide the Latin transliteration
@@ -3642,7 +3930,7 @@ function AddWordModal({ onClose, onAdded }) {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:200,
+          body: JSON.stringify({ model:AI_MODEL, max_tokens:200,
             messages:[{ role:"user", content:`The user entered: "${input}"
 This could be in Greek, Latin transliteration, English, or Russian.
 Your task:
@@ -3709,7 +3997,7 @@ Return ONLY JSON: {"gr":"...","tr":"...","en":"...","topic":"...","subtopic":"..
         method: "POST",
         headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5",
+          model: AI_MODEL,
           max_tokens: 800,
           messages: [{ role:"user", content: [
             { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: imgData }},
@@ -5104,6 +5392,58 @@ function CaseRefTable({ answer, caseLabel, gender, nounBase }) {
 // Last failure reason from Grammar fetchers — shown in the setup banner instead of a generic message
 let __grammarFetchErr = null;
 function setGrammarErr(kind, detail) { __grammarFetchErr = { kind, detail: detail || "" }; }
+// v1.89: quality gate — every generated exercise sentence is re-read by the model as a strict native-speaker
+// teacher before it is shown: wrong grammar, unnatural / absurd meaning or a mismatched translation → dropped.
+function fillBlanks(q) {
+  if (Array.isArray(q.gr)) return q.gr.join(" ");
+  if (q.gr_before !== undefined || q.gr_after !== undefined) return `${q.gr_before || ""} ${q.answer || ""} ${q.gr_after || ""}`.replace(/\s+/g, " ").trim();
+  const ans = q.blanks ? q.blanks.map(b => b.answer) : [q.article_answer != null ? q.article_answer : q.answer];
+  let k = 0;
+  return String(q.gr || "")
+    .replace(/___\s*(\([^)]*\))?/g, () => { const a = ans[k++]; return a && a !== "∅" ? a + " " : ""; })
+    .replace(/\s+/g, " ").replace(/\s([,.;!?·])/g, "$1").trim();
+}
+async function aiVerifySentences(items, trKey = "en") {
+  if (!items || !items.length) return items;
+  const apiKey = await getApiKey();
+  if (!apiKey) return items;
+  const lines = items.map((q, i) => `${i + 1}. ${fillBlanks(q)} || ${q[trKey] || ""}`).join("\n");
+  const prompt =
+`You are a strict native-speaker teacher of Modern Greek reviewing exercise sentences for A1–B1 learners.
+Each line: Greek sentence (blanks already filled in) || translation (${trKey === "ru" ? "Russian" : "English"}).
+
+Reject a sentence (ok:false) if ANY of these is true:
+- a grammar error: article / case / gender / number agreement, verb form, wrong preposition, accents
+- it is unnatural — a native speaker would not say it this way
+- the meaning is odd or absurd (e.g. "asks the boards for help", "I drink the waters all day", a mass noun forced into the plural, objects doing human actions)
+- the translation does not match the Greek meaning
+If the Greek is perfect and natural but only the translation is wrong, keep it (ok:true) and put a corrected translation in "tr"; otherwise "tr":"".
+
+${lines}
+
+Return ONLY a JSON array, one object per line, in order: [{"n":1,"ok":true,"tr":"","why":""}]`;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: Math.min(8000, 300 + 90 * items.length), messages:[{ role:"user", content: prompt }] })
+    });
+    if (!res.ok) return items;                                            // checker unavailable → keep the batch
+    const d = await res.json();
+    const verdicts = parseJsonArrayLoose((d.content && d.content[0] && d.content[0].text) || "");
+    if (!verdicts) return items;
+    const byN = {};
+    verdicts.forEach((v, i) => { if (v) byN[Number.isInteger(v.n) ? v.n : i + 1] = v; });
+    const out = [];
+    items.forEach((q, i) => {
+      const v = byN[i + 1];
+      if (v && v.ok === false) { console.info("AI check rejected:", fillBlanks(q), "—", v.why || ""); return; }
+      out.push(v && v.tr && String(v.tr).trim() ? { ...q, [trKey]: String(v.tr).trim() } : q);
+    });
+    return out;
+  } catch(e) { console.error("aiVerifySentences error:", e); return items; }
+}
+
 async function describeHttpError(res) {
   let msg = "";
   try { const j = await res.json(); msg = (j && j.error && j.error.message) || ""; } catch(e) {}
@@ -5263,6 +5603,7 @@ RULES:
 - GENITIVE tasks: ONLY possession / "X of Y" — the blank comes RIGHT AFTER another noun (from the vocabulary) that owns it; never after a verb or a number (Καλώ δύο υδραυλικούς is accusative, no genitive) (το σπίτι ___ γιαγιάς, η βοήθεια ___ γραμματέων). NEVER put a genitive after a preposition: από / για / με / σε / χωρίς / μέχρι / μετά / πριν always take the ACCUSATIVE (από τους, not από των)
 - Before writing each sentence, check: which word requires this case? Report it in "governor"
 - The word right before the blank is NEVER an article or στον/στη/στις/στα… (the blank IS the article)
+- MEANING FIRST: every sentence must describe a realistic everyday situation a native speaker would really say. Never build an absurd combination just to use the noun (✗ "Ζητάει βοήθεια από τους πίνακες", ✗ "Πίνω τα νερά"). If you cannot, return {"n":<task>,"skip":true}
 - The sentence must sound natural in the requested NUMBER. If the noun is unnatural in that number (unique things like η Ακρόπολη, mass / abstract nouns, body parts normally singular such as η κοιλιά), do not force it — return {"n":<task>,"skip":true} for that task
 - The English translation must show the number clearly (singular vs plural noun in English)
 - PLURAL tasks must use the plural form of the noun (and plural article); SINGULAR tasks the singular form. Article and noun must agree: των + -ων form (των φίλων), never των + a singular form
@@ -5285,14 +5626,14 @@ Return ONLY a JSON array, one object per task in order:
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{ "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-      body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens: Math.min(8000, 600 + 280 * slots.length), messages:[{ role:"user", content: prompt }] })
+      body: JSON.stringify({ model:AI_MODEL, max_tokens: Math.min(8000, 600 + 280 * slots.length), messages:[{ role:"user", content: prompt }] })
     });
     if (!res.ok) { setGrammarErr("http", await describeHttpError(res)); return null; }
     const d = await res.json();
     const text = (d.content && d.content[0] && d.content[0].text) || "";
     const raw = parseJsonArrayLoose(text);
     if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
-    const valid = validateCaseSlots(raw, slots);
+    const valid = await aiVerifySentences(validateCaseSlots(raw, slots));
     if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
     return valid;
   } catch(e) { console.error("fetchCaseSlotBatch error:", e); setGrammarErr("network", e.message); }
@@ -5494,7 +5835,7 @@ Important:
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5", max_tokens: Math.min(8000, 600 + 280 * pool.length),
+        model: AI_MODEL, max_tokens: Math.min(8000, 600 + 280 * pool.length),
         messages: [{ role:"user", content: prompt }]
       })
     });
@@ -5503,9 +5844,10 @@ Important:
     const text = (d.content && d.content[0] && d.content[0].text) || "";
     const raw = parseJsonArrayLoose(text);
     if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
-    const valid = validateCasesSentencesV2(raw, cases)
+    let valid = validateCasesSentencesV2(raw, cases)
       .map(q => ({ ...q, unknown: unknownWords(q.gr, [q.noun_form, q.noun_base]) }))
       .filter(q => q.unknown.length <= 1);
+    valid = await aiVerifySentences(valid);
     if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку (формат или слова вне словаря)");
     return valid;
   } catch(e) { console.error("fetchCasesSentences error:", e); setGrammarErr("network", e.message); }
@@ -5642,14 +5984,14 @@ Return ONLY a JSON array, one object per task in order:
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{ "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
-      body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens: Math.min(8000, 600 + 260 * slots.length), messages:[{ role:"user", content: prompt }] })
+      body: JSON.stringify({ model:AI_MODEL, max_tokens: Math.min(8000, 600 + 260 * slots.length), messages:[{ role:"user", content: prompt }] })
     });
     if (!res.ok) { setGrammarErr("http", await describeHttpError(res)); return null; }
     const d = await res.json();
     const text = (d.content && d.content[0] && d.content[0].text) || "";
     const raw = parseJsonArrayLoose(text);
     if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
-    const valid = validateVerbSentences(raw, slots);
+    const valid = await aiVerifySentences(validateVerbSentences(raw, slots));
     if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
     return valid;
   } catch(e) { console.error("fetchVerbBatch error:", e); setGrammarErr("network", e.message); }
@@ -5702,7 +6044,7 @@ VOCABULARY RESTRICTION — ONLY use verbs from this exact list (provided as blan
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
       body: JSON.stringify({
-        model:"claude-haiku-4-5", max_tokens:2500,
+        model:AI_MODEL, max_tokens:2500,
         messages:[{ role:"user", content:
 `Create 7 Greek sentences (${level} level) that practice verb tenses and conjugations.
 LANGUAGE LEVEL GUIDANCE: ${levelGuide}
@@ -5737,7 +6079,7 @@ Return ONLY a JSON array:
     const text = (d.content && d.content[0] && d.content[0].text) || "";
     const raw = parseJsonArrayLoose(text);
     if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
-    const valid = validateTensesSentences(raw);
+    const valid = await aiVerifySentences(validateTensesSentences(raw));
     if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку");
     return valid;
   } catch(e) { console.error("fetchTensesSentences error:", e); setGrammarErr("network", e.message); }
@@ -6036,7 +6378,7 @@ function ArticlesTab({ mastery, rec }) {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method:"POST",
           headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-          body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:600, messages:[{ role:"user", content:prompt }] })
+          body: JSON.stringify({ model:AI_MODEL, max_tokens:600, messages:[{ role:"user", content:prompt }] })
         });
         if (res.ok) { const d=await res.json(); setExplanation(d.content[0].text); }
         else { setExplanation("Ошибка запроса."); }
@@ -6076,7 +6418,7 @@ ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({
-          model:"claude-haiku-4-5", max_tokens:800,
+          model:AI_MODEL, max_tokens:800,
           messages:[{ role:"user", content: prompt }]
         })
       });
@@ -7188,7 +7530,7 @@ function SentencesTab({ rec }) {
   const [genError, setGenError] = useState("");
   const [sentCount, setSentCount] = useState("12");
 
-  const SENT_CACHE_PREFIX = "sent_v2_";
+  const SENT_CACHE_PREFIX = "sent_v3_";
 
   async function getSentences(sel, count=12) {
     const key = selKey(sel);
@@ -7216,7 +7558,7 @@ function SentencesTab({ rec }) {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: AI_MODEL,
         max_tokens: Math.min(8000, 600 + count * 110),
         messages: [{ role:"user", content:`Create ${count} short Greek sentences for A2 language learners using words from these topics: ${selLabel(sel)}.
 Words available: ${topicWords}
@@ -7236,7 +7578,8 @@ Return ONLY a JSON array:
     const data = await res.json();
     const match = data.content[0].text.match(/\[[\s\S]*\]/);
     if (!match) return null;
-    const sentences = JSON.parse(match[0]);
+    const sentences = await aiVerifySentences(JSON.parse(match[0]));
+    if (!sentences.length) return null;
 
     // Cache it
     try {
@@ -7661,7 +8004,7 @@ Keep exact Greek spelling with accents.`;
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({ model:"claude-haiku-4-5", max_tokens:600, messages:[{role:"user",content:prompt}] })
+      body:JSON.stringify({ model:AI_MODEL, max_tokens:600, messages:[{role:"user",content:prompt}] })
     });
     if (!res.ok) throw new Error("API "+res.status);
     const data = await res.json();
@@ -7682,7 +8025,7 @@ Keep exact Greek spelling with accents.`;
   }
 }
 
-const FILL_CACHE_PREFIX = "vfill_v1_";
+const FILL_CACHE_PREFIX = "vfill_v2_";
 
 async function fetchFillExercises(verb, transcription, english) {
   const cacheKey = FILL_CACHE_PREFIX + verb;
@@ -7729,14 +8072,15 @@ Rules:
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({ model:"claude-haiku-4-5", max_tokens:1400, messages:[{role:"user",content:prompt}] })
+      body:JSON.stringify({ model:AI_MODEL, max_tokens:1400, messages:[{role:"user",content:prompt}] })
     });
     if (!res.ok) throw new Error("API "+res.status);
     const data = await res.json();
     const match = data.content[0].text.match(/\[[\s\S]*\]/);
     if (!match) throw new Error("No JSON");
-    const result = parseCardJson("[" + match[0].slice(1,-1) + "]") || JSON.parse(match[0]);
+    let result = parseCardJson("[" + match[0].slice(1,-1) + "]") || JSON.parse(match[0]);
     if (!result) throw new Error("Parse fail");
+    result = await aiVerifySentences(result, "ru");
     try {
       const db = await openDB();
       const tx = db.transaction(DB_STORE,"readwrite");
@@ -9385,7 +9729,7 @@ function AuditTab() {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body: JSON.stringify({ model:"claude-haiku-4-5", max_tokens:1000,
+        body: JSON.stringify({ model:AI_MODEL, max_tokens:1000,
           messages:[{ role:"user", content:
 `For each Greek verb below, provide the correct English translation starting with "to " (infinitive form).
 Return ONLY a JSON array of {"gr":"...","en":"..."} objects, one per verb.
@@ -9632,7 +9976,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.88-2227</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.89-0045</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
