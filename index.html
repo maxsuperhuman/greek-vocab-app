@@ -1891,6 +1891,60 @@ const API_KEY_STORE = "api_key";
 
 // v1.89: one model for all AI features (was claude-haiku-4-5 — too careless for exercise sentences)
 const AI_MODEL = "claude-sonnet-5-5";
+// v1.90: all Claude calls go through claudeFetch — streamed (SSE), so the phone's connection never sits idle
+// while a long answer is being written (non-streamed requests >30–60 s were dropped on iOS: "Load failed").
+// Returns a Response-like object: { ok, status, json() → { content:[{type:"text",text}], stop_reason } } — only text
+// deltas are collected, so callers that read content[0].text keep working even when thinking blocks come first.
+async function claudeFetch(url, opts) {
+  let body = {};
+  try { body = JSON.parse(opts.body); } catch(e) {}
+  let noThinkingParam = false;
+  const attempt = async () => {
+    // Sonnet 5.5 thinks at high effort by default: slow, eats max_tokens, and thinking blocks come before the text.
+    // "between_tools" is its lowest thinking setting — right for short structured generation. Extra token headroom too.
+    const req = { ...body, stream: true };
+    if (/sonnet-5-5/.test(req.model || "") && !req.thinking) { req.thinking = { type: "between_tools" }; req.max_tokens = (req.max_tokens || 1024) + 1500; }
+    if (noThinkingParam) delete req.thinking;
+    const res = await fetch(url, { ...opts, body: JSON.stringify(req) });
+    if (res.status === 400 && req.thinking && !noThinkingParam) {     // safety net: API rejects the thinking setting → retry with defaults
+      const t = await res.clone().text().catch(() => "");
+      if (/thinking/i.test(t)) { noThinkingParam = true; return attempt(); }
+    }
+    if (!res.ok || !res.body) return res;                         // HTTP errors: hand back the real response
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "", text = "", stop = null, usage = null;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith("data:")) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch(e) { continue; }
+        if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta") text += ev.delta.text;
+        else if (ev.type === "message_delta") { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) usage = ev.usage; }
+        else if (ev.type === "error") {
+          const err = ev.error || {};
+          return { ok:false, status: err.type === "overloaded_error" ? 529 : 500,
+                   json: async () => ({ error: { message: err.message || err.type || "stream error" } }) };
+        }
+      }
+    }
+    const data = { content: [{ type:"text", text }], stop_reason: stop, usage };
+    return { ok:true, status:200, json: async () => data, text: async () => text };
+  };
+  for (let n = 0; ; n++) {
+    try {
+      const r = await attempt();
+      if (!r.ok && [429, 500, 529].includes(r.status) && n < 2) { await new Promise(z => setTimeout(z, 2000 * (n + 1))); continue; }
+      return r;
+    } catch(e) {
+      if (n >= 2) throw e;                                          // network drop: retry twice, then report
+      await new Promise(z => setTimeout(z, 1500 * (n + 1)));
+    }
+  }
+}
 async function getApiKey() {
   try {
     const db = await openDB();
@@ -1981,7 +2035,7 @@ Rules:
 - Use simple A2-level Greek in examples. Include negation or question form in one example.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2077,7 +2131,7 @@ Return ONLY a JSON object:
 Keep each line short: person/form + Greek + transliteration in parentheses.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2152,7 +2206,7 @@ Return ONLY valid JSON, keys must be exactly as given:
 {"entry1": "η", "entry2": "none"}`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3628,7 +3682,7 @@ Exactly 3 sentences:
 
     // Try a quick preflight to see if API is reachable from this context
     // (Mobile app iframe blocks cross-origin requests)
-    fetch("https://api.anthropic.com/v1/messages", {
+    claudeFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({ model:AI_MODEL, max_tokens:900, messages:[{role:"user",content:prompt}] }),
@@ -3857,7 +3911,7 @@ async function enrichWord(greek, english) {
   const apiKey = await getApiKey();
   if (!apiKey) return { tr: greek, topic: "Subjects" };
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3927,7 +3981,7 @@ function AddWordModal({ onClose, onAdded }) {
     let result = { gr: input, tr: input, en: input, topic: "Subjects" };
     if (apiKey) {
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
           body: JSON.stringify({ model:AI_MODEL, max_tokens:200,
@@ -3993,7 +4047,7 @@ Return ONLY JSON: {"gr":"...","tr":"...","en":"...","topic":"...","subtopic":"..
     const apiKey = await getApiKey();
     if (!apiKey) { setPhotoLoading(false); setError("API key required."); return; }
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
         body: JSON.stringify({
@@ -5407,23 +5461,25 @@ async function aiVerifySentences(items, trKey = "en") {
   if (!items || !items.length) return items;
   const apiKey = await getApiKey();
   if (!apiKey) return items;
-  const lines = items.map((q, i) => `${i + 1}. ${fillBlanks(q)} || ${q[trKey] || ""}`).join("\n");
+  const optsOf = q => q.blanks ? q.blanks.map(b => (b.options || []).join(" / ")).join(" ; ") : (q.article_options || []).join(" / ");
+  const lines = items.map((q, i) => `${i + 1}. ${fillBlanks(q)} || ${q[trKey] || ""}${optsOf(q) ? " || options for the blank: " + optsOf(q) : ""}`).join("\n");
   const prompt =
 `You are a strict native-speaker teacher of Modern Greek reviewing exercise sentences for A1–B1 learners.
-Each line: Greek sentence (blanks already filled in) || translation (${trKey === "ru" ? "Russian" : "English"}).
+Each line: Greek sentence (blanks already filled in) || translation [|| answer options for the blank] (${trKey === "ru" ? "Russian" : "English"}).
 
 Reject a sentence (ok:false) if ANY of these is true:
 - a grammar error: article / case / gender / number agreement, verb form, wrong preposition, accents
 - it is unnatural — a native speaker would not say it this way
 - the meaning is odd or absurd (e.g. "asks the boards for help", "I drink the waters all day", a mass noun forced into the plural, objects doing human actions)
 - the translation does not match the Greek meaning
+- options are given and another option (not the one used in the sentence) would ALSO be correct there, or an option is not a real Greek word form
 If the Greek is perfect and natural but only the translation is wrong, keep it (ok:true) and put a corrected translation in "tr"; otherwise "tr":"".
 
 ${lines}
 
 Return ONLY a JSON array, one object per line, in order: [{"n":1,"ok":true,"tr":"","why":""}]`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({ model: AI_MODEL, max_tokens: Math.min(8000, 300 + 90 * items.length), messages:[{ role:"user", content: prompt }] })
@@ -5553,6 +5609,28 @@ function caseGovernorOk(q, cs) {
   return true;
 }
 
+// v1.90: article options are built in code, not by the model. All options have the SAME number as the answer
+// (the "plural / singular" badge must not give the answer away) and mix the same gender in another case with
+// other genders in the same case — so the learner has to know both the gender and the case.
+function buildArticleOptions(ans, gender, cs, num) {
+  const allowed = new Set([ans]);
+  ((CS_ARTICLE[gender] || {})[cs] || {})[num] && CS_ARTICLE[gender][cs][num].forEach(a => { allowed.add(a); if (CS_SE_FORM[a]) allowed.add(CS_SE_FORM[a]); });
+  if (allowed.has("την")) allowed.add("τη"); if (allowed.has("στην")) allowed.add("στη");
+  const notAns = a => !allowed.has(a);
+  let picked;
+  if (ans.startsWith("στ")) {
+    const same = (num === "pl" ? ["στους","στις","στα"] : ["στον","στην","στο"]).filter(notAns);
+    const plain = ((CS_ARTICLE[gender] || {}).acc || {})[num] ? CS_ARTICLE[gender].acc[num][0] : (num === "pl" ? "τους" : "τον");
+    const otherPlain = (num === "pl" ? ["τους","τις","τα"] : ["τον","την","το"]).filter(x => notAns(x) && x !== plain);
+    picked = [...shuf(same).slice(0, 2), plain, ...shuf(otherPlain)];
+  } else {
+    const pool = (num === "pl" ? ["οι","τους","τις","τα","των"] : ["ο","η","το","τον","την","του","της"]).filter(notAns);
+    const sameG = ({ "ο":["ο","τον","του","οι","τους","των"], "η":["η","την","της","οι","τις","των"], "το":["το","του","τα","των"] }[gender] || []);
+    const first = shuf(pool.filter(a => sameG.includes(a)))[0];
+    picked = [first, ...shuf(pool.filter(a => a !== first))].filter(Boolean);
+  }
+  return shuf([ans, ...[...new Set(picked)].slice(0, 3)]);
+}
 function validateCaseSlots(raw, slots) {
   const out = [];
   raw.forEach((q, i) => {
@@ -5564,12 +5642,7 @@ function validateCaseSlots(raw, slots) {
     const allowed = slot.cs === "acc" ? [...plain, ...plain.map(a => CS_SE_FORM[a])] : plain;
     const ans = String(q.article_answer).trim();
     if (!allowed.includes(ans)) return;                                   // article matches gender + case + number
-    const isSe = ans.startsWith("στ");
-    if (isSe) {
-      // options are rebuilt in code: the answer + 3 other σε-forms (στην/στη count as one)
-      const same = a => a === ans || (["στη","στην"].includes(a) && ["στη","στην"].includes(ans));
-      q = { ...q, article_options: shuf([ans, ...shuf(CS_SE_ALL.filter(a => !same(a))).slice(0, 3)]) };
-    } else if ((q.article_options || []).some(a => String(a).startsWith("στ"))) return; // mixed plain / σε options
+    q = { ...q, article_options: buildArticleOptions(ans, slot.gender, slot.cs, slot.num) }; // rebuilt in code — never guessable
     if (!caseFormFits(q.noun_form, slot.gender, slot.cs, slot.num)) return; // noun form matches case + number too
     if (!caseGovernorOk(q, slot.cs)) return;                              // the case is actually required here
     const opts = (q.noun_form_options || []).map(o => grNorm(o));
@@ -5623,7 +5696,7 @@ Return ONLY a JSON array, one object per task in order:
 - noun_form_options: correct form + 3 other case/number forms of the SAME noun
 - article_options: correct article + 3 plausible wrong ones (other case / number of the same gender)`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{ "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({ model:AI_MODEL, max_tokens: Math.min(8000, 600 + 280 * slots.length), messages:[{ role:"user", content: prompt }] })
@@ -5646,10 +5719,10 @@ async function fetchCaseSentencesPlanned(slots, anchors, nounsByGender) {
   let pending = slots;
   for (let round = 0; round < 4 && pending.length; round++) {
     const batches = [];
-    for (let i = 0; i < pending.length; i += 10) batches.push(pending.slice(i, i + 10));
+    for (let i = 0; i < pending.length; i += 5) batches.push(pending.slice(i, i + 5));
     const got = [];
-    for (let i = 0; i < batches.length; i += 3) {
-      const res = await Promise.all(batches.slice(i, i + 3).map(b => fetchCaseSlotBatch(b, anchors)));
+    for (let i = 0; i < batches.length; i += 4) {
+      const res = await Promise.all(batches.slice(i, i + 4).map(b => fetchCaseSlotBatch(b, anchors)));
       res.forEach(r => { if (r) got.push(...r); });
       if (!got.length && !out.length && __grammarFetchErr && ["nokey","http"].includes(__grammarFetchErr.kind)) return null;
     }
@@ -5831,7 +5904,7 @@ Important:
 - gender: м/ж/ср`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
@@ -5845,7 +5918,11 @@ Important:
     const raw = parseJsonArrayLoose(text);
     if (!raw) { setGrammarErr("parse", d.stop_reason === "max_tokens" ? "ответ обрезан по max_tokens" : ""); return null; }
     let valid = validateCasesSentencesV2(raw, cases)
-      .map(q => ({ ...q, unknown: unknownWords(q.gr, [q.noun_form, q.noun_base]) }))
+      .map(q => {
+        const g = { "м":"ο", "ж":"η", "ср":"το" }[q.gender], cs = /Род/i.test(q.case_label) ? "gen" : "acc", num = /мн/i.test(q.case_label) ? "pl" : "sg";
+        return { ...q, ...(g ? { article_options: buildArticleOptions(String(q.article_answer).trim(), g, cs, num) } : {}),
+                 unknown: unknownWords(q.gr, [q.noun_form, q.noun_base]) };
+      })
       .filter(q => q.unknown.length <= 1);
     valid = await aiVerifySentences(valid);
     if (!valid.length) setGrammarErr("invalid", raw.length + " получено, 0 прошло проверку (формат или слова вне словаря)");
@@ -5981,7 +6058,7 @@ STUDENT VOCABULARY: ${vocab}
 Return ONLY a JSON array, one object per task in order:
 [{"n":1,"gr":"Χτες εμείς ___ (μιλάω) με τη Μαρία στο τηλέφωνο.","en":"Yesterday we talked to Maria on the phone.","answer":"μιλήσαμε","options":["μιλήσαμε","μίλησα","μίλησαν","μιλάμε","θα μιλήσουμε","μιλήσατε"]}]`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{ "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({ model:AI_MODEL, max_tokens: Math.min(8000, 600 + 260 * slots.length), messages:[{ role:"user", content: prompt }] })
@@ -6004,10 +6081,10 @@ async function fetchVerbSentences(slots, anchors, level) {
   let pending = slots;
   for (let round = 0; round < 4 && pending.length; round++) {
     const batches = [];
-    for (let i = 0; i < pending.length; i += 10) batches.push(pending.slice(i, i + 10));
+    for (let i = 0; i < pending.length; i += 5) batches.push(pending.slice(i, i + 5));
     const got = [];
-    for (let i = 0; i < batches.length; i += 3) {
-      const res = await Promise.all(batches.slice(i, i + 3).map(b => fetchVerbBatch(b, anchors, level)));
+    for (let i = 0; i < batches.length; i += 4) {
+      const res = await Promise.all(batches.slice(i, i + 4).map(b => fetchVerbBatch(b, anchors, level)));
       res.forEach(r => { if (r) got.push(...r); });
       if (!got.length && !out.length && __grammarFetchErr && ["nokey","http"].includes(__grammarFetchErr.kind)) return null;
     }
@@ -6040,7 +6117,7 @@ VOCABULARY: use any verbs freely, including less common ones, phrasal verbs, for
     : `A2 level: moderate sentences (6-9 words), mainly present and past simple (αόριστος), 1st/2nd/3rd person singular, future occasionally.
 VOCABULARY RESTRICTION — ONLY use verbs from this exact list (provided as blanks above). Do NOT invent or substitute other verbs. Every verb blank must be one of the verbs given. Context words (non-blank) must also be simple A1-A2 vocabulary a student with 3-6 months of Greek would know. Absolutely NO rare, literary, or formal verbs.`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
       body: JSON.stringify({
@@ -6375,7 +6452,7 @@ function ArticlesTab({ mastery, rec }) {
 3. Почему артикль именно ${q.article_answer} (род, падеж, число)
 💡 Подсказка: как запомнить это изменение`;
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
           method:"POST",
           headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
           body: JSON.stringify({ model:AI_MODEL, max_tokens:600, messages:[{ role:"user", content:prompt }] })
@@ -6414,7 +6491,7 @@ ${blanksDesc}
 ${q.blanks.map((b,i)=>`**${b.answer}** — [падеж, род, число]: [2-3 фразы с объяснением]`).join("\n")}
 💡 [практическая подсказка как запомнить этот тип артикля или этот падеж]`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({
@@ -7554,7 +7631,7 @@ function SentencesTab({ rec }) {
     const pool = selWords(sel);
     const topicWords = shuf(pool).slice(0, sel.topics.includes("All") ? 40 : 150).map(w => w[0]).join(", ");
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
       body: JSON.stringify({
@@ -8001,7 +8078,7 @@ For imperative, use person labels: "εσύ (imperf.)", "εσύ (perf.)", "εσε
 Keep exact Greek spelling with accents.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
       body:JSON.stringify({ model:AI_MODEL, max_tokens:600, messages:[{role:"user",content:prompt}] })
@@ -8069,7 +8146,7 @@ Rules:
 - Russian translation must be natural`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
       body:JSON.stringify({ model:AI_MODEL, max_tokens:1400, messages:[{role:"user",content:prompt}] })
@@ -9726,7 +9803,7 @@ function AuditTab() {
     // Only auto-fix things we're confident about
     if (kind === "verb-en-form") {
       const items = subset.map(i => `${i.gr} — current EN: "${i.en}"`).join("\n");
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await claudeFetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({ model:AI_MODEL, max_tokens:1000,
@@ -9976,7 +10053,7 @@ function App() {
       {/* header */}
       <div style={{ background:"#EEEDFE", border:"0.5px solid #AFA9EC", borderRadius:12, padding:"10px 16px", marginBottom:6, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.89-0045</span></div>
+          <div style={{ fontSize:11, fontWeight:500, color:"#534AB7", textTransform:"uppercase", letterSpacing:".06em" }}>Greek Vocabulary <span style={{fontWeight:400,color:"#9D96D8",letterSpacing:0}}>v1.90-0115</span></div>
           <div style={{ fontSize:15, fontWeight:500, color:"#26215C" }}>A1–B1 · {WORDS.length} words · {TOPICS.length-1} topics</div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
